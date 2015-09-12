@@ -1,0 +1,15 @@
+*.aux
+*.idx
+*.ilg
+*.ind
+*.log
+*.o
+*.out
+*.pdf
+*.swp
+*.swn
+*.toc
+*.ko
+.gdb_history
+misaka-kernel.64
+misaka-kernel
