@@ -10,6 +10,7 @@
 *.swn
 *.toc
 *.ko
+*.pcap
 .gdb_history
 misaka-kernel.64
 misaka-kernel
