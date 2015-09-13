@@ -10,6 +10,7 @@
  */
 #include <types.h>
 #include <va_list.h>
+#include <string.h>
 
 /*
  * Integer to string

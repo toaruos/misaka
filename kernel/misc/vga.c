@@ -6,39 +6,7 @@
  *
  */
 #include <types.h>
-
-#define asm __asm__
-#define volatile __volatile__
-
-static unsigned short * memsetw(unsigned short * dest, unsigned short val, int count) {
-	int i = 0;
-	for ( ; i < count; ++i ) {
-		dest[i] = val;
-	}
-	return dest;
-}
-
-static void * memcpy(void * restrict dest, const void * restrict src, size_t n) {
-	asm volatile("rep movsb"
-	            : "=c"((int){0})
-	            : "D"(dest), "S"(src), "c"(n)
-	            : "flags", "memory");
-	return dest;
-}
-
-
-static size_t strlen(const char * s) {
-	const char * a = s;
-	const size_t * w;
-	for (; (uintptr_t)s % ALIGN; s++) {
-		if (!*s) {
-			return s-a;
-		}
-	}
-	for (w = (const void *)s; !HASZERO(*w); w++);
-	for (s = (const void *)w; *s; s++);
-	return s-a;
-}
+#include <string.h>
 
 static void outportb(unsigned short _port, unsigned char _data) {
 	asm volatile ("outb %1, %0" : : "dN" (_port), "a" (_data));

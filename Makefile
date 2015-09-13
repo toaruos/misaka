@@ -60,14 +60,24 @@ kvm: system
 
 # TODO: build/symbols.o as a replacement for toaru kernel/symbols.o
 #       (symbol table generator needs x86_64 support)
-misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS}
+misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 	@${BEG} "CC" "$@"
-	@${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} -lgcc ${ERRORS}
+	@${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc ${ERRORS}
 	@${OC} -I elf64-x86-64 -O elf32-i386 $@.64 $@
 	@${END} "CC" "$@"
 	@${INFO} "--" "Kernel is ready!"
 
 kernel/sys/version.o: ${KERNEL_SOURCES}
+
+kernel/symbols.o: ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} util/generate_symbols.py
+	@-rm -f kernel/symbols.o
+	@${BEG} "NM" "Generating symbol list..."
+	@${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o misaka-kernel.64 ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} -lgcc ${ERRORS}
+	@${NM} misaka-kernel.64 -g | python2 util/generate_symbols.py > kernel/symbols.S
+	@${END} "NM" "Generated symbol list."
+	@${BEG} "AS" "kernel/symbols.S"
+	@${AS} kernel/symbols.S -o $@ ${ERRORS}
+	@${END} "AS" "kernel/symbols.S"
 
 kernel/%.o: kernel/%.S
 	@${BEG} "AS" "$<"
@@ -89,6 +99,7 @@ clean:
 	@-rm -f ${KERNEL_ASMOBJS}
 	@-rm -f ${KERNEL_YASMOBJS}
 	@-rm -f ${KERNEL_OBJS}
+	@-rm -f kernel/symbols.o
 	@-rm -f misaka-kernel
 	@-rm -f misaka-kernel.64
 	@${ENDRM} "RM" "Cleaned kernel objects"

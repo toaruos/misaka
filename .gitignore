@@ -14,3 +14,4 @@
 .gdb_history
 misaka-kernel.64
 misaka-kernel
+kernel/symbols.S

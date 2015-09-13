@@ -3,6 +3,9 @@
 
 #include <limits.h>
 
+#define asm __asm__
+#define volatile __volatile__
+
 typedef unsigned long long uint64_t;
 typedef unsigned long uint32_t;
 typedef unsigned short uint16_t;
