@@ -4,7 +4,7 @@
 #include <symboltable.h>
 #include <string.h>
 
-extern int printf(char *fmt, ...);
+extern int printf(const char *fmt, ...);
 extern void init_video();
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {

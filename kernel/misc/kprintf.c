@@ -42,7 +42,7 @@ static void print_dec(unsigned long long value, unsigned long long width, char *
 	*ptr += n_width;
 }
 
-int printf(char *fmt, ...);
+int printf(const char *fmt, ...);
 
 /*
  * Hexadecimal to string
@@ -78,7 +78,7 @@ static void print_hex(unsigned long long value, unsigned long long width, char *
  */
 size_t vasprintf(char * buf, const char * fmt, va_list args) {
 	long long i = 0;
-	char * s;
+	const char * s;
 	char * b = buf;
 	for (const char *f = fmt; *f; f++) {
 		if (*f != '%') {
@@ -95,7 +95,7 @@ size_t vasprintf(char * buf, const char * fmt, va_list args) {
 		/* fmt[i] == '%' */
 		switch (*f) {
 			case 's': /* String pointer -> String */
-				s = (char *)va_arg(args, char *);
+				s = (const char *)va_arg(args, char *);
 				if (s == NULL) {
 					s = "(null)";
 				}
@@ -144,7 +144,7 @@ int fprintf(fs_node_t * device, char *fmt, ...) {
 
 extern void writech(unsigned char c);
 
-int printf(char *fmt, ...) {
+int printf(const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
 	char buffer[1024];

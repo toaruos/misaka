@@ -17,7 +17,7 @@ KERNEL_CFLAGS += -mcmodel=large -mno-red-zone -fno-omit-frame-pointer
 KERNEL_CFLAGS += -mno-mmx -mno-sse -mno-sse2
 # Warnings
 KERNEL_CFLAGS += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-format
-KERNEL_CFLAGS += -pedantic
+KERNEL_CFLAGS += -pedantic -Wwrite-strings
 # Defined constants for the kernel
 KERNEL_CFLAGS += -D_KERNEL_ -DKERNEL_ARCH=${ARCH}
 KERNEL_CFLAGS += -DKERNEL_GIT_TAG=`util/make-version`
