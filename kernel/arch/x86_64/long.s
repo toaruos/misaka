@@ -84,12 +84,11 @@ Realm64:
     mov fs, ax                    ; Set the F-segment to the A-register.
     mov gs, ax                    ; Set the G-segment to the A-register.
     mov ss, ax                    ; Set the stack segment to the A-register.
-    mov edi, 0xB8000              ; Set the destination index to 0xB8000.
-    mov rax, 0x0                  ; Set the A-register to 0x0
-    mov ecx, 500                  ; Set the C-register to 500.
-    rep stosq                     ; Clear the screen.
 
 extern kmain
+    pop rdi
+    pop rsi
+    pop rdx
     call kmain
 
 halt:

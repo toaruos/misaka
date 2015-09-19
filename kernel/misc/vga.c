@@ -277,6 +277,7 @@ static void vga_set_color(unsigned char fg, unsigned char bg) {
  */
 void init_video() {
 	textmemptr = (unsigned short *)0xB8000;
+	cls();
 	csr_y = 0;
 	move_csr();
 

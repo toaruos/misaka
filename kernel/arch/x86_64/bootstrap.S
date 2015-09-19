@@ -33,9 +33,9 @@
 
 /* Request linear graphics mode */
 .long 0x00000000
-.byte 0
-.byte 0
-.byte 32
+.long 1024
+.long 768
+.long 32
 
 /* .stack resides in .bss */
 .section .stack, "aw", @nobits
@@ -50,6 +50,9 @@ stack_top:
 .extern jmp_to_long
 .type jmp_to_long, @function
 
+.extern kmain
+.type kmain, @function
+
 .global start
 .type start, @function
 
@@ -60,9 +63,13 @@ start:
     /* Make sure our stack is 16-byte aligned */
     and $-16, %esp
 
+    pushl $0
     pushl %esp
+    pushl $0
     pushl %eax /* Multiboot header magic */
+    pushl $0
     pushl %ebx /* Multiboot header pointer */
 
     jmp jmp_to_long
+
 

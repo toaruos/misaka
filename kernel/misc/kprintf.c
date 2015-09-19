@@ -42,6 +42,8 @@ static void print_dec(unsigned long long value, unsigned long long width, char *
 	*ptr += n_width;
 }
 
+int printf(char *fmt, ...);
+
 /*
  * Hexadecimal to string
  */

@@ -56,7 +56,7 @@ run: system
 	${EMU} ${EMU_ARGS}
 
 kvm: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM}
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "cmdline arguments heeeeeeeeeeerererererere" -initrd README.md
 
 # TODO: build/symbols.o as a replacement for toaru kernel/symbols.o
 #       (symbol table generator needs x86_64 support)
@@ -64,6 +64,7 @@ misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} kernel/symbol
 	@${BEG} "CC" "$@"
 	@${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc ${ERRORS}
 	@${OC} -I elf64-x86-64 -O elf32-i386 $@.64 $@
+	@${KERNEL_TARGET}-strip $@
 	@${END} "CC" "$@"
 	@${INFO} "--" "Kernel is ready!"
 
