@@ -40,17 +40,13 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	printf("cmdline: %s\n", mboot->cmdline);
 	printf("mmap_length: 0x%8x mmap_addr: 0x%8x\n", (uint64_t)mboot->mmap_length, (uint64_t)mboot->mmap_addr);
 
-#if 0
-	for (unsigned int i = 0; i < sizeof(struct multiboot); ++i) {
-		printf("%2x ", ((uint8_t *)mboot)[i]);
-		if ((i + 1) % 24 == 0) printf("\n");
-	}
+	printf("%d module%s starting 0x%8x\n", mboot->mods_count, (mboot->mods_count == 1 ) ? "" : "s", mboot->mods_addr);
 
-	for (unsigned int i = sizeof(struct multiboot); i < 0x000200; ++i) {
-		printf("%2x ", ((uint8_t *)mboot)[i]);
-		if ((i + 1) % 24 == 0) printf("\n");
+	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
+	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
+		printf("  module %s at [0x%8x:0x%8x]\n", mods->cmdline, mods->mod_start, mods->mod_end);
+		mods++;
 	}
-#endif
 
 	return 42;
 }

@@ -56,7 +56,7 @@ run: system
 	${EMU} ${EMU_ARGS}
 
 kvm: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "cmdline arguments heeeeeeeeeeerererererere" -initrd README.md
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "cmdline arguments heeeeeeeeeeerererererere" -initrd README.md,Makefile
 
 # TODO: build/symbols.o as a replacement for toaru kernel/symbols.o
 #       (symbol table generator needs x86_64 support)
