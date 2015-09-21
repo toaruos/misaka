@@ -24,7 +24,7 @@ KERNEL_CFLAGS += -DKERNEL_GIT_TAG=`util/make-version`
 
 KERNEL_OBJS =  $(patsubst %.c,%.o,$(wildcard kernel/*.c))
 KERNEL_OBJS += $(patsubst %.c,%.o,$(wildcard kernel/*/*.c))
-KERNEL_OBJS += $(patsubst %.c,%.o,$(wildcard kernel/${ARCH}/*/*.c))
+KERNEL_OBJS += $(patsubst %.c,%.o,$(wildcard kernel/arch/${ARCH}/*.c))
 
 KERNEL_ASMOBJS  = $(filter-out kernel/symbols.o,$(patsubst %.S,%.o,$(wildcard kernel/arch/${ARCH}/*.S)))
 KERNEL_YASMOBJS = $(filter-out kernel/symbols.o,$(patsubst %.s,%.o,$(wildcard kernel/arch/${ARCH}/*.s)))

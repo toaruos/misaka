@@ -12,6 +12,8 @@
 #include <va_list.h>
 #include <string.h>
 
+size_t (*printf_output)(size_t, uint8_t *) = NULL;
+
 /*
  * Integer to string
  */
@@ -151,11 +153,7 @@ int printf(const char *fmt, ...) {
 	vasprintf(buffer, fmt, args);
 	va_end(args);
 
-	char * c = buffer;
-	while (*c) {
-		writech(*c);
-		c++;
-	}
+	printf_output(strlen(buffer), (uint8_t *)buffer);
 
 	return 0;
 }

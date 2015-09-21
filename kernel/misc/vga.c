@@ -271,6 +271,15 @@ static void vga_set_color(unsigned char fg, unsigned char bg) {
 	settextcolor(fg, bg);
 }
 
+size_t vga_print(size_t len, uint8_t * buffer) {
+	uint8_t * c = buffer;
+	while (*c) {
+		writech((char)*c);
+		c++;
+	}
+	return len;
+}
+
 /*
  * init_video
  * Initialize the VGA driver.
