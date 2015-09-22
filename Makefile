@@ -11,7 +11,7 @@ AS = ${KERNEL_TARGET}-as
 OC = ${KERNEL_TARGET}-objcopy
 YA = yasm
 
-KERNEL_CFLAGS  = -ffreestanding -O2 -std=c99 -g
+KERNEL_CFLAGS  = -ffreestanding -O2 -std=c11 -g
 # Arch-specific arguments
 KERNEL_CFLAGS += -mcmodel=large -mno-red-zone -fno-omit-frame-pointer
 KERNEL_CFLAGS += -mno-mmx -mno-sse -mno-sse2
