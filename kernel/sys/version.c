@@ -1,7 +1,7 @@
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2011-2015 Kevin Lange
+ * Copyright (C) 2011-2018 K. Lange
  */
 
 #include <version.h>
@@ -11,7 +11,7 @@
 
 /* Kernel name. If you change this, you're not
  * my friend any more. */
-const char * __kernel_name = "misaka";
+const char * __kernel_name = "toaru";
 
 /* This really shouldn't change, and if it does,
  * always ensure it still has the correct arguments
@@ -19,9 +19,9 @@ const char * __kernel_name = "misaka";
 const char * __kernel_version_format = "%d.%d.%d-%s";
 
 /* Version numbers X.Y.Z */
-int    __kernel_version_major = 0;
-int    __kernel_version_minor = 0;
-int    __kernel_version_lower = 1;
+int    __kernel_version_major = 1;
+int    __kernel_version_minor = 99;
+int    __kernel_version_lower = 0;
 
 /* Kernel build suffix, which doesn't necessarily
  * mean anything, but can be used to distinguish
