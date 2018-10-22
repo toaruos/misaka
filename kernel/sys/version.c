@@ -4,7 +4,7 @@
  * Copyright (C) 2011-2018 K. Lange
  */
 
-#include <version.h>
+#include <kernel/version.h>
 
 #define STR(x) #x
 #define STRSTR(x) STR(x)
@@ -35,7 +35,7 @@ int    __kernel_version_lower = 0;
 const char * __kernel_version_suffix   = KERNEL_VERSION_SUFFIX;
 
 /* The release codename. */
-const char * __kernel_version_codename = "funny-codename-here";
+const char * __kernel_version_codename = "misaka";
 
 /* Build architecture */
 const char * __kernel_arch = STRSTR(KERNEL_ARCH);

@@ -1,7 +1,7 @@
 #ifndef _ARCH_X86_64_ACPI_H
 #define _ARCH_X86_64_ACPI_H
 
-#include <types.h>
+#include <kernel/types.h>
 
 struct rsdp_descriptor {
 	char     signature[8];

@@ -3,7 +3,7 @@
 #ifndef _MULTIBOOT_H
 #define _MULTIBOOT_H
 
-#include <types.h>
+#include <kernel/types.h>
 
 #define MULTIBOOT_MAGIC        0x1BADB002
 #define MULTIBOOT_EAX_MAGIC    0x2BADB002

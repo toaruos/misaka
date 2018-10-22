@@ -8,9 +8,9 @@
  * Simple, painfully lacking, implementation of printf(),
  * for the kernel of all things.
  */
-#include <types.h>
+#include <kernel/types.h>
+#include <kernel/string.h>
 #include <va_list.h>
-#include <string.h>
 
 size_t (*printf_output)(size_t, uint8_t *) = NULL;
 

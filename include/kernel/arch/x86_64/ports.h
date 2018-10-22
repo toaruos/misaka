@@ -1,7 +1,7 @@
 #ifndef _ARCH_X86_64_PORTS_H
 #define _ARCH_X86_64_PORTS_H
 
-#include <types.h>
+#include <kernel/types.h>
 extern void outports(unsigned short _port, unsigned short _data);
 extern unsigned int inportl(unsigned short _port);
 extern void outportl(unsigned short _port, unsigned int _data);

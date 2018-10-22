@@ -1,6 +1,6 @@
-#include <types.h>
-#include <string.h>
-#include <symboltable.h>
+#include <kernel/types.h>
+#include <kernel/string.h>
+#include <kernel/symboltable.h>
 
 
 /* Cannot use symboltable here because symbol_find is used during initialization

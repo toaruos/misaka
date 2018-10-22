@@ -1,11 +1,11 @@
-#include <types.h>
-#include <multiboot.h>
-#include <version.h>
-#include <symboltable.h>
-#include <string.h>
+#include <kernel/types.h>
+#include <kernel/multiboot.h>
+#include <kernel/version.h>
+#include <kernel/symboltable.h>
+#include <kernel/string.h>
 
-#include <arch/x86_64/ports.h>
-#include <arch/x86_64/acpi.h>
+#include <kernel/arch/x86_64/ports.h>
+#include <kernel/arch/x86_64/acpi.h>
 
 extern int printf(const char *fmt, ...);
 extern size_t (*printf_output)(size_t, uint8_t *);

@@ -83,7 +83,7 @@ kernel/%.o: kernel/%.s
 
 kernel/%.o: kernel/%.c ${HEADERS}
 	@${BEG} "CC" "$<"
-	@${CC} ${KERNEL_CFLAGS} -nostdlib -g -I./kernel/include -c -o $@ $< ${ERRORS}
+	@${CC} ${KERNEL_CFLAGS} -nostdlib -g -Iinclude -c -o $@ $< ${ERRORS}
 	@${END} "CC" "$<"
 
 clean:
