@@ -34,16 +34,11 @@ KERNEL_SOURCES += $(wildcard kernel/arch/${ARCH}/*.S) $(wildcard kernel/arch/${A
 
 EMU = qemu-system-x86_64
 EMU_ARGS  = -kernel misaka-kernel
-EMU_ARGS += -m 1024
+EMU_ARGS += -m 1G
 EMU_ARGS += -smp 4
-EMU_ARGS += -vga std
-EMU_ARGS += -serial stdio
-EMU_ARGS += -k en-us
-EMU_ARGS += -no-frame
+EMU_ARGS += -serial mon:stdio
 EMU_ARGS += -rtc base=localtime
-EMU_ARGS += -net nic,model=rtl8139 -net user -net dump
 EMU_ARGS += -soundhw pcspk,ac97
-EMU_ARGS += -no-kvm-irqchip
 #EMU_ARGS += -hda toaruos-disk.img
 EMU_KVM   = -enable-kvm
 
@@ -53,13 +48,8 @@ all: system
 system: misaka-kernel
 
 run: system
-	${EMU} ${EMU_ARGS}
-
-kvm: system
 	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "cmdline arguments heeeeeeeeeeerererererere" -initrd README.md,Makefile
 
-# TODO: build/symbols.o as a replacement for toaru kernel/symbols.o
-#       (symbol table generator needs x86_64 support)
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 	@${BEG} "CC" "$@"
 	@${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_YASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc ${ERRORS}

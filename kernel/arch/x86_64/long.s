@@ -8,18 +8,26 @@ section .bootstrap
 global jmp_to_long
 jmp_to_long:
 
-    mov edi, 0x1000    ; Set the destination index to 0x1000.
+extern init_page_region
+
+    mov edi, init_page_region    ; Set the destination index to 0x1000.
     mov cr3, edi       ; Set control register 3 to the destination index.
     xor eax, eax       ; Nullify the A-register.
     mov ecx, 4096      ; Set the C-register to 4096.
     rep stosd          ; Clear the memory.
     mov edi, cr3       ; Set the destination index to control register 3.
 
-    mov DWORD [edi], 0x2003      ; Set the uint32_t at the destination index to 0x2003.
+    mov eax, 0x1003
+    add eax, edi
+    mov DWORD [edi], eax      ; Set the uint32_t at the destination index to 0x2003.
     add edi, 0x1000              ; Add 0x1000 to the destination index.
-    mov DWORD [edi], 0x3003      ; Set the uint32_t at the destination index to 0x3003.
+    mov eax, 0x1003
+    add eax, edi
+    mov DWORD [edi], eax      ; Set the uint32_t at the destination index to 0x3003.
     add edi, 0x1000              ; Add 0x1000 to the destination index.
-    mov DWORD [edi], 0x4003      ; Set the uint32_t at the destination index to 0x4003.
+    mov eax, 0x1003
+    add eax, edi
+    mov DWORD [edi], eax      ; Set the uint32_t at the destination index to 0x4003.
     add edi, 0x1000              ; Add 0x1000 to the destination index.
 
     mov ebx, 0x00000003          ; Set the B-register to 0x00000003.

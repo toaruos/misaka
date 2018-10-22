@@ -19,6 +19,16 @@ static size_t _early_log_write(size_t size, uint8_t *buffer) {
 	return size;
 }
 
+typedef struct {
+	uint16_t base_low;
+	uint16_t sel;
+	uint8_t zero;
+	uint8_t flags;
+	uint16_t base_high;
+	uint32_t base_higher;
+	uint32_t reserved;
+} __attribute__((packed)) idt_entry_t;
+
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	init_video();
 	printf_output = &_early_log_write;
