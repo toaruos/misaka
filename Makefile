@@ -36,6 +36,7 @@ EMU = qemu-system-x86_64
 EMU_ARGS  = -kernel misaka-kernel
 EMU_ARGS += -m 1G
 EMU_ARGS += -smp 4
+EMU_ARGS += -nographic -no-reboot
 EMU_ARGS += -serial mon:stdio
 EMU_ARGS += -rtc base=localtime
 EMU_ARGS += -soundhw pcspk,ac97
