@@ -6,14 +6,10 @@ SECTIONS
 	. = 1M;
 	phys = .;
 
-	.bootstrap BLOCK(4K) : ALIGN(4K)
+	.text BLOCK(4K) : ALIGN(4K)
 	{
 		*(.multiboot)
 		*(.bootstrap)
-	}
-
-	.text BLOCK(4K) : ALIGN(4K)
-	{
 		code = .;
 		*(.text)
 	}
