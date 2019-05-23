@@ -1,7 +1,9 @@
 include util/util.mk
 include build/arch.mk
 
-KERNEL_TARGET=${ARCH}-elf
+# Temporarily use the system compiler... XXX Fix me
+KERNEL_TARGET=x86_64-linux-gnu
+#${ARCH}-elf
 
 CC = ${KERNEL_TARGET}-gcc
 NM = ${KERNEL_TARGET}-nm
