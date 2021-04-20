@@ -95,7 +95,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	if (good) {
 		struct rsdp_descriptor * rsdp = (struct rsdp_descriptor *)scan;
-		printf("ACPI RSDP found at 0x%16x\n", scan);
+		printf("ACPI RSDP found at 0x%016x\n", scan);
 		printf("  ACPI revision %d.0\n", rsdp->revision + 1);
 
 		uint8_t check = 0;
@@ -115,7 +115,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 				rsdp->oemid[4],
 				rsdp->oemid[5]);
 
-		printf("  RSDT address: 0x%8x\n", rsdp->rsdt_address);
+		printf("  RSDT address: 0x%08x\n", rsdp->rsdt_address);
 
 #if 0
 		struct rsdt * rsdt = (struct rsdt *)(uintptr_t)rsdp->rsdt_address;
