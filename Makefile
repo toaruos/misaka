@@ -1,4 +1,6 @@
-export PATH := $(shell ../../x86_64-toaru/activate.sh)
+TOOLCHAIN=../../x86_64-toaru
+BASE=$(TOOLCHAIN)/base
+export PATH := $(shell $(TOOLCHAIN)/activate.sh)
 include util/util.mk
 include build/arch.mk
 
@@ -9,6 +11,7 @@ CC = ${KERNEL_TARGET}-gcc
 NM = ${KERNEL_TARGET}-nm
 CXX= ${KERNEL_TARGET}-g++
 AR = ${KERNEL_TARGET}-ar
+AS = ${KERNEL_TARGET}-as
 OC = ${KERNEL_TARGET}-objcopy
 
 KERNEL_CFLAGS  = -ffreestanding -O2 -std=c11 -g -static
@@ -82,3 +85,12 @@ clean:
 
 libc.so: libc/test.c
 	${CC} -nodefaultlibs -shared -fPIC -o $@ $< -lgcc
+
+apps/test: apps/test.c
+	${CC} -o $@ $<
+
+crts: $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
+
+$(BASE)/lib/crt%.o: libc/crt%.S
+	${AS} -o $@ $<
+
