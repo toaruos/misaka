@@ -1,8 +1,8 @@
+export PATH := $(shell ../../x86_64-toaru/activate.sh)
 include util/util.mk
 include build/arch.mk
 
-# Temporarily use the system compiler... XXX Fix me
-KERNEL_TARGET=x86_64-linux-gnu
+KERNEL_TARGET=x86_64-pc-toaru
 #${ARCH}-elf
 
 CC = ${KERNEL_TARGET}-gcc
@@ -52,39 +52,27 @@ run: system
 	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "cmdline arguments heeeeeeeeeeerererererere" -initrd README.md,Makefile
 
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
-	@${BEG} "CC" "$@"
-	@${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc ${ERRORS}
-	@${OC} -I elf64-x86-64 -O elf32-i386 $@.64 $@
-	@${END} "CC" "$@"
-	@${INFO} "--" "Kernel is ready!"
+	${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc
+	${OC} -I elf64-x86-64 -O elf32-i386 $@.64 $@
 
 kernel/sys/version.o: ${KERNEL_SOURCES}
 
 kernel/symbols.o: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} util/generate_symbols.py
-	@-rm -f kernel/symbols.o
-	@${BEG} "NM" "Generating symbol list..."
-	@${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o misaka-kernel.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} -lgcc ${ERRORS}
-	@${NM} misaka-kernel.64 -g | python2 util/generate_symbols.py > kernel/symbols.S
-	@${END} "NM" "Generated symbol list."
-	@${BEG} "CC" "kernel/symbols.S"
-	@${CC} -c kernel/symbols.S -o $@ ${ERRORS}
-	@${END} "CC" "kernel/symbols.S"
+	-rm -f kernel/symbols.o
+	${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o misaka-kernel.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} -lgcc
+	${NM} misaka-kernel.64 -g | python2 util/generate_symbols.py > kernel/symbols.S
+	${CC} -c kernel/symbols.S -o $@
 
 kernel/%.o: kernel/%.S
-	@${BEG} "CC" "$<"
-	@${CC} -c $< -o $@ ${ERRORS}
-	@${END} "CC" "$<"
+	echo ${PATH}
+	${CC} -c $< -o $@
 
 kernel/%.o: kernel/%.c ${HEADERS}
-	@${BEG} "CC" "$<"
-	@${CC} ${KERNEL_CFLAGS} -nostdlib -g -Iinclude -c -o $@ $< ${ERRORS}
-	@${END} "CC" "$<"
+	${CC} ${KERNEL_CFLAGS} -nostdlib -g -Iinclude -c -o $@ $<
 
 clean:
-	@${BEGRM} "RM" "Cleaning kernel objects..."
-	@-rm -f ${KERNEL_ASMOBJS}
-	@-rm -f ${KERNEL_OBJS}
-	@-rm -f kernel/symbols.o
-	@-rm -f misaka-kernel
-	@-rm -f misaka-kernel.64
-	@${ENDRM} "RM" "Cleaned kernel objects"
+	-rm -f ${KERNEL_ASMOBJS}
+	-rm -f ${KERNEL_OBJS}
+	-rm -f kernel/symbols.o
+	-rm -f misaka-kernel
+	-rm -f misaka-kernel.64
