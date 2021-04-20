@@ -1,7 +1,6 @@
 TOOLCHAIN=util
 BASE=base
 export PATH := $(shell $(TOOLCHAIN)/activate.sh)
-include util/util.mk
 include build/arch.mk
 
 KERNEL_TARGET=x86_64-pc-toaru
@@ -63,10 +62,10 @@ misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 
 kernel/sys/version.o: ${KERNEL_SOURCES}
 
-kernel/symbols.o: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} util/generate_symbols.py
+kernel/symbols.o: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} util/gensym.krk
 	-rm -f kernel/symbols.o
 	${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o misaka-kernel.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} -lgcc
-	${NM} misaka-kernel.64 -g | python2 util/generate_symbols.py > kernel/symbols.S
+	${NM} misaka-kernel.64 -g | kuroko util/gensym.krk > kernel/symbols.S
 	${CC} -c kernel/symbols.S -o $@
 
 kernel/%.o: kernel/%.S
