@@ -12,16 +12,18 @@ AR = ${KERNEL_TARGET}-ar
 OC = ${KERNEL_TARGET}-objcopy
 
 KERNEL_CFLAGS  = -ffreestanding -O2 -std=c11 -g -static
+
 # Arch-specific arguments
 KERNEL_CFLAGS += -mcmodel=large -mno-red-zone -fno-omit-frame-pointer
 KERNEL_CFLAGS += -mno-mmx -mno-sse -mno-sse2
+
 # Warnings
-KERNEL_CFLAGS += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-format
+KERNEL_CFLAGS += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter
 KERNEL_CFLAGS += -pedantic -Wwrite-strings
+
 # Defined constants for the kernel
 KERNEL_CFLAGS += -D_KERNEL_ -DKERNEL_ARCH=${ARCH}
 KERNEL_CFLAGS += -DKERNEL_GIT_TAG=`util/make-version`
-KERNEL_CFLAGS += -Wl,--build-id=none
 
 KERNEL_OBJS =  $(patsubst %.c,%.o,$(wildcard kernel/*.c))
 KERNEL_OBJS += $(patsubst %.c,%.o,$(wildcard kernel/*/*.c))
@@ -37,6 +39,7 @@ EMU_ARGS  = -kernel misaka-kernel
 EMU_ARGS += -m 1G
 EMU_ARGS += -smp 4
 EMU_ARGS += -no-reboot
+EMU_ARGS += -display none
 EMU_ARGS += -serial mon:stdio
 EMU_ARGS += -rtc base=localtime
 EMU_ARGS += -soundhw pcspk,ac97
@@ -76,3 +79,6 @@ clean:
 	-rm -f kernel/symbols.o
 	-rm -f misaka-kernel
 	-rm -f misaka-kernel.64
+
+libc.so: libc/test.c
+	${CC} -nodefaultlibs -shared -fPIC -o $@ $< -lgcc

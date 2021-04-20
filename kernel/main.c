@@ -3,13 +3,12 @@
 #include <kernel/version.h>
 #include <kernel/symboltable.h>
 #include <kernel/string.h>
+#include <kernel/printf.h>
 
 #include <kernel/arch/x86_64/ports.h>
+#include <kernel/arch/x86_64/idt.h>
 #include <kernel/arch/x86_64/acpi.h>
-
-extern int printf(const char *fmt, ...);
-extern size_t (*printf_output)(size_t, uint8_t *);
-extern void init_video();
+#include <kernel/arch/x86_64/cmos.h>
 
 #define EARLY_LOG_DEVICE 0x3F8
 static size_t _early_log_write(size_t size, uint8_t *buffer) {
@@ -19,18 +18,7 @@ static size_t _early_log_write(size_t size, uint8_t *buffer) {
 	return size;
 }
 
-typedef struct {
-	uint16_t base_low;
-	uint16_t sel;
-	uint8_t zero;
-	uint8_t flags;
-	uint16_t base_high;
-	uint32_t base_higher;
-	uint32_t reserved;
-} __attribute__((packed)) idt_entry_t;
-
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
-	init_video();
 	printf_output = &_early_log_write;
 
 	printf("%s %s ", __kernel_name, __kernel_arch);
@@ -46,6 +34,8 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	printf("\n");
 
 	printf("Built with %s\n", __kernel_compiler_version);
+
+	printf("Current time: %u\n", read_cmos());
 
 	printf("Command line: %s\n", mboot->cmdline);
 
