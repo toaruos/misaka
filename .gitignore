@@ -6,6 +6,7 @@
 *.o
 *.out
 *.pdf
+*.so
 *.swp
 *.swn
 *.toc

@@ -1,4 +1,4 @@
-TOOLCHAIN=../../x86_64-toaru
+TOOLCHAIN=../x86_64-toaru
 BASE=$(TOOLCHAIN)/base
 export PATH := $(shell $(TOOLCHAIN)/activate.sh)
 include util/util.mk
@@ -83,8 +83,17 @@ clean:
 	-rm -f misaka-kernel
 	-rm -f misaka-kernel.64
 
-libc.so: libc/test.c
-	${CC} -nodefaultlibs -shared -fPIC -o $@ $< -lgcc
+LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
+LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
+
+libc/%.o: libc/%.c
+	$(CC) -fPIC -c -o $@ $<
+
+libc.a: ${LIBC_OBJS} | crts
+	$(AR) cr $@ $^
+
+libc.so: ${LIBC_OBJS} | crts
+	${CC} -nodefaultlibs -shared -fPIC -o $@ $^ -lgcc
 
 apps/test: apps/test.c
 	${CC} -o $@ $<
