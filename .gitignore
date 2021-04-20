@@ -16,3 +16,6 @@
 misaka-kernel.64
 misaka-kernel
 kernel/symbols.S
+util/build
+util/local
+base/bin/*

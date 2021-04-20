@@ -1,5 +1,5 @@
-TOOLCHAIN=../x86_64-toaru
-BASE=$(TOOLCHAIN)/base
+TOOLCHAIN=util
+BASE=base
 export PATH := $(shell $(TOOLCHAIN)/activate.sh)
 include util/util.mk
 include build/arch.mk
@@ -89,15 +89,19 @@ LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
 libc/%.o: libc/%.c
 	$(CC) -fPIC -c -o $@ $<
 
-libc.a: ${LIBC_OBJS} | crts
+.PHONY: libc
+libc: $(BASE)/lib/libc.a $(BASE)/lib/libc.so
+
+$(BASE)/lib/libc.a: ${LIBC_OBJS} | crts
 	$(AR) cr $@ $^
 
-libc.so: ${LIBC_OBJS} | crts
+$(BASE)/lib/libc.so: ${LIBC_OBJS} | crts
 	${CC} -nodefaultlibs -shared -fPIC -o $@ $^ -lgcc
 
-apps/test: apps/test.c
+base/bin/test: apps/test.c
 	${CC} -o $@ $<
 
+.PHONY: crts
 crts: $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 
 $(BASE)/lib/crt%.o: libc/crt%.S

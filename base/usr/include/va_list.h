@@ -1,5 +1,8 @@
-#ifndef _VA_LIST_H
-#define _VA_LIST_H
+#pragma once
+
+#include <_cheader.h>
+
+_Begin_C_Header
 
 typedef __builtin_va_list va_list;
 #define va_start(ap,last) __builtin_va_start(ap, last)
@@ -7,4 +10,5 @@ typedef __builtin_va_list va_list;
 #define va_arg(ap,type) __builtin_va_arg(ap,type)
 #define va_copy(dest, src) __builtin_va_copy(dest,src)
 
-#endif /* _VA_LIST_H */
+_End_C_Header
+
