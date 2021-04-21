@@ -116,8 +116,13 @@
  * Defines for often-used integral values
  * related to our binning and paging strategy.
  */
+#ifdef __x86_64__
+#define NUM_BINS 10U								/* Number of bins, total, under 64-bit. */
+#define SMALLEST_BIN_LOG 3U							/* Logarithm base two of the smallest bin: log_2(sizeof(int32)). */
+#else
 #define NUM_BINS 11U								/* Number of bins, total, under 32-bit. */
 #define SMALLEST_BIN_LOG 2U							/* Logarithm base two of the smallest bin: log_2(sizeof(int32)). */
+#endif
 #define BIG_BIN (NUM_BINS - 1)						/* Index for the big bin, (NUM_BINS - 1) */
 #define SMALLEST_BIN (1UL << SMALLEST_BIN_LOG)		/* Size of the smallest bin. */
 

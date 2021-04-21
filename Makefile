@@ -41,7 +41,7 @@ EMU_ARGS  = -kernel misaka-kernel
 EMU_ARGS += -m 1G
 EMU_ARGS += -smp 4
 EMU_ARGS += -no-reboot
-EMU_ARGS += -display none
+#EMU_ARGS += -display none
 EMU_ARGS += -serial mon:stdio
 EMU_ARGS += -rtc base=localtime
 EMU_ARGS += -soundhw pcspk,ac97

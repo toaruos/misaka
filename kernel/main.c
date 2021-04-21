@@ -10,16 +10,110 @@
 #include <kernel/arch/x86_64/acpi.h>
 #include <kernel/arch/x86_64/cmos.h>
 
+#include "terminal-font.h"
+
+uint32_t * framebuffer = (uint32_t*)0xfd000000;
+
+/**
+ * @brief Bochs LFB setup.
+ */
+static void _setup_framebuffer(uint16_t x, uint16_t y) {
+	/* Turn display off */
+	outports(0x1CE, 0x04);
+	outports(0x1CF, 0x00);
+	/* Horizontal resolution */
+	outports(0x1CE, 0x01);
+	outports(0x1CF, x);
+	/* Vertical resolution */
+	outports(0x1CE, 0x02);
+	outports(0x1CF, y);
+	/* Set bpp to 32 */
+	outports(0x1CE, 0x03);
+	outports(0x1CF, 32);
+	/* Virtual height */
+	outports(0x1CE, 0x07);
+	outports(0x1CF, 4096);
+	/* Turn it back on */
+	outports(0x1CE, 0x04);
+	outports(0x1CF, 0x41);
+}
+
+static int width = 1440, height = 900;
+
+#define char_height 20
+#define char_width  9
+
+#define BG_COLOR 0xFF050505
+#define FG_COLOR 0xFFCCCCCC
+#define EX_COLOR 0xFF999999
+
+static void set_point(int x, int y, uint32_t value) {
+	framebuffer[y * width + x] = value;
+}
+
+static void write_char(int x, int y, int val, uint32_t color) {
+	if (val > 128) {
+		val = 4;
+	}
+	uint16_t * c = large_font[val];
+	for (uint8_t i = 0; i < char_height; ++i) {
+		for (uint8_t j = 0; j < char_width; ++j) {
+			if (c[i] & (1 << (15-j))) {
+				set_point(x+j,y+i,color);
+			} else {
+				set_point(x+j,y+i,BG_COLOR);
+			}
+		}
+	}
+}
+
+#define LEFT_PAD 1
+static int x = LEFT_PAD;
+static int y = 0;
+
+static void process_char(char ch) {
+	write_char(x,y,' ',BG_COLOR);
+	switch (ch) {
+		case '\n':
+			x = LEFT_PAD;
+			y += char_height;
+			break;
+		case '\r':
+			x = LEFT_PAD;
+			break;
+		default:
+			write_char(x,y,ch,FG_COLOR);
+			x += char_width;
+			break;
+	}
+	if (x > width) {
+		y += char_height;
+		x = LEFT_PAD;
+	}
+	if (y > height - char_height) {
+		y -= char_height;
+		/* scroll everything?*/
+		memmove(framebuffer, framebuffer + width * char_height, (height - char_height) * width * 4);
+		memset(framebuffer + (height - char_height) * width, 0x05, char_height * width * 4);
+	}
+	write_char(x,y,'_',EX_COLOR);
+}
+
 #define EARLY_LOG_DEVICE 0x3F8
 static size_t _early_log_write(size_t size, uint8_t *buffer) {
 	for (unsigned int i = 0; i < size; ++i) {
 		outportb(EARLY_LOG_DEVICE, buffer[i]);
+		process_char(buffer[i]);
 	}
 	return size;
 }
 
+
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	printf_output = &_early_log_write;
+
+	_setup_framebuffer(1440,900);
+	memset(framebuffer, 0x05, width * height * 4);
 
 	printf("%s %s ", __kernel_name, __kernel_arch);
 	printf(__kernel_version_format,
@@ -31,9 +125,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 			__kernel_version_codename,
 			__kernel_build_date,
 			__kernel_build_time);
-	printf("\n");
-
-	printf("Built with %s\n", __kernel_compiler_version);
+	printf(" [%s]\n", __kernel_compiler_version);
 
 	printf("Current time: %u\n", read_cmos());
 
@@ -60,10 +152,20 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	printf("Kernel symbol table:\n");
 	kernel_symbol_t * k = (kernel_symbol_t *)&kernel_symbols_start;
+	int column = 0;
 	while ((uintptr_t)k < (uintptr_t)&kernel_symbols_end) {
-		printf("  0x%x - %s\n", k->addr, k->name);
+		int count = printf("  0x%x - %s", k->addr, k->name);
 		k = (kernel_symbol_t *)((uintptr_t)k + sizeof *k + strlen(k->name) + 1);
+		while (count < 38) {
+			count += printf(" ");
+		}
+		column++;
+		if (column == 4) {
+			printf("\n");
+			column = 0;
+		}
 	}
+	if (column != 0) printf("\n");
 
 	/* ACPI */
 
