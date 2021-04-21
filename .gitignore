@@ -4,6 +4,7 @@
 *.ind
 *.log
 *.o
+*.a
 *.out
 *.pdf
 *.so
