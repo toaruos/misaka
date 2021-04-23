@@ -5,6 +5,7 @@
 
 #include <kernel/types.h>
 #include <kernel/symboltable.h>
+#include <kernel/printf.h>
 
 struct Elf64_Header {
 	uint8_t  e_ident[16];
@@ -46,3 +47,27 @@ struct Elf64_Phdr {
 	uint64_t p_memsz;
 	uint64_t p_align;
 };
+
+void elf_parseFromMemory(void * atAddress) {
+	struct Elf64_Header * elfHeader = atAddress;
+
+	printf("Identifier: %c %c %c %c %c %c %c %c\n",
+		elfHeader->e_ident[0],
+		elfHeader->e_ident[1],
+		elfHeader->e_ident[2],
+		elfHeader->e_ident[3],
+		elfHeader->e_ident[4],
+		elfHeader->e_ident[5],
+		elfHeader->e_ident[6],
+		elfHeader->e_ident[7]);
+	printf("            %c %c %c %c %c %c %c %c\n",
+		elfHeader->e_ident[8],
+		elfHeader->e_ident[9],
+		elfHeader->e_ident[10],
+		elfHeader->e_ident[11],
+		elfHeader->e_ident[12],
+		elfHeader->e_ident[13],
+		elfHeader->e_ident[14],
+		elfHeader->e_ident[15]);
+
+}

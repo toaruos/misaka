@@ -4,6 +4,7 @@
 #include <kernel/symboltable.h>
 #include <kernel/string.h>
 #include <kernel/printf.h>
+#include <kernel/pci.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/idt.h>
@@ -108,6 +109,28 @@ static size_t _early_log_write(size_t size, uint8_t *buffer) {
 	return size;
 }
 
+static void scan_hit_list(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
+
+	printf("%02x:%02x.%d (%04x, %04x:%04x)",
+			(int)pci_extract_bus(device),
+			(int)pci_extract_slot(device),
+			(int)pci_extract_func(device),
+			(int)pci_find_type(device),
+			vendorid,
+			deviceid);
+
+	printf(" BAR0: 0x%08x", pci_read_field(device, PCI_BAR0, 4));
+	printf(" BAR1: 0x%08x", pci_read_field(device, PCI_BAR1, 4));
+	printf(" BAR2: 0x%08x", pci_read_field(device, PCI_BAR2, 4));
+	printf(" BAR3: 0x%08x", pci_read_field(device, PCI_BAR3, 4));
+	printf(" BAR4: 0x%08x", pci_read_field(device, PCI_BAR4, 4));
+	printf(" BAR5: 0x%08x", pci_read_field(device, PCI_BAR5, 4));
+
+	printf(" IRQ: %2d", pci_read_field(device, 0x3C, 1));
+	printf(" %2d", pci_read_field(device, 0x3D, 1));
+	printf(" Int: %2d", pci_get_interrupt(device));
+	printf(" Stat: 0x%04x\n", pci_read_field(device, PCI_STATUS, 2));
+}
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	printf_output = &_early_log_write;
@@ -135,12 +158,11 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
-		printf("  module %s at [0x%08x:0x%08x]\n", mods->cmdline, mods->mod_start, mods->mod_end);
-		mods++;
+		printf("  module %s at [0x%08x:0x%08x]\n", mods[i].cmdline, mods[i].mod_start, mods[i].mod_end);
 	}
 
-	printf("Memory map:\n");
-	printf("  Lower mem: %dkB\n", (uint64_t)mboot->mem_lower);
+	printf("Memory map:");
+	printf("  Lower mem: %dkB", (uint64_t)mboot->mem_lower);
 	printf("  Upper mem: %dkB\n", (uint64_t)mboot->mem_upper);
 	mboot_memmap_t * mmap = (void *)(uintptr_t)mboot->mmap_addr;
 	while ((uintptr_t)mmap < mboot->mmap_addr + mboot->mmap_length) {
@@ -187,8 +209,8 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	if (good) {
 		struct rsdp_descriptor * rsdp = (struct rsdp_descriptor *)scan;
-		printf("ACPI RSDP found at 0x%016x\n", scan);
-		printf("  ACPI revision %d.0\n", rsdp->revision + 1);
+		printf("ACPI RSDP found at 0x%016x; ", scan);
+		printf("ACPI revision %d.0; ", rsdp->revision + 1);
 
 		uint8_t check = 0;
 		uint8_t * tmp;
@@ -196,10 +218,10 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 			check += *tmp;
 		}
 		if (check != 0) {
-			printf("  Bad checksum? %d\n", check);
+			printf("Bad checksum? %d\n", check);
 		}
 
-		printf("  OEMID: %c%c%c%c%c%c\n",
+		printf("OEMID: %c%c%c%c%c%c; ",
 				rsdp->oemid[0],
 				rsdp->oemid[1],
 				rsdp->oemid[2],
@@ -207,16 +229,20 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 				rsdp->oemid[4],
 				rsdp->oemid[5]);
 
-		printf("  RSDT address: 0x%08x\n", rsdp->rsdt_address);
+		printf("RSDT address: 0x%08x; ", rsdp->rsdt_address);
 
-#if 0
 		struct rsdt * rsdt = (struct rsdt *)(uintptr_t)rsdp->rsdt_address;
-		printf("  RSDT length: %d\n", rsdt->header.length);
-		printf("  RSDT checksum %s\n", acpi_checksum((struct acpi_sdt_header *)rsdt) ? "passed" : "failed");
-#endif
+		printf("RSDT length: %d; ", rsdt->header.length);
+		printf("RSDT checksum %s\n", acpi_checksum((struct acpi_sdt_header *)rsdt) ? "passed" : "failed");
 
 	}
 
+	pci_scan(&scan_hit_list, -1, NULL);
+
+	/* Let's take an aside here to look at a module */
+	printf("Parsing %s (starts at 0x%08x)\n", mods[0].cmdline, mods[0].mod_start);
+	extern void elf_parseFromMemory(void * atAddress);
+	elf_parseFromMemory((void*)mods[0].mod_start);
 
 	printf("Looping...\n");
 	while (1);

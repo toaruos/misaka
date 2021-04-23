@@ -17,7 +17,7 @@ KERNEL_CFLAGS  = -ffreestanding -O2 -std=c11 -g -static
 
 # Arch-specific arguments
 KERNEL_CFLAGS += -mcmodel=large -mno-red-zone -fno-omit-frame-pointer
-KERNEL_CFLAGS += -mno-mmx -mno-sse -mno-sse2
+KERNEL_CFLAGS += -mno-mmx -mno-sse -mno-sse2  -z max-page-size=0x1000 -nostdlib
 
 # Warnings
 KERNEL_CFLAGS += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter
@@ -36,6 +36,8 @@ KERNEL_ASMOBJS  = $(filter-out kernel/symbols.o,$(patsubst %.S,%.o,$(wildcard ke
 KERNEL_SOURCES  = $(wildcard kernel/*.c) $(wildcard kernel/*/*.c) $(wildcard kernel/${ARCH}/*/*.c)
 KERNEL_SOURCES += $(wildcard kernel/arch/${ARCH}/*.S)
 
+MODULES = $(patsubst %.c,%.ko,$(wildcard modules/*.c))
+
 EMU = qemu-system-x86_64
 EMU_ARGS  = -kernel misaka-kernel
 EMU_ARGS += -m 1G
@@ -51,20 +53,23 @@ EMU_KVM   = -enable-kvm
 .PHONY: all system clean run
 
 all: system
-system: misaka-kernel
+system: misaka-kernel $(MODULES)
+
+%.ko: %.c
+	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
 run: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "cmdline arguments heeeeeeeeeeerererererere" -initrd README.md,Makefile
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd modules/test.ko
 
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
-	${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc
+	${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc
 	${OC} -I elf64-x86-64 -O elf32-i386 $@.64 $@
 
 kernel/sys/version.o: ${KERNEL_SOURCES}
 
 kernel/symbols.o: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} util/gensym.krk
 	-rm -f kernel/symbols.o
-	${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -z max-page-size=0x1000 -nostdlib -o misaka-kernel.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} -lgcc
+	${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o misaka-kernel.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} -lgcc
 	${NM} misaka-kernel.64 -g | kuroko util/gensym.krk > kernel/symbols.S
 	${CC} -c kernel/symbols.S -o $@
 

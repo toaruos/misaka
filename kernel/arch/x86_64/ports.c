@@ -1,5 +1,11 @@
 #include <kernel/types.h>
 
+unsigned short inports(unsigned short _port) {
+	unsigned short rv;
+	asm volatile ("inw %1, %0" : "=a" (rv) : "dN" (_port));
+	return rv;
+}
+
 void outports(unsigned short _port, unsigned short _data) {
 	asm volatile ("outw %1, %0" : : "dN" (_port), "a" (_data));
 }
