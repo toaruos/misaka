@@ -1,5 +1,4 @@
-#ifndef _ARCH_X86_64_PORTS_H
-#define _ARCH_X86_64_PORTS_H
+#pragma once
 
 #include <kernel/types.h>
 extern unsigned short inports(unsigned short _port);
@@ -11,4 +10,3 @@ extern void outportb(unsigned short _port, unsigned char _data);
 extern void outportsm(unsigned short port, unsigned char * data, unsigned long size);
 extern void inportsm(unsigned short port, unsigned char * data, unsigned long size);
 
-#endif /* _ARCH_X86_64_PORTS_H */

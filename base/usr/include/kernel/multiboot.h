@@ -1,7 +1,4 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
- */
-#ifndef _MULTIBOOT_H
-#define _MULTIBOOT_H
+#pragma once
 
 #include <kernel/types.h>
 
@@ -86,4 +83,3 @@ typedef struct {
 	uint32_t type;
 } __attribute__ ((packed)) mboot_memmap_t;
 
-#endif /* _MULTIBOOT_H */

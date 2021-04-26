@@ -1,5 +1,4 @@
-#ifndef _SYMBOLTABLE_H
-#define _SYMBOLTABLE_H
+#pragma once
 
 extern char kernel_symbols_start[];
 extern char kernel_symbols_end[];
@@ -11,4 +10,3 @@ typedef struct {
 
 extern void (* symbol_find(const char * name))(void);
 
-#endif /* _SYMBOLTABLE_H */

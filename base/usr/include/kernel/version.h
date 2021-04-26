@@ -1,5 +1,4 @@
-#ifndef _VERSION_H
-#define _VERSION_H
+#pragma once
 
 extern const char * __kernel_name;
 extern const char * __kernel_version_format;
@@ -18,4 +17,3 @@ extern const char * __kernel_build_time;
 
 extern const char * __kernel_compiler_version;
 
-#endif /* _VERSION_H */

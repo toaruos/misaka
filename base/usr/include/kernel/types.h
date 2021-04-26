@@ -1,5 +1,4 @@
-#ifndef _TYPES_H
-#define _TYPES_H
+#pragma once
 
 #include <limits.h>
 #include <stdint.h>
@@ -14,4 +13,3 @@
 #define HIGHS (ONES * (UCHAR_MAX/2+1))
 #define HASZERO(X) (((X)-ONES) & ~(X) & HIGHS)
 
-#endif /* _TYPES_H */

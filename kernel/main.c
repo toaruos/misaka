@@ -5,6 +5,7 @@
 #include <kernel/string.h>
 #include <kernel/printf.h>
 #include <kernel/pci.h>
+#include <kernel/hashmap.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/idt.h>
@@ -12,6 +13,25 @@
 #include <kernel/arch/x86_64/cmos.h>
 
 #include "terminal-font.h"
+
+static char * heapStart = NULL;
+
+void * sbrk(size_t bytes) {
+	if (!heapStart) {
+		printf("Heap is not yet available, but sbrk() was called.\n");
+		return NULL;
+	}
+
+	void * out = heapStart;
+	heapStart += bytes;
+	return out;
+}
+
+char * strdup(const char * c) {
+	char * out = malloc(strlen(c) + 1);
+	memcpy(out, c, strlen(c)+1);
+	return out;
+}
 
 uint32_t * framebuffer = (uint32_t*)0xfd000000;
 
@@ -109,35 +129,13 @@ static size_t _early_log_write(size_t size, uint8_t *buffer) {
 	return size;
 }
 
-static void scan_hit_list(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
-
-	printf("%02x:%02x.%d (%04x, %04x:%04x)",
-			(int)pci_extract_bus(device),
-			(int)pci_extract_slot(device),
-			(int)pci_extract_func(device),
-			(int)pci_find_type(device),
-			vendorid,
-			deviceid);
-
-	printf(" BAR0: 0x%08x", pci_read_field(device, PCI_BAR0, 4));
-	printf(" BAR1: 0x%08x", pci_read_field(device, PCI_BAR1, 4));
-	printf(" BAR2: 0x%08x", pci_read_field(device, PCI_BAR2, 4));
-	printf(" BAR3: 0x%08x", pci_read_field(device, PCI_BAR3, 4));
-	printf(" BAR4: 0x%08x", pci_read_field(device, PCI_BAR4, 4));
-	printf(" BAR5: 0x%08x", pci_read_field(device, PCI_BAR5, 4));
-
-	printf(" IRQ: %2d", pci_read_field(device, 0x3C, 1));
-	printf(" %2d", pci_read_field(device, 0x3D, 1));
-	printf(" Int: %2d", pci_get_interrupt(device));
-	printf(" Stat: 0x%04x\n", pci_read_field(device, PCI_STATUS, 2));
-}
-
-int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
+static void startup_initializeFramebuffer(void) {
 	printf_output = &_early_log_write;
-
 	_setup_framebuffer(1440,900);
 	memset(framebuffer, 0x05, width * height * 4);
+}
 
+static void startup_printVersion(void) {
 	printf("%s %s ", __kernel_name, __kernel_arch);
 	printf(__kernel_version_format,
 			__kernel_version_major,
@@ -149,16 +147,23 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 			__kernel_build_date,
 			__kernel_build_time);
 	printf(" [%s]\n", __kernel_compiler_version);
+}
 
+static void startup_printTime(void) {
 	printf("Current time: %u\n", read_cmos());
+}
 
+static void startup_processMultiboot(struct multiboot * mboot) {
 	printf("Command line: %s\n", mboot->cmdline);
-
 	printf("%d module%s starting 0x%08x\n", mboot->mods_count, (mboot->mods_count == 1 ) ? "" : "s", mboot->mods_addr);
-
 	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
 		printf("  module %s at [0x%08x:0x%08x]\n", mods[i].cmdline, mods[i].mod_start, mods[i].mod_end);
+		heapStart = (char*)((uintptr_t)mods[i].mod_start + mods[i].mod_end);
+	}
+
+	if ((uintptr_t)heapStart & 0xFFF) {
+		heapStart += 0x1000 - ((uintptr_t)heapStart & 0xFFF);
 	}
 
 	printf("Memory map:");
@@ -171,11 +176,17 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 				);
 		mmap = (mboot_memmap_t *) ((uintptr_t)mmap + mmap->size + sizeof(uint32_t));
 	}
+}
 
+static hashmap_t * kernelSymbols = NULL;
+
+static void startup_printSymbols(void) {
+	kernelSymbols = hashmap_create(10);
 	printf("Kernel symbol table:\n");
 	kernel_symbol_t * k = (kernel_symbol_t *)&kernel_symbols_start;
 	int column = 0;
 	while ((uintptr_t)k < (uintptr_t)&kernel_symbols_end) {
+		hashmap_set(kernelSymbols, k->name, (void*)k->addr);
 		int count = printf("  0x%x - %s", k->addr, k->name);
 		k = (kernel_symbol_t *)((uintptr_t)k + sizeof *k + strlen(k->name) + 1);
 		while (count < 38) {
@@ -188,9 +199,10 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 		}
 	}
 	if (column != 0) printf("\n");
+}
 
+static void startup_scanAcpi(void) {
 	/* ACPI */
-
 	uintptr_t scan;
 	int good = 0;
 	for (scan = 0x000E0000; scan < 0x00100000; scan += 16) {
@@ -234,15 +246,52 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 		struct rsdt * rsdt = (struct rsdt *)(uintptr_t)rsdp->rsdt_address;
 		printf("RSDT length: %d; ", rsdt->header.length);
 		printf("RSDT checksum %s\n", acpi_checksum((struct acpi_sdt_header *)rsdt) ? "passed" : "failed");
-
 	}
+}
 
+static void scan_hit_list(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
+	printf("%02x:%02x.%d (%04x, %04x:%04x)",
+			(int)pci_extract_bus(device),
+			(int)pci_extract_slot(device),
+			(int)pci_extract_func(device),
+			(int)pci_find_type(device),
+			vendorid,
+			deviceid);
+
+	printf(" BAR0: 0x%08x", pci_read_field(device, PCI_BAR0, 4));
+	printf(" BAR1: 0x%08x", pci_read_field(device, PCI_BAR1, 4));
+	printf(" BAR2: 0x%08x", pci_read_field(device, PCI_BAR2, 4));
+	printf(" BAR3: 0x%08x", pci_read_field(device, PCI_BAR3, 4));
+	printf(" BAR4: 0x%08x", pci_read_field(device, PCI_BAR4, 4));
+	printf(" BAR5: 0x%08x", pci_read_field(device, PCI_BAR5, 4));
+
+	printf(" IRQ: %2d", pci_read_field(device, 0x3C, 1));
+	printf(" %2d", pci_read_field(device, 0x3D, 1));
+	printf(" Int: %2d", pci_get_interrupt(device));
+	printf(" Stat: 0x%04x\n", pci_read_field(device, PCI_STATUS, 2));
+}
+
+static void startup_scanPci(void) {
 	pci_scan(&scan_hit_list, -1, NULL);
+}
+
+int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
+	startup_initializeFramebuffer();
+	startup_printVersion();
+	startup_printTime();
+	startup_processMultiboot(mboot);
+
+	startup_printSymbols();
+	startup_scanAcpi();
+	//startup_scanPci();
+
+	printf("list_copy = %p\n", hashmap_get(kernelSymbols, "list_copy"));
 
 	/* Let's take an aside here to look at a module */
+	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 	printf("Parsing %s (starts at 0x%08x)\n", mods[0].cmdline, mods[0].mod_start);
 	extern void elf_parseFromMemory(void * atAddress);
-	elf_parseFromMemory((void*)mods[0].mod_start);
+	elf_parseFromMemory((void*)(uintptr_t)mods[0].mod_start);
 
 	printf("Looping...\n");
 	while (1);

@@ -1,5 +1,4 @@
-#ifndef _ARCH_X86_64_ACPI_H
-#define _ARCH_X86_64_ACPI_H
+#pragma once
 
 #include <kernel/types.h>
 
@@ -45,4 +44,3 @@ static inline int acpi_checksum(struct acpi_sdt_header * header) {
 	return check == 0;
 }
 
-#endif /* _ARCH_X86_64_ACPI_H */

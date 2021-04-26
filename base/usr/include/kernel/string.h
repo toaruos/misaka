@@ -1,5 +1,4 @@
-#ifndef _STRING_H
-#define _STRING_H
+#pragma once
 
 #include <kernel/types.h>
 
@@ -31,4 +30,8 @@ extern int atoi(const char * s);
 
 extern char * strtok_r(char * str, const char * delim, char ** saveptr);
 
-#endif /* _STRING_H */
+extern void * __attribute__ ((malloc)) malloc(uintptr_t size);
+extern void * __attribute__ ((malloc)) realloc(void * ptr, uintptr_t size);
+extern void * __attribute__ ((malloc)) calloc(uintptr_t nmemb, uintptr_t size);
+extern void * __attribute__ ((malloc)) valloc(uintptr_t size);
+extern void free(void * ptr);
