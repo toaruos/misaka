@@ -38,13 +38,14 @@ typedef struct {
 	uintptr_t base;
 } __attribute__((packed)) gdt_pointer_t;
 
-static struct {
-	gdt_entry_t entries[5];
+struct {
+	gdt_entry_t entries[6];
 	gdt_entry_high_t tss_extra;
 	gdt_pointer_t pointer;
 	tss_entry_t tss;
-} gdt __attribute__((used)) = {
+} __attribute__((packed)) gdt __attribute__((used)) = {
 	{
+		{0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00},
 		{0xFFFF, 0x0000, 0x00, 0x9A, (1 << 5) | (1 << 7) | 0x0F, 0x00},
 		{0xFFFF, 0x0000, 0x00, 0x92, (1 << 5) | (1 << 7) | 0x0F, 0x00},
 		{0xFFFF, 0x0000, 0x00, 0xFA, (1 << 5) | (1 << 7) | 0x0F, 0x00},
@@ -55,3 +56,29 @@ static struct {
 	{0x0000, 0x0000000000000000},
 	{0,{0,0,0},0,{0,0,0,0,0,0,0},0,0,0},
 };
+
+void gdt_install(void) {
+	gdt.pointer.limit = sizeof(gdt.entries)+sizeof(gdt.tss_extra)-1;
+	gdt.pointer.base  = (uintptr_t)&gdt.entries;
+
+	uintptr_t addr = (uintptr_t)&gdt.tss;
+	gdt.entries[5].limit_low = sizeof(gdt.tss);
+	gdt.entries[5].base_low = (addr & 0xFFFF);
+	gdt.entries[5].base_middle = (addr >> 16) & 0xFF;
+	gdt.entries[5].base_high = (addr >> 24) & 0xFF;
+	gdt.tss_extra.base_highest = (addr >> 32) & 0xFFFFFFFF;
+
+	gdt.tss.rsp[0] = 0x40000000;
+
+	asm volatile (
+		"mov %0, %%rdi\n"
+		"lgdt (%%rdi)\n"
+		"mov $0x10, %%ax\n"
+		"mov %%ax, %%ds\n"
+		"mov %%ax, %%es\n"
+		"mov %%ax, %%ss\n"
+		"mov $0x2b, %%ax\n"
+		"ltr %%ax\n"
+		: : "r"(&gdt.pointer)
+	);
+}

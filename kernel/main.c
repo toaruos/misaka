@@ -180,13 +180,20 @@ static void startup_processMultiboot(struct multiboot * mboot) {
 
 static hashmap_t * kernelSymbols = NULL;
 
-static void startup_printSymbols(void) {
+static void startup_processSymbols(void) {
 	kernelSymbols = hashmap_create(10);
+	kernel_symbol_t * k = (kernel_symbol_t *)&kernel_symbols_start;
+	while ((uintptr_t)k < (uintptr_t)&kernel_symbols_end) {
+		hashmap_set(kernelSymbols, k->name, (void*)k->addr);
+		k = (kernel_symbol_t *)((uintptr_t)k + sizeof *k + strlen(k->name) + 1);
+	}
+}
+
+static void startup_printSymbols(void) {
 	printf("Kernel symbol table:\n");
 	kernel_symbol_t * k = (kernel_symbol_t *)&kernel_symbols_start;
 	int column = 0;
 	while ((uintptr_t)k < (uintptr_t)&kernel_symbols_end) {
-		hashmap_set(kernelSymbols, k->name, (void*)k->addr);
 		int count = printf("  0x%x - %s", k->addr, k->name);
 		k = (kernel_symbol_t *)((uintptr_t)k + sizeof *k + strlen(k->name) + 1);
 		while (count < 38) {
@@ -275,13 +282,17 @@ static void startup_scanPci(void) {
 	pci_scan(&scan_hit_list, -1, NULL);
 }
 
+extern void gdt_install(void);
+extern void idt_install(void);
+
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_initializeFramebuffer();
 	startup_printVersion();
 	startup_printTime();
 	startup_processMultiboot(mboot);
+	startup_processSymbols();
 
-	startup_printSymbols();
+	//startup_printSymbols();
 	startup_scanAcpi();
 	//startup_scanPci();
 
@@ -292,6 +303,12 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	printf("Parsing %s (starts at 0x%08x)\n", mods[0].cmdline, mods[0].mod_start);
 	extern void elf_parseFromMemory(void * atAddress);
 	elf_parseFromMemory((void*)(uintptr_t)mods[0].mod_start);
+
+	gdt_install();
+	idt_install();
+
+	char * t = 0x100000000;
+	*t = 'a';
 
 	printf("Looping...\n");
 	while (1);
