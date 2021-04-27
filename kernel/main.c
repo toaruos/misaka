@@ -35,10 +35,20 @@ char * strdup(const char * c) {
 
 uint32_t * framebuffer = (uint32_t*)0xfd000000;
 
+static void scan_find_framebuffer(uint32_t device, uint16_t v, uint16_t d, void * extra) {
+	if ((v == 0x1234 && d == 0x1111) ||
+	    (v == 0x80EE && d == 0xBEEF) ||
+	    (v == 0x10de && d == 0x0a20))  {
+		uintptr_t t = pci_read_field(device, PCI_BAR0, 4);
+		framebuffer = (uint32_t*)t;
+	}
+}
+
 /**
  * @brief Bochs LFB setup.
  */
 static void _setup_framebuffer(uint16_t x, uint16_t y) {
+	pci_scan(&scan_find_framebuffer, -1, NULL);
 	/* Turn display off */
 	outports(0x1CE, 0x04);
 	outports(0x1CF, 0x00);
