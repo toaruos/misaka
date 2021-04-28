@@ -14,9 +14,10 @@
 *.ko
 *.pcap
 .gdb_history
-misaka-kernel.64
-misaka-kernel
-kernel/symbols.S
-util/build
-util/local
-base/bin/*
+/misaka-kernel.64
+/misaka-kernel
+/kernel/symbols.S
+/util/build
+/util/local
+/base/bin/*
+/.make/

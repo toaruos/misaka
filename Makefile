@@ -102,12 +102,75 @@ $(BASE)/lib/libc.a: ${LIBC_OBJS} | crts
 $(BASE)/lib/libc.so: ${LIBC_OBJS} | crts
 	${CC} -nodefaultlibs -shared -fPIC -o $@ $^ -lgcc
 
-base/bin/test: apps/test.c
-	${CC} -o $@ $<
-
 .PHONY: crts
 crts: $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 
 $(BASE)/lib/crt%.o: libc/crt%.S
 	${AS} -o $@ $<
+
+base/dev:
+	mkdir -p $@
+base/tmp:
+	mkdir -p $@
+base/proc:
+	mkdir -p $@
+base/bin:
+	mkdir -p $@
+base/lib:
+	mkdir -p $@
+base/cdrom:
+	mkdir -p $@
+base/var:
+	mkdir -p $@
+base/lib/kuroko:
+	mkdir -p $@
+fatbase/efi/boot:
+	mkdir -p $@
+cdrom:
+	mkdir -p $@
+.make:
+	mkdir -p .make
+dirs: base/dev base/tmp base/proc base/bin base/lib base/cdrom base/lib/kuroko cdrom base/var fatbase/efi/boot .make
+
+APPS=$(patsubst apps/%.c,%,$(wildcard apps/*.c))
+APPS_X=$(foreach app,$(APPS),base/bin/$(app))
+APPS_Y=$(foreach app,$(APPS),.make/$(app).mak)
+APPS_SH=$(patsubst apps/%.sh,%.sh,$(wildcard apps/*.sh))
+APPS_SH_X=$(foreach app,$(APPS_SH),base/bin/$(app))
+APPS_KRK=$(patsubst apps/%.krk,%.krk,$(wildcard apps/*.krk))
+APPS_KRK_X=$(foreach app,$(APPS_KRK),base/bin/$(app))
+
+LIBS=$(patsubst lib/%.c,%,$(wildcard lib/*.c))
+LIBS_X=$(foreach lib,$(LIBS),base/lib/libtoaru_$(lib).so)
+LIBS_Y=$(foreach lib,$(LIBS),.make/$(lib).lmak)
+
+CFLAGS= -O2 -s -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-parameter
+
+ifeq (,$(findstring clean,$(MAKECMDGOALS)))
+-include ${APPS_Y}
+endif
+
+ifeq (,$(findstring clean,$(MAKECMDGOALS)))
+-include ${LIBS_Y}
+endif
+
+.make/%.lmak: lib/%.c util/auto-dep.krk | dirs crts
+	kuroko util/auto-dep.krk --makelib $< > $@
+
+.make/%.mak: apps/%.c util/auto-dep.krk | dirs crts
+	kuroko util/auto-dep.krk --make $< > $@
+
+base/bin/%.sh: apps/%.sh
+	cp $< $@
+	chmod +x $@
+
+base/bin/%.krk: apps/%.krk
+	cp $< $@
+	chmod +x $@
+
+.PHONY: libs
+libs: $(LIBS_X)
+
+.PHONY: apps
+apps: $(APPS_X)
 
