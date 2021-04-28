@@ -96,11 +96,14 @@ static void _libc_init(void) {
 }
 
 void pre_main(int (*main)(int,char**), int argc, char * argv[]) {
+	char * _argv[] = {"kuroko",NULL,NULL,NULL,NULL};
 	if (!__get_argv()) {
 		/* Statically loaded, must set __argv so __get_argv() works */
-		__argv = argv;
+		__argv = _argv;
+		__stdio_init_buffers();
 	}
-	_init();
-	exit(main(argc, argv));
+	//_init();
+	exit(main(1,_argv));
+	//exit(main(argc, argv));
 }
 

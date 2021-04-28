@@ -132,6 +132,7 @@ static void process_char(char ch) {
 
 #define EARLY_LOG_DEVICE 0x3F8
 static size_t _early_log_write(size_t size, uint8_t *buffer) {
+	if (!buffer) return 0;
 	for (unsigned int i = 0; i < size; ++i) {
 		outportb(EARLY_LOG_DEVICE, buffer[i]);
 		process_char(buffer[i]);
@@ -306,6 +307,19 @@ static void startup_initializePat(void) {
 extern void gdt_install(void);
 extern void idt_install(void);
 
+static void enable_fpu(void) {
+	asm volatile (
+		"clts\n"
+		"mov %%cr0, %%rax\n"
+		"and $0xfffffffffffffffb, %%rax\n"
+		"or  $0x0000000000000002, %%rax\n"
+		"mov %%rax, %%cr0\n"
+		"mov %%cr4, %%rax\n"
+		"or $0x600, %%rax\n"
+		"mov %%rax, %%cr4\n"
+	: : : "rax");
+}
+
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_initializeFramebuffer();
 	startup_printVersion();
@@ -320,21 +334,18 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	printf("list_copy = %p\n", hashmap_get(kernelSymbols, "list_copy"));
 
+	gdt_install();
+	idt_install();
+	enable_fpu();
+
+	//framebuffer = (uint32_t*)(0xFFFFFFFF00000000 | (uintptr_t)framebuffer);
+
 	/* Let's take an aside here to look at a module */
 	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 	printf("Parsing %s (starts at 0x%08x)\n", mods[0].cmdline, mods[0].mod_start);
 	extern void elf_parseFromMemory(void * atAddress);
 	elf_parseFromMemory((void*)(uintptr_t)mods[0].mod_start);
 
-	gdt_install();
-	idt_install();
-
-	char * t = 0x100000000;
-	*t = 'a';
-
-	framebuffer = (uint32_t*)(0xFFFFFFFF00000000 | (uintptr_t)framebuffer);
-
-	printf("Looping...\n");
 	while (1);
 
 	return 42;

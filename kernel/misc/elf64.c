@@ -13,7 +13,7 @@ static Elf64_Shdr * elf_getSection(Elf64_Header * this, Elf64_Word index) {
 	return (Elf64_Shdr*)((uintptr_t)this + this->e_shoff + index * this->e_shentsize);
 }
 
-void elf_parseFromMemory(void * atAddress) {
+void elf_parseModuleFromMemory(void * atAddress) {
 	struct Elf64_Header * elfHeader = atAddress;
 
 	if (elfHeader->e_ident[0] != ELFMAG0 ||
@@ -54,6 +54,58 @@ void elf_parseFromMemory(void * atAddress) {
 			shdr->sh_addr = (uintptr_t)atAddress + shdr->sh_offset;
 		}
 	}
+}
 
+#include <kernel/arch/x86_64/regs.h>
 
+static struct regs ret = {0};
+
+void elf_parseFromMemory(void * atAddress) {
+	struct Elf64_Header * elfHeader = atAddress;
+
+	if (elfHeader->e_ident[0] != ELFMAG0 ||
+	    elfHeader->e_ident[1] != ELFMAG1 ||
+	    elfHeader->e_ident[2] != ELFMAG2 ||
+	    elfHeader->e_ident[3] != ELFMAG3) {
+		printf("(Not an elf)\n");
+		return;
+	}
+	if (elfHeader->e_ident[EI_CLASS] != ELFCLASS64) {
+		printf("(Wrong Elf class)\n");
+		return;
+	}
+	if (elfHeader->e_type != ET_EXEC) {
+		printf("(Not an executable)\n");
+		return;
+	}
+
+	/** Load any LOAD PHDRs */
+	for (int i = 0; i < elfHeader->e_phnum; ++i) {
+		Elf64_Phdr * phdr = (void*)((uintptr_t)elfHeader + elfHeader->e_phoff + i * elfHeader->e_phentsize);
+
+		if (phdr->p_type == PT_LOAD) {
+			printf("LOAD 0x%016lx\n", phdr->p_vaddr);
+			memcpy((void*)phdr->p_vaddr, (void*)((uintptr_t)elfHeader + phdr->p_offset), phdr->p_filesz);
+			for (size_t i = phdr->p_filesz; i < phdr->p_memsz; ++i) {
+				*(char*)(phdr->p_vaddr + i) = 0;
+			}
+		}
+	}
+
+	printf("Jumping to 0x%016lx\n", elfHeader->e_entry);
+
+	/* Good luck. */
+	ret.cs = 0x18 | 0x03;
+	ret.ss = 0x20 | 0x03;
+	ret.rip = elfHeader->e_entry;
+	ret.rsp = 0x3FFFFF00;
+	ret.rflags = (1 << 21);
+	asm volatile (
+		"pushq %0\n"
+		"pushq %1\n"
+		"pushq %2\n"
+		"pushq %3\n"
+		"pushq %4\n"
+		"iretq"
+	: :"r"(ret.ss), "r"(ret.rsp), "r"(ret.rflags), "r"(ret.cs), "r"(ret.rip));
 }

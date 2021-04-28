@@ -91,7 +91,7 @@ jmp_to_long:
     mov %cr3, %edi
 
     /* PML4[0] = &PDP[0] | (PRESENT, WRITABLE, USER) */
-    mov $0x1003, %eax
+    mov $0x1007, %eax
     add %edi, %eax
     mov %eax, (%edi)
 
@@ -110,7 +110,7 @@ jmp_to_long:
     /* Set 512 page table entries to present */
     add $0x1000, %edi
 
-    mov $0x83, %ebx
+    mov $0x87, %ebx
     mov $4, %ecx
 
 .set_entry:

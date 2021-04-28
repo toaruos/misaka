@@ -6,8 +6,8 @@
     .type _irq\index, @function
     _irq\index:
         cli
-        push $0x00
-        push $\byte
+        pushq $0x00
+        pushq $\byte
         jmp isr_common
 .endm
 
@@ -16,8 +16,8 @@
     .type _isr\index, @function
     _isr\index:
         cli
-        push $0x00
-        push $\index
+        pushq $0x00
+        pushq $\index
         jmp isr_common
 .endm
 
@@ -26,7 +26,7 @@
     .type _isr\index, @function
     _isr\index:
         cli
-        push $\index
+        pushq $\index
         jmp isr_common
 .endm
 

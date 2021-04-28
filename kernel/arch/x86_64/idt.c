@@ -89,6 +89,7 @@ extern struct regs * _irq12(struct regs*);
 extern struct regs * _irq13(struct regs*);
 extern struct regs * _irq14(struct regs*);
 extern struct regs * _irq15(struct regs*);
+extern struct regs * _isr127(struct regs*);
 
 void idt_install(void) {
 	idtp.limit = sizeof(idt);
@@ -144,6 +145,7 @@ void idt_install(void) {
 	idt_set_gate(45, _irq13, 0x08, 0x8E);
 	idt_set_gate(46, _irq14, 0x08, 0x8E);
 	idt_set_gate(47, _irq15, 0x08, 0x8E);
+	idt_set_gate(127, _isr127, 0x08, 0x8E);
 
 	asm volatile (
 		"lidt %0"
@@ -151,35 +153,144 @@ void idt_install(void) {
 	);
 }
 
+static void dump_regs(struct regs * r) {
+	printf(
+		"Registers at interrupt:\n"
+		"  rax=0x%016lx rbx=0x%016lx rcx=0x%016lx rdx=0x%016lx\n"
+		"  rsi=0x%016lx rdi=0x%016lx rbp=0x%016lx\n"
+		"   r8=0x%016lx  r9=0x%016lx r10=0x%016lx r11=0x%016lx\n"
+		"  r12=0x%016lx r13=0x%016lx r14=0x%016lx r15=0x%016lx\n"
+		"  rip=0x%016lx  cs=0x%016lx rsp=0x%016lx  ss=0x%016lx\n"
+		"  rflags=0x%016lx int=0x%02lx err=0x%02lx\n",
+		r->rax, r->rbx, r->rcx, r->rdx,
+		r->rsi, r->rdi, r->rbp,
+		r->r8, r->r9, r->r10, r->r11,
+		r->r12, r->r13, r->r14, r->r15,
+		r->rip, r->cs, r->rsp, r->ss,
+		r->rflags, r->int_no, r->err_code
+	);
+}
+
+#include <syscall_nums.h>
+static const char * syscallNames[] = {
+#define _(o) [o] = #o,
+_(SYS_EXT)
+_(SYS_GETEUID)
+_(SYS_OPEN)
+_(SYS_READ)
+_(SYS_WRITE)
+_(SYS_CLOSE)
+_(SYS_GETTIMEOFDAY)
+_(SYS_EXECVE)
+_(SYS_FORK)
+_(SYS_GETPID)
+_(SYS_SBRK)
+_(SYS_UNAME)
+_(SYS_OPENPTY)
+_(SYS_SEEK)
+_(SYS_STAT)
+_(SYS_MKPIPE)
+_(SYS_DUP2)
+_(SYS_GETUID)
+_(SYS_SETUID)
+_(SYS_REBOOT)
+_(SYS_READDIR)
+_(SYS_CHDIR)
+_(SYS_GETCWD)
+_(SYS_CLONE)
+_(SYS_SETHOSTNAME)
+_(SYS_GETHOSTNAME)
+_(SYS_MKDIR)
+_(SYS_SHM_OBTAIN)
+_(SYS_SHM_RELEASE)
+_(SYS_KILL)
+_(SYS_SIGNAL)
+_(SYS_GETTID)
+_(SYS_YIELD)
+_(SYS_SYSFUNC)
+_(SYS_SLEEPABS)
+_(SYS_SLEEP)
+_(SYS_IOCTL)
+_(SYS_ACCESS)
+_(SYS_STATF)
+_(SYS_CHMOD)
+_(SYS_UMASK)
+_(SYS_UNLINK)
+_(SYS_WAITPID)
+_(SYS_PIPE)
+_(SYS_MOUNT)
+_(SYS_SYMLINK)
+_(SYS_READLINK)
+_(SYS_LSTAT)
+_(SYS_FSWAIT)
+_(SYS_FSWAIT2)
+_(SYS_CHOWN)
+_(SYS_SETSID)
+_(SYS_SETPGID)
+_(SYS_GETPGID)
+_(SYS_FSWAIT3)
+};
+
+static uintptr_t sbrk_address = 0x20000000;
+
 struct regs * isr_handler(struct regs * r) {
 	printf("ping %d\n", r->int_no);
 
 	/* XXX for demo purposes */
-	if (r->int_no == 0xE && r->rax == 0x100000000) {
-		printf("Got expected page fault; mapping 0x1_0000_0000 to NULL...\n");
-		init_page_region[1][4].raw = 0x83 | 0x00000000;
-		printf(
-			"Registers at interrupt:\n"
-			"  rax=0x%016lx rbx=0x%016lx rcx=0x%016lx rdx=0x%016lx\n"
-			"  rsi=0x%016lx rdi=0x%016lx rbp=0x%016lx\n"
-			"   r8=0x%016lx  r9=0x%016lx r10=0x%016lx r11=0x%016lx\n"
-			"  r12=0x%016lx r13=0x%016lx r14=0x%016lx r15=0x%016lx\n"
-			"  rip=0x%016lx  cs=0x%016lx rsp=0x%016lx  ss=0x%016lx\n"
-			"  rflags=0x%016lx int=0x%02lx err=0x%02lx\n",
-			r->rax, r->rbx, r->rcx, r->rdx,
-			r->rsi, r->rdi, r->rbp,
-			r->r8, r->r9, r->r10, r->r11,
-			r->r12, r->r13, r->r14, r->r15,
-			r->rip, r->cs, r->rsp, r->ss,
-			r->rflags, r->int_no, r->err_code
-		);
+	if (r->int_no == 14) {
+		printf("Page fault\n");
+		uintptr_t faulting_address;
+		asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
+		printf("cr2: 0x%016lx\n", faulting_address);
+		dump_regs(r);
 		printf("Stack is at ~%p\n", r);
+		printf("(halting)\n");
+		while (1) {};
+	} else if (r->int_no == 13) {
+		/* GPF */
+		printf("General Protection Fault\n");
+		dump_regs(r);
+		while (1) {};
+	} else if (r->int_no == 8) {
+		printf("Double fault?\n");
+		uintptr_t faulting_address;
+		asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
+		printf("cr2: 0x%016lx\n", faulting_address);
+		dump_regs(r);
+	} else if (r->int_no == 6) {
+		printf("Invalid opcode\n");
+		dump_regs(r);
+		while (1) {};
+	} else if (r->int_no == 127) {
+		printf("Legacy syscall vector! %d ", r->rax);
+		if (r->rax <= SYS_FSWAIT) {
+			printf("%s\n",
+				syscallNames[r->rax]);
+		} else {
+			printf("invalid?\n");
+		}
+		dump_regs(r);
 
-		init_page_region[2][508].raw = (uintptr_t)0x00000000 | 0x83;
-		init_page_region[2][509].raw = (uintptr_t)0x40000000 | 0x83;
-		init_page_region[2][510].raw = (uintptr_t)0x80000000 | 0x83;
-		init_page_region[2][511].raw = (uintptr_t)0xc0000000 | 0x83;
-		init_page_region[0][511].raw = (uintptr_t)&init_page_region[2] | 0x1003;
+		switch (r->rax) {
+			case SYS_SBRK:
+				printf("sbrk(%ld);\n", r->rbx);
+				r->rax = sbrk_address;
+				sbrk_address += r->rbx;
+				break;
+			case SYS_EXT:
+				printf("(halting)\n");
+				while (1) {};
+				break;
+			case SYS_WRITE:
+				if (r->rbx == 1) {
+					printf("%.*s", (int)r->rdx, (char*)r->rcx);
+				}
+				r->rax = r->rdx;
+				break;
+			default:
+				r->rax = (size_t)-1;
+				break;
+		}
 	}
 
 	return r;

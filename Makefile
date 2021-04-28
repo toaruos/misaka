@@ -40,7 +40,7 @@ MODULES = $(patsubst %.c,%.ko,$(wildcard modules/*.c))
 
 EMU = qemu-system-x86_64
 EMU_ARGS  = -kernel misaka-kernel
-EMU_ARGS += -m 1G
+EMU_ARGS += -m 3G
 EMU_ARGS += -smp 4
 EMU_ARGS += -no-reboot
 #EMU_ARGS += -display none
@@ -59,10 +59,10 @@ system: misaka-kernel $(MODULES)
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
 run: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd modules/test.ko
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd demo
 
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
-	${CC} -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc
+	${CC} -g -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc
 	${OC} -I elf64-x86-64 -O elf32-i386 $@.64 $@
 
 kernel/sys/version.o: ${KERNEL_SOURCES}
