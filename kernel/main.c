@@ -292,6 +292,17 @@ static void startup_scanPci(void) {
 	pci_scan(&scan_hit_list, -1, NULL);
 }
 
+static void startup_initializePat(void) {
+	asm volatile (
+		"mov $0x277, %%ecx\n" /* IA32_MSR_PAT */
+		"rdmsr\n"
+		"or $0x1000000, %%edx\n" /* set bit 56 */
+		"and $0xf9ffffff, %%edx\n" /* unset bits 57, 58 */
+		"wrmsr\n"
+		: : : "ecx", "edx", "eax"
+	);
+}
+
 extern void gdt_install(void);
 extern void idt_install(void);
 
@@ -301,6 +312,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_printTime();
 	startup_processMultiboot(mboot);
 	startup_processSymbols();
+	startup_initializePat();
 
 	//startup_printSymbols();
 	startup_scanAcpi();
@@ -319,6 +331,8 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	char * t = 0x100000000;
 	*t = 'a';
+
+	framebuffer = (uint32_t*)(0xFFFFFFFF00000000 | (uintptr_t)framebuffer);
 
 	printf("Looping...\n");
 	while (1);

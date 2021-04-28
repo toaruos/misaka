@@ -20,4 +20,4 @@ union PML {
     uint64_t raw;
 };
 
-extern union PML init_page_region[2][512];
+extern union PML init_page_region[3][512];

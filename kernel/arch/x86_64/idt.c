@@ -174,6 +174,12 @@ struct regs * isr_handler(struct regs * r) {
 			r->rflags, r->int_no, r->err_code
 		);
 		printf("Stack is at ~%p\n", r);
+
+		init_page_region[2][508].raw = (uintptr_t)0x00000000 | 0x83;
+		init_page_region[2][509].raw = (uintptr_t)0x40000000 | 0x83;
+		init_page_region[2][510].raw = (uintptr_t)0x80000000 | 0x83;
+		init_page_region[2][511].raw = (uintptr_t)0xc0000000 | 0x83;
+		init_page_region[0][511].raw = (uintptr_t)&init_page_region[2] | 0x1003;
 	}
 
 	return r;
