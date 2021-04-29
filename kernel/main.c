@@ -324,6 +324,7 @@ static void enable_fpu(void) {
 extern fs_node_t * ramdisk_mount(uintptr_t, size_t);
 extern void tarfs_register_init(void);
 extern void elf_parseFromMemory(void * atAddress);
+extern void elf_loadFromFile(const char * filePath);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_initializeFramebuffer();
@@ -356,8 +357,11 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	//framebuffer = (uint32_t*)(0xFFFFFFFF00000000 | (uintptr_t)framebuffer);
 
 	/* Let's take an aside here to look at a module */
-	printf("Parsing %s (starts at 0x%08x)\n", mods[1].cmdline, mods[1].mod_start);
-	elf_parseFromMemory((void*)(uintptr_t)mods[1].mod_start);
+	//printf("Parsing %s (starts at 0x%08x)\n", mods[1].cmdline, mods[1].mod_start);
+	//elf_parseFromMemory((void*)(uintptr_t)mods[1].mod_start);
+
+	/* Load elf from file */
+	elf_loadFromFile("/lib/ld.so");
 
 	while (1);
 

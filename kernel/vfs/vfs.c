@@ -577,7 +577,7 @@ int readlink_fs(fs_node_t *node, char * buf, uint64_t size) {
  * @param input Path to append or canonicalize on
  * @returns An absolute path string
  */
-char *canonicalize_path(char *cwd, char *input) {
+char *canonicalize_path(const char *cwd, const char *input) {
 	/* This is a stack-based canonicalizer; we use a list as a stack */
 	list_t *out = list_create();
 
@@ -935,7 +935,7 @@ fs_node_t *get_mount_point(char * path, unsigned int path_depth, char **outpath,
 
 
 
-fs_node_t *kopen_recur(char *filename, uint64_t flags, uint64_t symlink_depth, char *relative_to) {
+fs_node_t *kopen_recur(const char *filename, uint64_t flags, uint64_t symlink_depth, char *relative_to) {
 	/* Simple sanity checks that we actually have a file system */
 	if (!filename) {
 		return NULL;
@@ -1102,7 +1102,7 @@ fs_node_t *kopen_recur(char *filename, uint64_t flags, uint64_t symlink_depth, c
  * @param flags    Flag bits for read/write mode.
  * @returns A file system node element that the caller can free.
  */
-fs_node_t *kopen(char *filename, uint64_t flags) {
+fs_node_t *kopen(const char *filename, uint64_t flags) {
 	debug_print(NOTICE, "kopen(%s)", filename);
 
 	return kopen_recur(filename, flags, 0, (char *)(current_process->wd_name));

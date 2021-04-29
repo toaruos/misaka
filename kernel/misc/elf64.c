@@ -8,6 +8,7 @@
 #include <kernel/printf.h>
 #include <kernel/string.h>
 #include <kernel/elf.h>
+#include <kernel/vfs.h>
 
 static Elf64_Shdr * elf_getSection(Elf64_Header * this, Elf64_Word index) {
 	return (Elf64_Shdr*)((uintptr_t)this + this->e_shoff + index * this->e_shentsize);
@@ -117,16 +118,19 @@ void elf_parseFromMemory(void * atAddress) {
 	 * TODO: I think the placement of these is defined in the SysV ABI.
 	 */
 	uintptr_t * userStack = (uintptr_t*)ret.rsp;
-	userStack[0] = 1;
+	userStack[0] = 2;
 	userStack[1] = (uintptr_t)&userStack[2];
-	userStack[2] = (uintptr_t)&userStack[6];
-	userStack[3] = 0;
-	userStack[4] = 0; /* env */
-	userStack[5] = 0; /* auxv */
+	userStack[2] = (uintptr_t)&userStack[7];
+	userStack[4] = 0;
+
+	userStack[5] = 0; /* env */
+	userStack[6] = 0; /* auxv */
 
 	/* TODO: argv from exec... */
-	char * c = (char*)&userStack[6];
-	snprintf(c, 10, "argv[0]");
+	char * c = (char*)&userStack[7];
+	c += snprintf(c, 30, "/lib/ld.so") + 1;
+	userStack[3] = (uintptr_t)c;
+	snprintf(c, 30, "/bin/demo");
 
 	ret.rflags = (1 << 21);
 	asm volatile (
@@ -136,5 +140,92 @@ void elf_parseFromMemory(void * atAddress) {
 		"pushq %3\n"
 		"pushq %4\n"
 		"iretq"
-	: :"r"(ret.ss), "r"(ret.rsp), "r"(ret.rflags), "r"(ret.cs), "r"(ret.rip));
+	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
+	    "a"(2), "b"(&userStack[1]), "c"(NULL));
+}
+
+void elf_loadFromFile(const char * filePath) {
+	Elf64_Header header;
+
+	fs_node_t * file = kopen(filePath, 0);
+	if (!file) {
+		printf("Unable to load file.\n");
+		return;
+	}
+
+	read_fs(file, 0, sizeof(Elf64_Header), (uint8_t*)&header);
+
+	if (header.e_ident[0] != ELFMAG0 ||
+	    header.e_ident[1] != ELFMAG1 ||
+	    header.e_ident[2] != ELFMAG2 ||
+	    header.e_ident[3] != ELFMAG3) {
+		printf("Invalid file: Bad header.\n");
+		close_fs(file);
+		return;
+	}
+
+	if (header.e_ident[EI_CLASS] != ELFCLASS64) {
+		printf("(Wrong Elf class)\n");
+		return;
+	}
+
+	/* This loader can only handle basic executables. */
+	if (header.e_type != ET_EXEC) {
+		printf("(Not an executable)\n");
+		return;
+	}
+
+	for (int i = 0; i < header.e_phnum; ++i) {
+		Elf64_Phdr phdr;
+		read_fs(file, header.e_phoff + header.e_phentsize * i, sizeof(Elf64_Phdr), (uint8_t*)&phdr);
+		if (phdr.p_type == PT_LOAD) {
+			read_fs(file, phdr.p_offset, phdr.p_filesz, (void*)phdr.p_vaddr);
+			for (size_t i = phdr.p_filesz; i < phdr.p_memsz; ++i) {
+				*(char*)(phdr.p_vaddr + i) = 0;
+			}
+		}
+		/* TODO: Should also be setting up TLS PHDRs. */
+	}
+
+	/**
+	 * Userspace segment descriptors
+	 */
+	ret.cs = 0x18 | 0x03;
+	ret.ss = 0x20 | 0x03;
+	ret.rip = header.e_entry;
+
+	/* This should really be mapped at the top the userspace region when we set up
+	 * proper page allocation... */
+	ret.rsp = 0x60000000;
+
+	/**
+	 * Temporary stuff for startup environment loaded at bottom of stack.
+	 * TODO: I think the placement of these is defined in the SysV ABI.
+	 */
+	uintptr_t * userStack = (uintptr_t*)ret.rsp;
+	userStack[0] = 2;
+	userStack[1] = (uintptr_t)&userStack[2];
+	userStack[2] = (uintptr_t)&userStack[7];
+	userStack[4] = 0;
+
+	userStack[5] = 0; /* env */
+	userStack[6] = 0; /* auxv */
+
+	/* TODO: argv from exec... */
+	char * c = (char*)&userStack[7];
+	c += snprintf(c, 30, "/lib/ld.so") + 1;
+	userStack[3] = (uintptr_t)c;
+	snprintf(c, 30, "/bin/demo");
+
+	ret.rflags = (1 << 21);
+	asm volatile (
+		"pushq %0\n"
+		"pushq %1\n"
+		"pushq %2\n"
+		"pushq %3\n"
+		"pushq %4\n"
+		"iretq"
+	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
+	    "D"(2), "S"(userStack[1]), "d"(NULL));
+
 }

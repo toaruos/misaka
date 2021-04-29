@@ -1,8 +1,9 @@
 .global _start
 
 _start:
-  popq %rsi /* argc from stack */
-  popq %rdx /* argv from stack */
+  movq %rdx, %rcx /* env */
+  movq %rsi, %rdx /* argv */
+  movq %rdi, %rsi /* argc */
   movq $main, %rdi /* address of main */
   call pre_main /* call pre_main */
 

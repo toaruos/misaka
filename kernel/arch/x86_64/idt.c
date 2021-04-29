@@ -1,7 +1,9 @@
 #include <kernel/types.h>
+#include <kernel/string.h>
 #include <kernel/printf.h>
 #include <kernel/arch/x86_64/pml.h>
 #include <kernel/arch/x86_64/regs.h>
+#include <kernel/vfs.h>
 
 /**
  * Interrupt descriptor table
@@ -233,6 +235,50 @@ _(SYS_FSWAIT3)
 
 static uintptr_t sbrk_address = 0x20000000;
 
+static int stat_node(fs_node_t * fn, uintptr_t st) {
+	struct stat * f = (struct stat *)st;
+
+	//PTR_VALIDATE(f);
+
+	if (!fn) {
+		memset(f, 0x00, sizeof(struct stat));
+		printf("nope\n");
+		return -1; //-ENOENT;
+	}
+	f->st_dev   = (uint16_t)(((uint64_t)fn->device & 0xFFFF0) >> 8);
+	f->st_ino   = fn->inode;
+
+	uint32_t flags = 0;
+	if (fn->flags & FS_FILE)        { flags |= _IFREG; }
+	if (fn->flags & FS_DIRECTORY)   { flags |= _IFDIR; }
+	if (fn->flags & FS_CHARDEVICE)  { flags |= _IFCHR; }
+	if (fn->flags & FS_BLOCKDEVICE) { flags |= _IFBLK; }
+	if (fn->flags & FS_PIPE)        { flags |= _IFIFO; }
+	if (fn->flags & FS_SYMLINK)     { flags |= _IFLNK; }
+
+	f->st_mode  = fn->mask | flags;
+	f->st_nlink = fn->nlink;
+	f->st_uid   = fn->uid;
+	f->st_gid   = fn->gid;
+	f->st_rdev  = 0;
+	f->st_size  = fn->length;
+
+	f->st_atime = fn->atime;
+	f->st_mtime = fn->mtime;
+	f->st_ctime = fn->ctime;
+	f->st_blksize = 512; /* whatever */
+
+	if (fn->get_size) {
+		f->st_size = fn->get_size(fn);
+	}
+
+	return 0;
+}
+
+static int __fd = 3;
+static fs_node_t * __fd_nodes[10] = {NULL};
+static size_t __fd_offsets[10] = {0};
+
 struct regs * isr_handler(struct regs * r) {
 	/* XXX for demo purposes */
 	if (r->int_no == 14) {
@@ -290,11 +336,61 @@ struct regs * isr_handler(struct regs * r) {
 				while (1) {};
 				break;
 			case SYS_WRITE:
-				if (r->rbx == 1) {
+				if (r->rbx == 1 || r->rbx == 2) {
 					printf("%.*s", (int)r->rdx, (char*)r->rcx);
+				} else {
+					printf("invalid write (fd=%ld)\n", r->rbx);
 				}
 				r->rax = r->rdx;
 				break;
+			case SYS_STATF: {
+				fs_node_t * fn = kopen((char*)r->rbx, 0);
+				int result = stat_node(fn, r->rcx);
+				r->rax = result;
+				break;
+			}
+			case SYS_OPEN: {
+				fs_node_t * node = kopen((char*)r->rbx, (int)r->rcx);
+				if (!node) {
+					r->rax = -1;
+					break;
+				}
+				int fd = __fd++;
+				__fd_nodes[fd] = node;
+				__fd_offsets[fd] = 0;
+				r->rax = fd;
+				printf("Completed open for '%s' as fd=%d\n", (char*)r->rbx, fd);
+				break;
+			}
+			case SYS_SEEK: {
+				int fd = r->rbx;
+				if (fd < 3) {
+					r->rax = -1;
+					break;
+				}
+				int offset = r->rcx;
+				int whence = r->rdx;
+
+				if (whence == 0) {
+					__fd_offsets[fd] = offset;
+				} else if (whence == 1) {
+					__fd_offsets[fd] += offset;
+				} else if (whence == 2) {
+					__fd_offsets[fd] = __fd_nodes[fd]->length + offset;
+				}
+				r->rax = __fd_offsets[fd];
+				break;
+			}
+			case SYS_READ: {
+				int fd = r->rbx;
+				if (fd < 3 || !__fd_nodes[fd]) {
+					r->rax = -1;
+					break;
+				}
+				r->rax = read_fs(__fd_nodes[fd], __fd_offsets[fd], r->rdx, (uint8_t*)r->rcx);
+				__fd_offsets[fd] += r->rax;
+				break;
+			}
 			default:
 				printf("Unsupported system call (%s)\n", syscallNames[r->rax]);
 				r->rax = (size_t)-1;

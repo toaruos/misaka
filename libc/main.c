@@ -41,6 +41,7 @@ static void _libc_init(void) {
 	__make_tls();
 	__stdio_init_buffers();
 
+#if 0
 	unsigned int x = 0;
 	unsigned int nulls = 0;
 	for (x = 0; 1; ++x) {
@@ -56,6 +57,7 @@ static void _libc_init(void) {
 			break;
 		}
 	}
+#endif
 	if (!environ) {
 		environ = malloc(sizeof(char *) * 4);
 		environ[0] = NULL;

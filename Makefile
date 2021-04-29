@@ -79,14 +79,17 @@ system: misaka-kernel $(MODULES) ramdisk.tar
 %.ko: %.c
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
-ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/bin/demo
+ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/bin/demo $(BASE)/lib/ld.so
 	cd base; tar -cf ../ramdisk.tar *
 
 $(BASE)/bin/demo: demo.c $(BASE)/lib/libc.a
 	$(CC) -O2 -static -o $@ $<
 
+$(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs
+	$(CC) -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<
+
 run: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd ramdisk.tar,$(BASE)/bin/demo
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd ramdisk.tar
 
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 	${CC} -g -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc
