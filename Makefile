@@ -79,11 +79,8 @@ system: misaka-kernel $(MODULES) ramdisk.tar
 %.ko: %.c
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
-ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/bin/demo $(BASE)/lib/ld.so
+ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/lib/ld.so
 	cd base; tar -cf ../ramdisk.tar *
-
-$(BASE)/bin/demo: demo.c $(BASE)/lib/libc.a
-	$(CC) -O2 -static -o $@ $<
 
 $(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs
 	$(CC) -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<

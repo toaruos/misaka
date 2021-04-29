@@ -76,7 +76,7 @@ static hashmap_t * dumb_symbol_table;
 static hashmap_t * glob_dat;
 static hashmap_t * objects_map;
 static hashmap_t * tls_map;
-static size_t current_tls_offset = 0;
+//static size_t current_tls_offset = 0;
 
 /* Used for dlerror */
 static char * last_error = NULL;
@@ -427,8 +427,11 @@ static int object_relocate(elf_t * object) {
 		fread(&shdr, object->header.e_shentsize, 1, object->file);
 
 		/* Relocation table found */
-		if (shdr.sh_type == 9) {
-			Elf64_Rel * table = (Elf64_Rel *)(shdr.sh_addr + object->base);
+		if (shdr.sh_type == SHT_REL) {
+			printf("Found a REL section. XXXXXXXXXXXXXXXXXXXXX\n");
+		} else if (shdr.sh_type == SHT_RELA) {
+			printf("Found a relocation section\n");
+			Elf64_Rela * table = (Elf64_Rela *)(shdr.sh_addr + object->base);
 			while ((uintptr_t)table - ((uintptr_t)shdr.sh_addr + object->base) < shdr.sh_size) {
 				unsigned int symbol = ELF64_R_SYM(table->r_info);
 				unsigned int type = ELF64_R_TYPE(table->r_info);
@@ -450,6 +453,23 @@ static int object_relocate(elf_t * object) {
 
 				/* Relocations, symbol lookups, etc. */
 				switch (type) {
+					case R_X86_64_GLOB_DAT: /* 6 */
+						if (symname && hashmap_has(glob_dat, symname)) {
+							x = (uintptr_t)hashmap_get(glob_dat, symname);
+						} /* fallthrough */
+					case R_X86_64_JUMP_SLOT: /* 7 */
+						memcpy((void*)(table->r_offset + object->base), &x, sizeof(uintptr_t));
+						break;
+					case R_X86_64_RELATIVE: /* 8*/
+						x = object->base;
+						x += table->r_addend;
+						//*((ssize_t *)(table->r_offset + object->base));
+						memcpy((void*)(table->r_offset + object->base), &x, sizeof(uintptr_t));
+						break;
+					case R_X86_64_64: /* 1 */
+						x += table->r_addend;
+						memcpy((void*)(table->r_offset + object->base), &x, sizeof(uintptr_t));
+						break;
 #if 0
 					case 6: /* GLOB_DAT */
 						if (symname && hashmap_has(glob_dat, symname)) {
@@ -761,7 +781,7 @@ int main(int argc, char * argv[]) {
 
 	/* Enable tracing if requested */
 	char * trace_ld_env = getenv("LD_DEBUG");
-	if ((trace_ld_env && (!strcmp(trace_ld_env,"1") || !strcmp(trace_ld_env,"yes")))) {
+	if (1 || (trace_ld_env && (!strcmp(trace_ld_env,"1") || !strcmp(trace_ld_env,"yes")))) {
 		__trace_ld = 1;
 	}
 
