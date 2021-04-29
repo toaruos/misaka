@@ -321,7 +321,7 @@ static void enable_fpu(void) {
 	: : : "rax");
 }
 
-extern fs_node_t * ramdisk_mount(module_start, module_size);
+extern fs_node_t * ramdisk_mount(uintptr_t, size_t);
 extern void tarfs_register_init(void);
 extern void elf_parseFromMemory(void * atAddress);
 

@@ -703,13 +703,13 @@ void vfs_install(void) {
 	fs_types = hashmap_create(5);
 }
 
-int vfs_register(char * name, vfs_mount_callback callback) {
+int vfs_register(const char * name, vfs_mount_callback callback) {
 	if (hashmap_get(fs_types, name)) return 1;
 	hashmap_set(fs_types, name, (void *)(uintptr_t)callback);
 	return 0;
 }
 
-int vfs_mount_type(char * type, char * arg, char * mountpoint) {
+int vfs_mount_type(const char * type, const char * arg, const char * mountpoint) {
 
 	vfs_mount_callback t = (vfs_mount_callback)(uintptr_t)hashmap_get(fs_types, type);
 	if (!t) {
@@ -747,7 +747,7 @@ static spin_lock_t tmp_vfs_lock = { 0 };
  *
  * Paths here must be absolute.
  */
-void * vfs_mount(char * path, fs_node_t * local_root) {
+void * vfs_mount(const char * path, fs_node_t * local_root) {
 	if (!fs_tree) {
 		debug_print(ERROR, "VFS hasn't been initialized, you can't mount things yet!");
 		return NULL;

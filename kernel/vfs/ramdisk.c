@@ -81,6 +81,7 @@ static int ioctl_ramdisk(fs_node_t * node, int request, void * argp) {
 			return -EINVAL;
 	}
 #endif
+	return -1;
 }
 
 static fs_node_t * ramdisk_device_create(int device_number, uintptr_t location, size_t size) {

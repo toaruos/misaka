@@ -158,10 +158,10 @@ int selectwait_fs(fs_node_t * node, void * process);
 void truncate_fs(fs_node_t * node);
 
 void vfs_install(void);
-void * vfs_mount(char * path, fs_node_t * local_root);
-typedef fs_node_t * (*vfs_mount_callback)(char * arg, char * mount_point);
-int vfs_register(char * name, vfs_mount_callback callback);
-int vfs_mount_type(char * type, char * arg, char * mountpoint);
+void * vfs_mount(const char * path, fs_node_t * local_root);
+typedef fs_node_t * (*vfs_mount_callback)(const char * arg, const char * mount_point);
+int vfs_register(const char * name, vfs_mount_callback callback);
+int vfs_mount_type(const char * type, const char * arg, const char * mountpoint);
 void vfs_lock(fs_node_t * node);
 
 /* Debug purposes only, please */

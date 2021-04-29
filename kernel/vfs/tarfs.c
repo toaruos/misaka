@@ -443,7 +443,7 @@ static int ustar_from_offset(struct tarfs * self, unsigned int offset, struct us
 	return 1;
 }
 
-static fs_node_t * tar_mount(char * device, char * mount_path) {
+static fs_node_t * tar_mount(const char * device, const char * mount_path) {
 	char * arg = strdup(device);
 	char * argv[10];
 	int argc = tokenize(arg, ",", argv);
