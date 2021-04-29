@@ -234,8 +234,6 @@ _(SYS_FSWAIT3)
 static uintptr_t sbrk_address = 0x20000000;
 
 struct regs * isr_handler(struct regs * r) {
-	printf("ping %d\n", r->int_no);
-
 	/* XXX for demo purposes */
 	if (r->int_no == 14) {
 		printf("Page fault\n");
@@ -262,18 +260,28 @@ struct regs * isr_handler(struct regs * r) {
 		dump_regs(r);
 		while (1) {};
 	} else if (r->int_no == 127) {
-		printf("Legacy syscall vector! %d ", r->rax);
-		if (r->rax <= SYS_FSWAIT) {
-			printf("%s\n",
-				syscallNames[r->rax]);
-		} else {
-			printf("invalid?\n");
+		if (r->rax > SYS_FSWAIT) {
+			printf("Invalid system call: %lu\n", r->rax);
+			r->rax = (size_t)-1;
+			return r;
 		}
-		dump_regs(r);
 
 		switch (r->rax) {
+			case SYS_SYSFUNC:
+				{
+					char ** args = (char**)r->rcx;
+					switch (r->rbx) {
+						case 0x0E:
+							printf("Set TLS/fsbase to %p\n", args[0]);
+							break;
+						default:
+							printf("unsupported sysfunc called (%lu)\n", r->rbx);
+							break;
+					}
+					r->rax = (size_t)-1;
+				}
+				break;
 			case SYS_SBRK:
-				printf("sbrk(%ld);\n", r->rbx);
 				r->rax = sbrk_address;
 				sbrk_address += r->rbx;
 				break;
@@ -288,9 +296,13 @@ struct regs * isr_handler(struct regs * r) {
 				r->rax = r->rdx;
 				break;
 			default:
+				printf("Unsupported system call (%s)\n", syscallNames[r->rax]);
 				r->rax = (size_t)-1;
 				break;
 		}
+	} else {
+		printf("Unhandled interrupt: %ld\n", r->int_no);
+		dump_regs(r);
 	}
 
 	return r;

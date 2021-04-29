@@ -6,6 +6,7 @@
 #include <kernel/printf.h>
 #include <kernel/pci.h>
 #include <kernel/hashmap.h>
+#include <kernel/vfs.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/idt.h>
@@ -320,6 +321,10 @@ static void enable_fpu(void) {
 	: : : "rax");
 }
 
+extern fs_node_t * ramdisk_mount(module_start, module_size);
+extern void tarfs_register_init(void);
+extern void elf_parseFromMemory(void * atAddress);
+
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_initializeFramebuffer();
 	startup_printVersion();
@@ -338,13 +343,21 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	idt_install();
 	enable_fpu();
 
+	vfs_install();
+	tarfs_register_init();
+	map_vfs_directory("/dev");
+
+	/* Assume first module is ramdisk? */
+	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
+	ramdisk_mount(mods[0].mod_start, mods[0].mod_end - mods[0].mod_start);
+
+	vfs_mount_type("tar","/dev/ram0","/");
+
 	//framebuffer = (uint32_t*)(0xFFFFFFFF00000000 | (uintptr_t)framebuffer);
 
 	/* Let's take an aside here to look at a module */
-	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
-	printf("Parsing %s (starts at 0x%08x)\n", mods[0].cmdline, mods[0].mod_start);
-	extern void elf_parseFromMemory(void * atAddress);
-	elf_parseFromMemory((void*)(uintptr_t)mods[0].mod_start);
+	printf("Parsing %s (starts at 0x%08x)\n", mods[1].cmdline, mods[1].mod_start);
+	elf_parseFromMemory((void*)(uintptr_t)mods[1].mod_start);
 
 	while (1);
 

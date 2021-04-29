@@ -35,3 +35,4 @@ extern void * __attribute__ ((malloc)) realloc(void * ptr, uintptr_t size);
 extern void * __attribute__ ((malloc)) calloc(uintptr_t nmemb, uintptr_t size);
 extern void * __attribute__ ((malloc)) valloc(uintptr_t size);
 extern void free(void * ptr);
+extern uint8_t startswith(const char * str, const char * accept);

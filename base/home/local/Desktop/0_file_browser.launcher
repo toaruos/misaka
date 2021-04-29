@@ -1,0 +1,3 @@
+icon=folder
+run=cd ~ ; exec file-browser
+title=File Browser

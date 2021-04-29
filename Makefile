@@ -59,7 +59,7 @@ system: misaka-kernel $(MODULES)
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
 run: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd demo
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd ramdisk.tar,demo
 
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 	${CC} -g -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc

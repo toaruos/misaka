@@ -33,8 +33,11 @@ void _exit(int val){
 
 extern void __make_tls(void);
 
+static int __libc_init_called = 0;
+
 __attribute__((constructor))
 static void _libc_init(void) {
+	__libc_init_called = 1;
 	__make_tls();
 	__stdio_init_buffers();
 
@@ -100,9 +103,9 @@ void pre_main(int (*main)(int,char**), int argc, char * argv[]) {
 	if (!__get_argv()) {
 		/* Statically loaded, must set __argv so __get_argv() works */
 		__argv = _argv;
-		__stdio_init_buffers();
+		if (!__libc_init_called) _libc_init();
 	}
-	//_init();
+	_init();
 	exit(main(1,_argv));
 	//exit(main(argc, argv));
 }

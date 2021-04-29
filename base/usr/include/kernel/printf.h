@@ -4,3 +4,4 @@
 
 extern int printf(const char *fmt, ...);
 extern size_t (*printf_output)(size_t, uint8_t *);
+extern int snprintf(char * str, size_t size, const char * format, ...);
