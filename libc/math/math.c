@@ -483,14 +483,14 @@ double cos(double x) {
 
 double tan(double x) {
 	MATH;
-	float out;
-	float _x = x;
-	float one;
+	double out;
+	double _x = x;
+	double one;
 	asm volatile (
-		"fld %2\n"
+		"fldl %2\n"
 		"fptan\n"
-		"fstp %1\n"
-		"fstp %0\n"
+		"fstpl %1\n"
+		"fstpl %0\n"
 		: "=m"(out), "=m"(one) : "m"(_x)
 	);
 	return out;
@@ -498,14 +498,14 @@ double tan(double x) {
 
 double atan2(double y, double x) {
 	MATH;
-	float out;
-	float _x = x;
-	float _y = y;
+	double out;
+	double _x = x;
+	double _y = y;
 	asm volatile (
-		"fld %1\n"
-		"fld %2\n"
+		"fldl %1\n"
+		"fldl %2\n"
 		"fpatan\n"
-		"fstp %0\n"
+		"fstpl %0\n"
 		: "=m"(out) : "m"(_y), "m"(_x)
 	);
 	return out;

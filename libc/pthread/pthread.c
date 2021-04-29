@@ -126,7 +126,7 @@ int pthread_join(pthread_t thread, void **retval) {
 	int status;
 	int result = waitpid(thread.id, &status, 0);
 	if (retval) {
-		*retval = (void*)status;
+		*retval = (void*)(uintptr_t)status;
 	}
 	return result;
 }

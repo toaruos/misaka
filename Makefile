@@ -53,13 +53,19 @@ EMU_KVM   = -enable-kvm
 .PHONY: all system clean run
 
 all: system
-system: misaka-kernel $(MODULES)
+system: misaka-kernel $(MODULES) ramdisk.tar
 
 %.ko: %.c
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
+ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/bin/demo
+	cd base; tar -cf ../ramdisk.tar *
+
+$(BASE)/bin/demo: demo.c | $(BASE)/lib/libc.a
+	$(CC) -O2 -static -o $@ $<
+
 run: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd ramdisk.tar,demo
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd ramdisk.tar,$(BASE)/bin/demo
 
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 	${CC} -g -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc
@@ -86,6 +92,11 @@ clean:
 	-rm -f kernel/symbols.o
 	-rm -f misaka-kernel
 	-rm -f misaka-kernel.64
+	-rm -f $(APPS_Y) $(LIBS_Y)
+	-rm -f $(APPS_X) $(LIBS_X) $(BASE)/bin/demo ramdisk.tar
+	-rm -f $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
+	-rm -f $(BASE)/lib/libc.so $(BASE)/lib/libc.a
+	-rm -f $(LIBC_OBJS)
 
 LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
 LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
@@ -108,21 +119,21 @@ crts: $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 $(BASE)/lib/crt%.o: libc/crt%.S
 	${AS} -o $@ $<
 
-base/dev:
+$(BASE)/dev:
 	mkdir -p $@
-base/tmp:
+$(BASE)/tmp:
 	mkdir -p $@
-base/proc:
+$(BASE)/proc:
 	mkdir -p $@
-base/bin:
+$(BASE)/bin:
 	mkdir -p $@
-base/lib:
+$(BASE)/lib:
 	mkdir -p $@
-base/cdrom:
+$(BASE)/cdrom:
 	mkdir -p $@
-base/var:
+$(BASE)/var:
 	mkdir -p $@
-base/lib/kuroko:
+$(BASE)/lib/kuroko:
 	mkdir -p $@
 fatbase/efi/boot:
 	mkdir -p $@
@@ -130,18 +141,18 @@ cdrom:
 	mkdir -p $@
 .make:
 	mkdir -p .make
-dirs: base/dev base/tmp base/proc base/bin base/lib base/cdrom base/lib/kuroko cdrom base/var fatbase/efi/boot .make
+dirs: $(BASE)/dev $(BASE)/tmp $(BASE)/proc $(BASE)/bin $(BASE)/lib $(BASE)/cdrom $(BASE)/lib/kuroko cdrom $(BASE)/var fatbase/efi/boot .make
 
 APPS=$(patsubst apps/%.c,%,$(wildcard apps/*.c))
-APPS_X=$(foreach app,$(APPS),base/bin/$(app))
+APPS_X=$(foreach app,$(APPS),$(BASE)/bin/$(app))
 APPS_Y=$(foreach app,$(APPS),.make/$(app).mak)
 APPS_SH=$(patsubst apps/%.sh,%.sh,$(wildcard apps/*.sh))
-APPS_SH_X=$(foreach app,$(APPS_SH),base/bin/$(app))
+APPS_SH_X=$(foreach app,$(APPS_SH),$(BASE)/bin/$(app))
 APPS_KRK=$(patsubst apps/%.krk,%.krk,$(wildcard apps/*.krk))
-APPS_KRK_X=$(foreach app,$(APPS_KRK),base/bin/$(app))
+APPS_KRK_X=$(foreach app,$(APPS_KRK),$(BASE)/bin/$(app))
 
 LIBS=$(patsubst lib/%.c,%,$(wildcard lib/*.c))
-LIBS_X=$(foreach lib,$(LIBS),base/lib/libtoaru_$(lib).so)
+LIBS_X=$(foreach lib,$(LIBS),$(BASE)/lib/libtoaru_$(lib).so)
 LIBS_Y=$(foreach lib,$(LIBS),.make/$(lib).lmak)
 
 CFLAGS= -O2 -s -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-parameter
@@ -160,11 +171,11 @@ endif
 .make/%.mak: apps/%.c util/auto-dep.krk | dirs crts
 	kuroko util/auto-dep.krk --make $< > $@
 
-base/bin/%.sh: apps/%.sh
+$(BASE)/bin/%.sh: apps/%.sh
 	cp $< $@
 	chmod +x $@
 
-base/bin/%.krk: apps/%.krk
+$(BASE)/bin/%.krk: apps/%.krk
 	cp $< $@
 	chmod +x $@
 
