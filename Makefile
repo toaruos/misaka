@@ -50,6 +50,25 @@ EMU_ARGS += -soundhw pcspk,ac97
 #EMU_ARGS += -hda toaruos-disk.img
 EMU_KVM   = -enable-kvm
 
+APPS=$(patsubst apps/%.c,%,$(wildcard apps/*.c))
+APPS_X=$(foreach app,$(APPS),$(BASE)/bin/$(app))
+APPS_Y=$(foreach app,$(APPS),.make/$(app).mak)
+APPS_SH=$(patsubst apps/%.sh,%.sh,$(wildcard apps/*.sh))
+APPS_SH_X=$(foreach app,$(APPS_SH),$(BASE)/bin/$(app))
+APPS_KRK=$(patsubst apps/%.krk,%.krk,$(wildcard apps/*.krk))
+APPS_KRK_X=$(foreach app,$(APPS_KRK),$(BASE)/bin/$(app))
+
+LIBS=$(patsubst lib/%.c,%,$(wildcard lib/*.c))
+LIBS_X=$(foreach lib,$(LIBS),$(BASE)/lib/libtoaru_$(lib).so)
+LIBS_Y=$(foreach lib,$(LIBS),.make/$(lib).lmak)
+
+CFLAGS= -O2 -s -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-parameter
+
+LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
+LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
+
+LC = $(BASE)/lib/libc.so
+
 .PHONY: all system clean run
 
 all: system
@@ -98,9 +117,6 @@ clean:
 	-rm -f $(BASE)/lib/libc.so $(BASE)/lib/libc.a
 	-rm -f $(LIBC_OBJS)
 
-LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
-LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
-
 libc/%.o: libc/%.c
 	$(CC) -fPIC -c -o $@ $<
 
@@ -142,20 +158,6 @@ cdrom:
 .make:
 	mkdir -p .make
 dirs: $(BASE)/dev $(BASE)/tmp $(BASE)/proc $(BASE)/bin $(BASE)/lib $(BASE)/cdrom $(BASE)/lib/kuroko cdrom $(BASE)/var fatbase/efi/boot .make
-
-APPS=$(patsubst apps/%.c,%,$(wildcard apps/*.c))
-APPS_X=$(foreach app,$(APPS),$(BASE)/bin/$(app))
-APPS_Y=$(foreach app,$(APPS),.make/$(app).mak)
-APPS_SH=$(patsubst apps/%.sh,%.sh,$(wildcard apps/*.sh))
-APPS_SH_X=$(foreach app,$(APPS_SH),$(BASE)/bin/$(app))
-APPS_KRK=$(patsubst apps/%.krk,%.krk,$(wildcard apps/*.krk))
-APPS_KRK_X=$(foreach app,$(APPS_KRK),$(BASE)/bin/$(app))
-
-LIBS=$(patsubst lib/%.c,%,$(wildcard lib/*.c))
-LIBS_X=$(foreach lib,$(LIBS),$(BASE)/lib/libtoaru_$(lib).so)
-LIBS_Y=$(foreach lib,$(LIBS),.make/$(lib).lmak)
-
-CFLAGS= -O2 -s -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-parameter
 
 ifeq (,$(findstring clean,$(MAKECMDGOALS)))
 -include ${APPS_Y}
