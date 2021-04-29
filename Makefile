@@ -67,6 +67,8 @@ CFLAGS= -O2 -s -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unuse
 LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
 LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
 
+CRTS  = $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
+
 LC = $(BASE)/lib/libc.so
 
 .PHONY: all system clean run
@@ -80,7 +82,7 @@ system: misaka-kernel $(MODULES) ramdisk.tar
 ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/bin/demo
 	cd base; tar -cf ../ramdisk.tar *
 
-$(BASE)/bin/demo: demo.c | $(BASE)/lib/libc.a
+$(BASE)/bin/demo: demo.c $(BASE)/lib/libc.a
 	$(CC) -O2 -static -o $@ $<
 
 run: system
@@ -123,14 +125,11 @@ libc/%.o: libc/%.c
 .PHONY: libc
 libc: $(BASE)/lib/libc.a $(BASE)/lib/libc.so
 
-$(BASE)/lib/libc.a: ${LIBC_OBJS} | crts
-	$(AR) cr $@ $^
+$(BASE)/lib/libc.a: ${LIBC_OBJS} $(CRTS)
+	$(AR) cr $@ $(LIBC_OBJS)
 
-$(BASE)/lib/libc.so: ${LIBC_OBJS} | crts
+$(BASE)/lib/libc.so: ${LIBC_OBJS} | $(CRTS)
 	${CC} -nodefaultlibs -shared -fPIC -o $@ $^ -lgcc
-
-.PHONY: crts
-crts: $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 
 $(BASE)/lib/crt%.o: libc/crt%.S
 	${AS} -o $@ $<
@@ -167,10 +166,10 @@ ifeq (,$(findstring clean,$(MAKECMDGOALS)))
 -include ${LIBS_Y}
 endif
 
-.make/%.lmak: lib/%.c util/auto-dep.krk | dirs crts
+.make/%.lmak: lib/%.c util/auto-dep.krk | dirs $(CRTS)
 	kuroko util/auto-dep.krk --makelib $< > $@
 
-.make/%.mak: apps/%.c util/auto-dep.krk | dirs crts
+.make/%.mak: apps/%.c util/auto-dep.krk | dirs $(CRTS)
 	kuroko util/auto-dep.krk --make $< > $@
 
 $(BASE)/bin/%.sh: apps/%.sh

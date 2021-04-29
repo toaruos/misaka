@@ -99,14 +99,20 @@ static void _libc_init(void) {
 }
 
 void pre_main(int (*main)(int,char**), int argc, char * argv[]) {
-	char * _argv[] = {"kuroko",NULL,NULL,NULL,NULL};
 	if (!__get_argv()) {
 		/* Statically loaded, must set __argv so __get_argv() works */
-		__argv = _argv;
-		if (!__libc_init_called) _libc_init();
+		__argv = argv;
+		/* Run our initializers, because I'm pretty sure the kernel didn't... */
+		if (!__libc_init_called) {
+			extern uintptr_t __init_array_start;
+			extern uintptr_t __init_array_end;
+			for (uintptr_t * constructor = &__init_array_start; constructor < &__init_array_end; ++constructor) {
+				void (*constr)(void) = (void*)*constructor;
+				constr();
+			}
+		}
 	}
 	_init();
-	exit(main(1,_argv));
-	//exit(main(argc, argv));
+	exit(main(argc, argv));
 }
 
