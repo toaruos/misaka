@@ -203,19 +203,21 @@ void elf_loadFromFile(const char * filePath) {
 	 * TODO: I think the placement of these is defined in the SysV ABI.
 	 */
 	uintptr_t * userStack = (uintptr_t*)ret.rsp;
-	userStack[0] = 2;
+	userStack[0] = 3;
 	userStack[1] = (uintptr_t)&userStack[2];
-	userStack[2] = (uintptr_t)&userStack[7];
-	userStack[4] = 0;
+	userStack[2] = (uintptr_t)&userStack[8];
+	userStack[5] = 0;
 
-	userStack[5] = 0; /* env */
-	userStack[6] = 0; /* auxv */
+	userStack[6] = 0; /* env */
+	userStack[7] = 0; /* auxv */
 
 	/* TODO: argv from exec... */
-	char * c = (char*)&userStack[7];
+	char * c = (char*)&userStack[8];
 	c += snprintf(c, 30, "/lib/ld.so") + 1;
 	userStack[3] = (uintptr_t)c;
-	snprintf(c, 30, "/bin/demo");
+	c += snprintf(c, 30, "/bin/kuroko") + 1;
+	userStack[4] = (uintptr_t)c;
+	c += snprintf(c, 30, "/bin/demo.krk") + 1;
 
 	ret.rflags = (1 << 21);
 	asm volatile (
@@ -226,6 +228,6 @@ void elf_loadFromFile(const char * filePath) {
 		"pushq %4\n"
 		"iretq"
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
-	    "D"(2), "S"(userStack[1]), "d"(NULL));
+	    "D"(userStack[0]), "S"(userStack[1]), "d"(NULL));
 
 }

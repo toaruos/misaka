@@ -4,3 +4,6 @@
 [submodule "util/gcc"]
 	path = util/gcc
 	url = git@github.com:toaruos/gcc
+[submodule "kuroko"]
+	path = kuroko
+	url = git@github.com:kuroko-lang/kuroko

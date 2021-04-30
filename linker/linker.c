@@ -428,9 +428,8 @@ static int object_relocate(elf_t * object) {
 
 		/* Relocation table found */
 		if (shdr.sh_type == SHT_REL) {
-			printf("Found a REL section. XXXXXXXXXXXXXXXXXXXXX\n");
+			TRACE_LD("Found a REL section, this is not handled.");
 		} else if (shdr.sh_type == SHT_RELA) {
-			printf("Found a relocation section\n");
 			Elf64_Rela * table = (Elf64_Rela *)(shdr.sh_addr + object->base);
 			while ((uintptr_t)table - ((uintptr_t)shdr.sh_addr + object->base) < shdr.sh_size) {
 				unsigned int symbol = ELF64_R_SYM(table->r_info);
@@ -469,6 +468,9 @@ static int object_relocate(elf_t * object) {
 					case R_X86_64_64: /* 1 */
 						x += table->r_addend;
 						memcpy((void*)(table->r_offset + object->base), &x, sizeof(uintptr_t));
+						break;
+					case R_X86_64_COPY: /* 5 */
+						memcpy((void *)(table->r_offset + object->base), (void *)x, sym->st_size);
 						break;
 #if 0
 					case 6: /* GLOB_DAT */
@@ -533,6 +535,19 @@ static void object_find_copy_relocations(elf_t * object) {
 		/* Relocation table found */
 		if (shdr.sh_type == SHT_REL) {
 			Elf64_Rel * table = (Elf64_Rel *)(shdr.sh_addr + object->base);
+			while ((uintptr_t)table - ((uintptr_t)shdr.sh_addr + object->base) < shdr.sh_size) {
+				unsigned int type = ELF64_R_TYPE(table->r_info);
+				if (type == R_X86_64_COPY) {
+					unsigned int  symbol = ELF64_R_SYM(table->r_info);
+					Elf64_Sym * sym = &object->dyn_symbol_table[symbol];
+					char * symname = (char *)((uintptr_t)object->dyn_string_table + sym->st_name);
+					hashmap_set(glob_dat, symname, (void *)table->r_offset);
+				}
+				table++;
+			}
+		}
+		if (shdr.sh_type == SHT_RELA) {
+			Elf64_Rela * table = (Elf64_Rela *)(shdr.sh_addr + object->base);
 			while ((uintptr_t)table - ((uintptr_t)shdr.sh_addr + object->base) < shdr.sh_size) {
 				unsigned int type = ELF64_R_TYPE(table->r_info);
 				if (type == R_X86_64_COPY) {

@@ -4,6 +4,10 @@
 #include <kernel/arch/x86_64/pml.h>
 #include <kernel/arch/x86_64/regs.h>
 #include <kernel/vfs.h>
+#include <kernel/version.h>
+
+#include <sys/time.h>
+#include <sys/utsname.h>
 
 /**
  * Interrupt descriptor table
@@ -318,7 +322,14 @@ struct regs * isr_handler(struct regs * r) {
 					char ** args = (char**)r->rcx;
 					switch (r->rbx) {
 						case 0x0E:
-							printf("Set TLS/fsbase to %p\n", args[0]);
+							printf("[system_function] Set TLS/fsbase to %p\n", args[0]);
+							break;
+						case 0x09:
+							printf("[system_function] Move sbrk to %p\n", args[0]);
+							sbrk_address = (uintptr_t)args[0];
+							break;
+						case 0x0A:
+							printf("[system_function] Map pages to fill %p:0x%016lx\n", args[0], args[1]);
 							break;
 						default:
 							printf("unsupported sysfunc called (%lu)\n", r->rbx);
@@ -359,7 +370,6 @@ struct regs * isr_handler(struct regs * r) {
 				__fd_nodes[fd] = node;
 				__fd_offsets[fd] = 0;
 				r->rax = fd;
-				printf("Completed open for '%s' as fd=%d\n", (char*)r->rbx, fd);
 				break;
 			}
 			case SYS_SEEK: {
@@ -384,11 +394,52 @@ struct regs * isr_handler(struct regs * r) {
 			case SYS_READ: {
 				int fd = r->rbx;
 				if (fd < 3 || !__fd_nodes[fd]) {
+					printf("(read from fd=%d returning -1)\n", fd);
 					r->rax = -1;
 					break;
 				}
 				r->rax = read_fs(__fd_nodes[fd], __fd_offsets[fd], r->rdx, (uint8_t*)r->rcx);
 				__fd_offsets[fd] += r->rax;
+				break;
+			}
+			case SYS_CLOSE: {
+				int fd = r->rbx;
+				if (fd < 3 || !__fd_nodes[fd]) {
+					r->rax = -1;
+					break;
+				}
+				close_fs(__fd_nodes[fd]);
+				__fd_nodes[fd] = NULL;
+				r->rax = 0;
+				break;
+			}
+			case SYS_GETTIMEOFDAY: {
+				struct timeval * out = (struct timeval*)r->rbx;
+				extern uint32_t read_cmos(void);
+				out->tv_sec = read_cmos();
+				out->tv_usec = 0;
+				break;
+			}
+			case SYS_UNAME: {
+				struct utsname * name = (struct utsname*)r->rbx;
+				char version_number[256];
+				snprintf(version_number, 255, __kernel_version_format,
+						__kernel_version_major,
+						__kernel_version_minor,
+						__kernel_version_lower,
+						__kernel_version_suffix);
+				char version_string[256];
+				snprintf(version_string, 255, "%s %s %s",
+						__kernel_version_codename,
+						__kernel_build_date,
+						__kernel_build_time);
+				strcpy(name->sysname,  __kernel_name);
+				strcpy(name->nodename, "localhost");
+				strcpy(name->release,  version_number);
+				strcpy(name->version,  version_string);
+				strcpy(name->machine,  __kernel_arch);
+				strcpy(name->domainname, "");
+				r->rax = 0;
 				break;
 			}
 			default:

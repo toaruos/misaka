@@ -79,8 +79,12 @@ system: misaka-kernel $(MODULES) ramdisk.tar
 %.ko: %.c
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
-ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/lib/ld.so
+ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/bin/kuroko $(BASE)/lib/ld.so $(APPS_KRK_X)
 	cd base; tar -cf ../ramdisk.tar *
+
+KRK_SRC = $(sort $(wildcard kuroko/src/*.c))
+$(BASE)/bin/kuroko: $(KRK_SRC) | $(LC)
+	$(CC) -o $@ -Wl,--export-dynamic -Ikuroko/src -DNO_RLINE -DKRK_DISABLE_THREADS $(KRK_SRC)
 
 $(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs
 	$(CC) -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<

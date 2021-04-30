@@ -119,7 +119,7 @@ uint32_t read_cmos(void) {
 	return time;
 }
 
-/*
+#if 0
 int gettimeofday(struct timeval * t, void *z) {
 	t->tv_sec = boot_time + timer_ticks + timer_drift;
 	t->tv_usec = timer_subticks * 1000;
@@ -131,4 +131,4 @@ uint32_t now(void) {
 	gettimeofday(&t, NULL);
 	return t.tv_sec;
 }
-*/
+#endif

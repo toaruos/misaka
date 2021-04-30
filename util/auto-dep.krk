@@ -3,7 +3,7 @@ import os, kuroko, fileio
 
 let cflags = "-O2 -g -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-parameter"
 
-def basename(path):
+def basename(path: str) -> str:
     return path.strip('/').split('/')[-1]
 
 class Classifier:
@@ -36,7 +36,7 @@ class Classifier:
         '<kuroko/kuroko.h>':     (None, '-lkuroko', []),
     }
 
-    def __init__(self, filename):
+    def __init__(self, filename: str):
         self.export_dynamic_hint = False
         self.filename  = filename
         self.includes, self.libs = self._depends()
@@ -50,7 +50,7 @@ class Classifier:
                 depends = self._calculate(depends, other)
         return depends
 
-    def _sort(self, depends):
+    def _sort(self, depends: list[str]) -> list[str]:
         """Sort the list of dependencies so that elements appearing first depend on elements following."""
         let satisfied = []
         let a = depends[:]
@@ -65,7 +65,7 @@ class Classifier:
             a = b[:]
         return reversed(satisfied)
 
-    def _depends(self):
+    def _depends(self) -> (list[str],list[str]):
         """Calculate include and library dependencies."""
         let lines = []
         let depends = []
@@ -89,7 +89,7 @@ class Classifier:
         return includes, libraries
 
 
-def todep(name):
+def todep(name: str) -> (bool, str):
     """Convert a library name to an archive path or object file name."""
     if name.startswith("-l"):
         name = name.replace("-l","",1)
@@ -102,7 +102,7 @@ def todep(name):
     else:
         return (False, name)
 
-def toheader(name):
+def toheader(name: str) -> str:
     if name.startswith('-ltoaru_'):
         return name.replace('-ltoaru_','base/usr/include/toaru/') + '.h'
     else:

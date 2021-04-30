@@ -46,7 +46,7 @@ static uint64_t now(void) {
 	return 0;
 }
 
-#define debug_print(x, ...) do { printf("vfs.c [%s] ", #x); printf(__VA_ARGS__); printf("\n"); } while (0)
+#define debug_print(x, ...) do { if (0) {printf("vfs.c [%s] ", #x); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
 
 int has_permission(fs_node_t * node, int permission_bit) {

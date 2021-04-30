@@ -161,16 +161,14 @@ static void startup_printVersion(void) {
 	printf(" [%s]\n", __kernel_compiler_version);
 }
 
-static void startup_printTime(void) {
-	printf("Current time: %u\n", read_cmos());
-}
-
 static void startup_processMultiboot(struct multiboot * mboot) {
+#if 0
 	printf("Command line: %s\n", mboot->cmdline);
 	printf("%d module%s starting 0x%08x\n", mboot->mods_count, (mboot->mods_count == 1 ) ? "" : "s", mboot->mods_addr);
+#endif
 	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
-		printf("  module %s at [0x%08x:0x%08x]\n", mods[i].cmdline, mods[i].mod_start, mods[i].mod_end);
+	//	printf("  module %s at [0x%08x:0x%08x]\n", mods[i].cmdline, mods[i].mod_start, mods[i].mod_end);
 		heapStart = (char*)((uintptr_t)mods[i].mod_start + mods[i].mod_end);
 	}
 
@@ -178,6 +176,7 @@ static void startup_processMultiboot(struct multiboot * mboot) {
 		heapStart += 0x1000 - ((uintptr_t)heapStart & 0xFFF);
 	}
 
+#if 0
 	printf("Memory map:");
 	printf("  Lower mem: %dkB", (uint64_t)mboot->mem_lower);
 	printf("  Upper mem: %dkB\n", (uint64_t)mboot->mem_upper);
@@ -188,6 +187,7 @@ static void startup_processMultiboot(struct multiboot * mboot) {
 				);
 		mmap = (mboot_memmap_t *) ((uintptr_t)mmap + mmap->size + sizeof(uint32_t));
 	}
+#endif
 }
 
 static hashmap_t * kernelSymbols = NULL;
@@ -312,12 +312,20 @@ static void enable_fpu(void) {
 	asm volatile (
 		"clts\n"
 		"mov %%cr0, %%rax\n"
-		"and $0xfffffffffffffffb, %%rax\n"
-		"or  $0x0000000000000002, %%rax\n"
+		"and $0xFFFD, %%ax\n"
+		"or $0x10, %%ax\n"
+		"mov %%rax, %%cr0\n"
+		"fninit\n"
+		"mov %%cr0, %%rax\n"
+		"and $0xfffb, %%ax\n"
+		"or  $0x0002, %%ax\n"
 		"mov %%rax, %%cr0\n"
 		"mov %%cr4, %%rax\n"
 		"or $0x600, %%rax\n"
 		"mov %%rax, %%cr4\n"
+		"push $0x1F80\n"
+		"ldmxcsr (%%rsp)\n"
+		"addq $8, %%rsp\n"
 	: : : "rax");
 }
 
@@ -329,16 +337,13 @@ extern void elf_loadFromFile(const char * filePath);
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_initializeFramebuffer();
 	startup_printVersion();
-	startup_printTime();
 	startup_processMultiboot(mboot);
 	startup_processSymbols();
 	startup_initializePat();
 
 	//startup_printSymbols();
-	startup_scanAcpi();
+	//startup_scanAcpi();
 	//startup_scanPci();
-
-	printf("list_copy = %p\n", hashmap_get(kernelSymbols, "list_copy"));
 
 	gdt_install();
 	idt_install();
