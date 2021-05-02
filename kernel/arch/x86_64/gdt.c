@@ -68,7 +68,8 @@ void gdt_install(void) {
 	gdt.entries[5].base_high = (addr >> 24) & 0xFF;
 	gdt.tss_extra.base_highest = (addr >> 32) & 0xFFFFFFFF;
 
-	gdt.tss.rsp[0] = 0x50000000;
+	extern void * stack_top;
+	gdt.tss.rsp[0] = (uintptr_t)&stack_top;
 
 	asm volatile (
 		"mov %0, %%rdi\n"

@@ -43,6 +43,7 @@ multiboot_header:
 .section .stack, "aw", @nobits
 stack_bottom:
 .skip 16384 /* 16KiB */
+.global stack_top
 stack_top:
 
 .section .bootstrap

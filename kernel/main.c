@@ -12,6 +12,7 @@
 #include <kernel/arch/x86_64/idt.h>
 #include <kernel/arch/x86_64/acpi.h>
 #include <kernel/arch/x86_64/cmos.h>
+#include <kernel/arch/x86_64/pml.h>
 
 #include "terminal-font.h"
 
@@ -335,12 +336,16 @@ extern void tarfs_register_init(void);
 extern void elf_parseFromMemory(void * atAddress);
 extern void elf_loadFromFile(const char * filePath);
 
+extern void mmu_init(void);
+
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
-	startup_initializeFramebuffer();
-	startup_printVersion();
+	startup_initializeFramebuffer(); /* TODO: lfbvideo module */
+	startup_printVersion();          /* TODO: move to generic kernel/misc/version.c? */
 	startup_processMultiboot(mboot);
-	startup_processSymbols();
-	startup_initializePat();
+	startup_processSymbols();        /* TODO: move to generic kernel/misc/symbols.c and/or ditch when we switch to an ELF with a DYN table? */
+	startup_initializePat();         /* TODO: arch/x86-64/mem.c? */
+
+	mmu_init();
 
 	startup_printSymbols();
 	//startup_scanAcpi();
@@ -360,7 +365,6 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	vfs_mount_type("tar","/dev/ram0","/");
 
-	//framebuffer = (uint32_t*)(0xFFFFFFFF00000000 | (uintptr_t)framebuffer);
 
 #if 0
 	/* Let's take an aside here to look at a module */

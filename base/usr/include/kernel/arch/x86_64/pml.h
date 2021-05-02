@@ -1,3 +1,4 @@
+#pragma once
 #include <kernel/types.h>
 
 union PML {
@@ -20,4 +21,3 @@ union PML {
     uint64_t raw;
 };
 
-extern union PML init_page_region[3][512];

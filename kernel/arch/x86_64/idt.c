@@ -8,6 +8,7 @@
 
 #include <sys/time.h>
 #include <sys/utsname.h>
+#include <kernel/arch/x86_64/mmu.h>
 
 /**
  * Interrupt descriptor table
@@ -330,6 +331,10 @@ struct regs * isr_handler(struct regs * r) {
 							break;
 						case 0x0A:
 							printf("[system_function] Map pages to fill %p:0x%016lx\n", args[0], args[1]);
+							for (uintptr_t i = (uintptr_t)args[0]; i < (uintptr_t)args[0] + (size_t)args[1]; i += 0x1000) {
+								union PML * page = mmu_get_page(i, MMU_GET_MAKE);
+								mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+							}
 							break;
 						default:
 							printf("unsupported sysfunc called (%lu)\n", r->rbx);
@@ -340,6 +345,10 @@ struct regs * isr_handler(struct regs * r) {
 				break;
 			case SYS_SBRK:
 				r->rax = sbrk_address;
+				for (uintptr_t i = sbrk_address; i < sbrk_address + r->rbx; i += 0x1000) {
+					union PML * page = mmu_get_page(i, MMU_GET_MAKE);
+					mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+				}
 				sbrk_address += r->rbx;
 				break;
 			case SYS_EXT:

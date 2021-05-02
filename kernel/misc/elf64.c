@@ -10,6 +10,8 @@
 #include <kernel/elf.h>
 #include <kernel/vfs.h>
 
+#include <kernel/arch/x86_64/mmu.h>
+
 static Elf64_Shdr * elf_getSection(Elf64_Header * this, Elf64_Word index) {
 	return (Elf64_Shdr*)((uintptr_t)this + this->e_shoff + index * this->e_shentsize);
 }
@@ -61,6 +63,7 @@ void elf_parseModuleFromMemory(void * atAddress) {
 
 static struct regs ret = {0};
 
+#if 0
 /**
  * @brief (temporary) Load an ELF Executable as a userspace program and jump to its entry point.
  *
@@ -143,6 +146,7 @@ void elf_parseFromMemory(void * atAddress) {
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
 	    "a"(2), "b"(&userStack[1]), "c"(NULL));
 }
+#endif
 
 void elf_loadFromFile(const char * filePath) {
 	Elf64_Header header;
@@ -179,6 +183,11 @@ void elf_loadFromFile(const char * filePath) {
 		Elf64_Phdr phdr;
 		read_fs(file, header.e_phoff + header.e_phentsize * i, sizeof(Elf64_Phdr), (uint8_t*)&phdr);
 		if (phdr.p_type == PT_LOAD) {
+			for (uintptr_t i = phdr.p_vaddr; i < phdr.p_vaddr + phdr.p_memsz; i += 0x1000) {
+				union PML * page = mmu_get_page(i, MMU_GET_MAKE);
+				mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+			}
+
 			read_fs(file, phdr.p_offset, phdr.p_filesz, (void*)phdr.p_vaddr);
 			for (size_t i = phdr.p_filesz; i < phdr.p_memsz; ++i) {
 				*(char*)(phdr.p_vaddr + i) = 0;
@@ -196,7 +205,13 @@ void elf_loadFromFile(const char * filePath) {
 
 	/* This should really be mapped at the top the userspace region when we set up
 	 * proper page allocation... */
-	ret.rsp = 0x60000000;
+	ret.rsp = 0x60000000 - 32 * 0x400;
+
+	/* Map stack space */
+	for (uintptr_t i = 0x60000000 - 64 * 0x400; i < 0x60000000; i += 0x1000) {
+		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
+		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+	}
 
 	/**
 	 * Temporary stuff for startup environment loaded at bottom of stack.
@@ -215,7 +230,7 @@ void elf_loadFromFile(const char * filePath) {
 	char * c = (char*)&userStack[8];
 	c += snprintf(c, 30, "/lib/ld.so") + 1;
 	userStack[3] = (uintptr_t)c;
-	c += snprintf(c, 30, "/bin/misaka-test") + 1;
+	c += snprintf(c, 30, "/bin/kuroko") + 1;
 	userStack[4] = (uintptr_t)c;
 	c += snprintf(c, 30, "/bin/demo.krk") + 1;
 
