@@ -238,6 +238,9 @@ void mmu_init(void) {
 		}
 	}
 
+	/* Unmap null */
+	low_base_pmls[2][0].raw = 0;
+
 	/* Now adjust the framebuffer address so it is directly in the 4GiB identity map region */
 	framebuffer = (uint32_t*)((uintptr_t)framebuffer | 0xFFFFffff00000000);
 
