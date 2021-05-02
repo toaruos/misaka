@@ -155,7 +155,7 @@ if __name__ == "__main__":
             libraryfiles=" ".join([todep(x)[1] for x in c.libs]),
             libraries=" ".join([x for x in c.libs]),
             includes=" ".join([x for x in c.includes if x is not None]),
-            comp="$(CC) $(CFLAGS)" if '.c++' not in filename else "$(CXX) $(CFLAGS)",
+            comp="$(CC) $(CFLAGS)" if '.c++' not in filename else "$(CXX) $(CXXFLAGS)",
             extra="-rdynamic" if c.export_dynamic_hint else ""
             ))
     elif command == "--makelib":
@@ -168,7 +168,7 @@ if __name__ == "__main__":
             libraryfiles=" ".join([todep(x)[1] for x in _libs]),
             libraries=" ".join([x for x in _libs]),
             includes=" ".join([x for x in c.includes if x is not None]),
-            comp="$(CC) $(CFLAGS)" if '.c++' not in filename else "$(CXX) $(CFLAGS)",
+            comp="$(CC) $(CFLAGS)" if '.c++' not in filename else "$(CXX) $(CXXFLAGS)",
             ))
     elif command == "--makekurokomod":
         let libname = basename(filename).replace('.c++','').replace(".c","").replace("module_","")

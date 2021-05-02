@@ -67,9 +67,10 @@ CFLAGS= -O2 -s -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unuse
 LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
 LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
 
-GCC_SHARED = $(BASE)/usr/lib/libgcc_s.so.1 $(BASE)/usr/lib/libgcc_s.so $(BASE)/usr/lib/libstdc++.so.6.0.28 $(BASE)/usr/lib/libstdc++.so.6 $(BASE)/usr/lib/libstdc++.so
+GCC_SHARED = $(BASE)/usr/lib/libgcc_s.so.1 $(BASE)/usr/lib/libgcc_s.so
+LIBSTDCXX =  $(BASE)/usr/lib/libstdc++.so.6.0.28 $(BASE)/usr/lib/libstdc++.so.6 $(BASE)/usr/lib/libstdc++.so
 
-CRTS  = $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o $(GCC_SHARED) $(BASE)/lib/libm.so
+CRTS  = $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o $(GCC_SHARED)
 
 LC = $(BASE)/lib/libc.so
 
@@ -141,7 +142,7 @@ $(BASE)/lib/libc.so: ${LIBC_OBJS} | $(CRTS)
 $(BASE)/lib/crt%.o: libc/crt%.S
 	${AS} -o $@ $<
 
-$(BASE)/usr/lib/%: util/local/x86_64-pc-toaru/lib/%
+$(BASE)/usr/lib/%: util/local/x86_64-pc-toaru/lib/% | dirs
 	cp -a $< $@
 	strip $@
 
@@ -163,6 +164,8 @@ $(BASE)/cdrom:
 $(BASE)/var:
 	mkdir -p $@
 $(BASE)/lib/kuroko:
+	mkdir -p $@
+$(BASE)/usr/lib:
 	mkdir -p $@
 fatbase/efi/boot:
 	mkdir -p $@
@@ -203,3 +206,8 @@ libs: $(LIBS_X)
 .PHONY: apps
 apps: $(APPS_X)
 
+.PHONY: libstdcxx
+libstdcxx: $(LIBSTDCXX)
+
+util/local/x86_64-pc-toaru/lib/libstdc++.so.6.0.28: | $(BASE)/lib/libm.so
+	cd util/build/gcc && make all-target-libstdc++-v3 && make install-target-libstdc++-v3
