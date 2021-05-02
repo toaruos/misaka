@@ -33,7 +33,7 @@ class Classifier:
         '<toaru/textregion.h>':  (None, '-ltoaru_textregion',  ['<toaru/sdf.h>', '<toaru/yutani.h>','<toaru/graphics.h>', '<toaru/hashmap.h>']),
         '<toaru/button.h>':      (None, '-ltoaru_button',      ['<toaru/graphics.h>','<toaru/sdf.h>', '<toaru/icon_cache.h>']),
         # Kuroko
-        '<kuroko/kuroko.h>':     (None, '-lkuroko', []),
+        '<kuroko/kuroko.h>':     ('../../../kuroko/src', '-lkuroko', []),
     }
 
     def __init__(self, filename: str):
