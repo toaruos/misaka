@@ -162,13 +162,14 @@ static void startup_printVersion(void) {
 }
 
 static void startup_processMultiboot(struct multiboot * mboot) {
-#if 0
+	printf("mboot struct is at at %p\n", mboot);
+#if 1
 	printf("Command line: %s\n", mboot->cmdline);
 	printf("%d module%s starting 0x%08x\n", mboot->mods_count, (mboot->mods_count == 1 ) ? "" : "s", mboot->mods_addr);
 #endif
 	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
-	//	printf("  module %s at [0x%08x:0x%08x]\n", mods[i].cmdline, mods[i].mod_start, mods[i].mod_end);
+		printf("  module %s at [0x%08x:0x%08x]\n", mods[i].cmdline, mods[i].mod_start, mods[i].mod_end);
 		heapStart = (char*)((uintptr_t)mods[i].mod_start + mods[i].mod_end);
 	}
 
@@ -176,7 +177,7 @@ static void startup_processMultiboot(struct multiboot * mboot) {
 		heapStart += 0x1000 - ((uintptr_t)heapStart & 0xFFF);
 	}
 
-#if 0
+#if 1
 	printf("Memory map:");
 	printf("  Lower mem: %dkB", (uint64_t)mboot->mem_lower);
 	printf("  Upper mem: %dkB\n", (uint64_t)mboot->mem_upper);
@@ -341,7 +342,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_processSymbols();
 	startup_initializePat();
 
-	//startup_printSymbols();
+	startup_printSymbols();
 	//startup_scanAcpi();
 	//startup_scanPci();
 
@@ -361,12 +362,16 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	//framebuffer = (uint32_t*)(0xFFFFFFFF00000000 | (uintptr_t)framebuffer);
 
+#if 0
 	/* Let's take an aside here to look at a module */
-	//printf("Parsing %s (starts at 0x%08x)\n", mods[1].cmdline, mods[1].mod_start);
-	//elf_parseFromMemory((void*)(uintptr_t)mods[1].mod_start);
+	printf("Parsing %s (starts at 0x%08x)\n", mods[1].cmdline, mods[1].mod_start);
+	elf_parseFromMemory((void*)(uintptr_t)mods[1].mod_start);
+#endif
 
+#if 1
 	/* Load elf from file */
 	elf_loadFromFile("/lib/ld.so");
+#endif
 
 	while (1);
 

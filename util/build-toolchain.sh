@@ -11,6 +11,6 @@ make install
 
 mkdir -p $DIR/build/gcc
 cd $DIR/build/gcc
-../../gcc/configure --target=$TARGET --prefix="$PREFIX" --with-sysroot="$SYSROOT" --enable-languages=c,c++ --enable-shared --with-newlib
+../../gcc/configure --target=$TARGET --prefix="$PREFIX" --with-sysroot="$SYSROOT" --enable-languages=c,c++ --enable-shared
 make -j8 all-gcc all-target-libgcc
 make install-gcc install-target-libgcc

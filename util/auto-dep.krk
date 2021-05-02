@@ -128,15 +128,15 @@ if __name__ == "__main__":
     elif command == "--build":
         os.system("gcc {cflags} {extra} {includes} -o {app} {source} {libraries}".format(
             cflags=cflags,
-            app=basename(filename).replace(".c",""),
+            app=basename(filename).replace('.c++','').replace(".c",""),
             source=filename,
             headers=" ".join([toheader(x) for x in c.libs]),
             libraries=" ".join([x for x in c.libs]),
             includes=" ".join([x for x in c.includes if x is not None]),
-            extra="-Wl,--export-dynamic" if c.export_dynamic_hint else "",
+            extra="-rdynamic" if c.export_dynamic_hint else "",
             ))
     elif command == "--buildlib":
-        let libname = basename(filename).replace(".c","")
+        let libname = basename(filename).replace('.c++','').replace(".c","")
         let _libs = [x for x in c.libs if not x.startswith('-ltoaru_') or x.replace("-ltoaru_","") != libname]
         os.system("gcc {cflags} {includes} -shared -fPIC -olibtoaru_{lib}.so {source} {libraries}".format(
             cflags=cflags,
@@ -148,28 +148,30 @@ if __name__ == "__main__":
             includes=" ".join([x for x in c.includes if x is not None])
             ))
     elif command == "--make":
-        print("base/bin/{app}: {source} {headers} util/auto-dep.krk | {libraryfiles} $(LC)\n\t$(CC) $(CFLAGS) {extra} {includes} -o $@ $< {libraries}".format(
-            app=basename(filename).replace(".c",""),
+        print("base/bin/{app}: {source} {headers} util/auto-dep.krk | {libraryfiles} $(LC)\n\t{comp} {extra} {includes} -o $@ $< {libraries}".format(
+            app=basename(filename).replace('.c++','').replace(".c",""),
             source=filename,
             headers=" ".join([toheader(x) for x in c.libs]),
             libraryfiles=" ".join([todep(x)[1] for x in c.libs]),
             libraries=" ".join([x for x in c.libs]),
             includes=" ".join([x for x in c.includes if x is not None]),
-            extra="-Wl,--export-dynamic" if c.export_dynamic_hint else ""
+            comp="$(CC) $(CFLAGS)" if '.c++' not in filename else "$(CXX) $(CFLAGS)",
+            extra="-rdynamic" if c.export_dynamic_hint else ""
             ))
     elif command == "--makelib":
-        let libname = basename(filename).replace(".c","")
+        let libname = basename(filename).replace('.c++','').replace(".c","")
         let _libs = [x for x in c.libs if not x.startswith('-ltoaru_') or x.replace("-ltoaru_","") != libname]
-        print("base/lib/libtoaru_{lib}.so: {source} {headers} util/auto-dep.krk | {libraryfiles} $(LC)\n\t$(CC) $(CFLAGS) {includes} -shared -fPIC -o $@ $< {libraries}".format(
+        print("base/lib/libtoaru_{lib}.so: {source} {headers} util/auto-dep.krk | {libraryfiles} $(LC)\n\t{comp} {includes} -shared -fPIC -o $@ $< {libraries}".format(
             lib=libname,
             source=filename,
             headers=" ".join([toheader(x) for x in c.libs]),
             libraryfiles=" ".join([todep(x)[1] for x in _libs]),
             libraries=" ".join([x for x in _libs]),
-            includes=" ".join([x for x in c.includes if x is not None])
+            includes=" ".join([x for x in c.includes if x is not None]),
+            comp="$(CC) $(CFLAGS)" if '.c++' not in filename else "$(CXX) $(CFLAGS)",
             ))
     elif command == "--makekurokomod":
-        let libname = basename(filename).replace(".c","").replace("module_","")
+        let libname = basename(filename).replace('.c++','').replace(".c","").replace("module_","")
         let _libs = [x for x in c.libs if not x.startswith('-ltoaru_') or x.replace("-ltoaru_","") != libname]
         print("base/lib/kuroko/{lib}.so: {source} {headers} util/auto-dep.krk | {libraryfiles} $(LC)\n\t$(CC) $(CFLAGS) {includes} -shared -fPIC -o $@ $< {libraries}".format(
             lib=libname,

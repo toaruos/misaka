@@ -50,7 +50,7 @@ EMU_ARGS += -soundhw pcspk,ac97
 #EMU_ARGS += -hda toaruos-disk.img
 EMU_KVM   = -enable-kvm
 
-APPS=$(patsubst apps/%.c,%,$(wildcard apps/*.c))
+APPS=$(patsubst apps/%.c,%,$(wildcard apps/*.c)) $(patsubst apps/%.c++,%,$(wildcard apps/*.c++))
 APPS_X=$(foreach app,$(APPS),$(BASE)/bin/$(app))
 APPS_Y=$(foreach app,$(APPS),.make/$(app).mak)
 APPS_SH=$(patsubst apps/%.sh,%.sh,$(wildcard apps/*.sh))
@@ -67,7 +67,9 @@ CFLAGS= -O2 -s -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unuse
 LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
 LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
 
-CRTS  = $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
+GCC_SHARED = $(BASE)/usr/lib/libgcc_s.so.1 $(BASE)/usr/lib/libgcc_s.so $(BASE)/usr/lib/libstdc++.so.6.0.28 $(BASE)/usr/lib/libstdc++.so.6 $(BASE)/usr/lib/libstdc++.so
+
+CRTS  = $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o $(GCC_SHARED) $(BASE)/lib/libm.so
 
 LC = $(BASE)/lib/libc.so
 
@@ -118,10 +120,11 @@ clean:
 	-rm -f misaka-kernel
 	-rm -f misaka-kernel.64
 	-rm -f $(APPS_Y) $(LIBS_Y)
-	-rm -f $(APPS_X) $(LIBS_X) $(BASE)/bin/demo ramdisk.tar
+	-rm -f $(APPS_X) $(LIBS_X) $(BASE)/bin/demo ramdisk.tar $(APPS_KRK_X) $(APPS_SH_X)
 	-rm -f $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 	-rm -f $(BASE)/lib/libc.so $(BASE)/lib/libc.a
 	-rm -f $(LIBC_OBJS)
+	-rm -f $(BASE)/bin/kuroko
 
 libc/%.o: libc/%.c
 	$(CC) -fPIC -c -o $@ $<
@@ -137,6 +140,13 @@ $(BASE)/lib/libc.so: ${LIBC_OBJS} | $(CRTS)
 
 $(BASE)/lib/crt%.o: libc/crt%.S
 	${AS} -o $@ $<
+
+$(BASE)/usr/lib/%: util/local/x86_64-pc-toaru/lib/%
+	cp -a $< $@
+	strip $@
+
+$(BASE)/lib/libm.so: util/libm.c
+	$(CC) -shared -fPIC -o $@ $<
 
 $(BASE)/dev:
 	mkdir -p $@
@@ -160,7 +170,7 @@ cdrom:
 	mkdir -p $@
 .make:
 	mkdir -p .make
-dirs: $(BASE)/dev $(BASE)/tmp $(BASE)/proc $(BASE)/bin $(BASE)/lib $(BASE)/cdrom $(BASE)/lib/kuroko cdrom $(BASE)/var fatbase/efi/boot .make
+dirs: $(BASE)/dev $(BASE)/tmp $(BASE)/proc $(BASE)/bin $(BASE)/lib $(BASE)/cdrom $(BASE)/usr/lib $(BASE)/lib/kuroko cdrom $(BASE)/var fatbase/efi/boot .make
 
 ifeq (,$(findstring clean,$(MAKECMDGOALS)))
 -include ${APPS_Y}
@@ -174,6 +184,9 @@ endif
 	kuroko util/auto-dep.krk --makelib $< > $@
 
 .make/%.mak: apps/%.c util/auto-dep.krk | dirs $(CRTS)
+	kuroko util/auto-dep.krk --make $< > $@
+
+.make/%.mak: apps/%.c++ util/auto-dep.krk | dirs $(CRTS)
 	kuroko util/auto-dep.krk --make $< > $@
 
 $(BASE)/bin/%.sh: apps/%.sh

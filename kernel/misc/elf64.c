@@ -215,7 +215,7 @@ void elf_loadFromFile(const char * filePath) {
 	char * c = (char*)&userStack[8];
 	c += snprintf(c, 30, "/lib/ld.so") + 1;
 	userStack[3] = (uintptr_t)c;
-	c += snprintf(c, 30, "/bin/kuroko") + 1;
+	c += snprintf(c, 30, "/bin/test-cxx") + 1;
 	userStack[4] = (uintptr_t)c;
 	c += snprintf(c, 30, "/bin/demo.krk") + 1;
 

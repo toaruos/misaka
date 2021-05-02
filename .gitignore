@@ -21,4 +21,6 @@
 /util/build
 /util/local
 /base/bin/*
+/base/usr/bin/*
+/base/usr/lib/*
 /.make/

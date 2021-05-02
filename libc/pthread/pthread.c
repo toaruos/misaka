@@ -30,7 +30,7 @@ struct pthread {
 	void * arg;
 };
 
-void * ___tls_get_addr(void* input) {
+void * __tls_get_addr(void* input) {
 	return NULL;
 }
 
