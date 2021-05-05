@@ -215,6 +215,8 @@ static const char *exception_messages[32] = {
 	"Reserved"
 };
 
+extern void irq_ack(size_t irq_no);
+
 struct regs * isr_handler(struct regs * r) {
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
@@ -252,11 +254,19 @@ struct regs * isr_handler(struct regs * r) {
 			syscall_handler(r);
 			return r;
 		}
+		case 32: /* Generally the PIT */
+			/* FIXME:
+			 *    We need to port over the IRQ chaining stuff from toaru32
+			 *    for quite a lot of our hardware to work
+			 **/
+			irq_ack(0);
+			break;
 		default: {
 			if (r->int_no < 32) {
 				printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
 			} else {
 				printf("Unhandled interrupt: %d\n", r->int_no - 32);
+				irq_ack(r->int_no - 32);
 			}
 			dump_regs(r);
 		}

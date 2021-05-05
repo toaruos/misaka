@@ -391,6 +391,7 @@ extern void elf_parseFromMemory(void * atAddress);
 extern void elf_loadFromFile(const char * filePath);
 extern void mmu_init(void);
 extern void arch_clock_initialize(void);
+extern void pit_initialize(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_initializeFramebuffer(); /* TODO: lfbvideo module */
@@ -410,6 +411,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	gdt_install();
 	idt_install();
 	enable_fpu();
+	pit_initialize();
 
 	vfs_install();
 	tarfs_register_init();
