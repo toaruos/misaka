@@ -15,6 +15,10 @@
 #include <kernel/arch/x86_64/cmos.h>
 #include <kernel/arch/x86_64/pml.h>
 
+#include <sys/ioctl.h>
+#include <sys/termios.h>
+#include <errno.h>
+
 #include "terminal-font.h"
 
 static char * heapStart = NULL;
@@ -98,8 +102,108 @@ static void write_char(int x, int y, int val, uint32_t color) {
 #define LEFT_PAD 1
 static int x = LEFT_PAD;
 static int y = 0;
+static uint32_t fg_color = FG_COLOR;
+
+static uint32_t term_colors[] = {
+	0xFF000000,
+	0xFFCC0000,
+	0xFF4E9A06,
+	0xFFC4A000,
+	0xFF3465A4,
+	0xFF75507B,
+	0xFF06989A,
+	0xFFD3D7CF,
+
+	0xFF555753,
+	0xFFEF2929,
+	0xFF8AE234,
+	0xFFFCE94F,
+	0xFF729FCF,
+	0xFFAD7FA8,
+	0xFF34E2E2,
+	0xFFEEEEEC,
+};
+
+static int term_state = 0;
+static char term_buf[1024] = {0};
+static int term_buf_c = 0;
+
+int atoi(const char * c) {
+	int sign = 1;
+	long out = 0;
+	if (*c == '-') {
+		sign = '-';
+		c++;
+	}
+
+	while (*c) {
+		out *= 10;
+		out += (*c - '0');
+		c++;
+	}
+
+	return out * sign;
+}
 
 static void process_char(char ch) {
+	if (term_state == 1) {
+		if (ch == '[') {
+			term_buf_c = 0;
+			term_buf[term_buf_c] = '\0';
+			term_state = 2;
+		} else {
+			term_state = 0;
+			process_char(ch);
+		}
+		return;
+	} else if (term_state == 2) {
+		if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
+			/* do the thing */
+			switch (ch) {
+				case 'm': {
+					char * arg = &term_buf[0];
+					char * next;
+					int argC = 0;
+					int isBold = 0;
+					do {
+						next = strchr(arg, ';');
+						if (next) { *next = '\0'; next++; }
+
+						int asInt = atoi(arg);
+
+						if (asInt == 0) {
+							fg_color = FG_COLOR;
+							isBold = 0;
+						} else if (asInt == 1) {
+							isBold = 1;
+						} else if (asInt == 22) {
+							fg_color = FG_COLOR;
+							isBold = 0;
+						} else if (asInt >= 30 && asInt <= 37) {
+							fg_color = term_colors[asInt-30 + (isBold ? 8 : 0)];
+						} else if (asInt >= 90 && asInt <= 97) {
+							fg_color = term_colors[asInt-90 + 8];
+						} else if (asInt == 38) {
+							fg_color = FG_COLOR;
+						}
+
+						arg = next;
+						argC++;
+					} while (arg);
+					break;
+				}
+			}
+			term_state = 0;
+		} else {
+			term_buf[term_buf_c++] = ch;
+			term_buf[term_buf_c] = '\0';
+		}
+		return;
+	} else if (ch == '\033') {
+		term_state = 1;
+		return;
+	}
+
 	write_char(x,y,' ',BG_COLOR);
 	switch (ch) {
 		case '\n':
@@ -109,8 +213,15 @@ static void process_char(char ch) {
 		case '\r':
 			x = LEFT_PAD;
 			break;
+		case '\b':
+			if (x > LEFT_PAD) {
+				x -= char_width;
+				write_char(x,y,' ',fg_color);
+			}
+			break;
 		default:
-			write_char(x,y,ch,FG_COLOR);
+			if ((unsigned int)ch > 127) return;
+			write_char(x,y,ch,fg_color);
 			x += char_width;
 			break;
 	}
@@ -159,23 +270,58 @@ static uint64_t _early_log_read_fs(fs_node_t * self, uint64_t offset, uint64_t s
 	while (bytesRead < size) {
 		while (serial_rcvd(SERIAL_PORT_A) == 0);
 		char c = serial_recv(SERIAL_PORT_A);
-		if (c == '\r') c = '\n';
-		if (c == 127) {
-			if (bytesRead) {
-				bytesRead--;
-				buffer[bytesRead] = '\0';
-				printf("\b \b");
+		if (0) {
+			if (c == '\r') c = '\n';
+			if (c == 127) {
+				if (bytesRead) {
+					bytesRead--;
+					buffer[bytesRead] = '\0';
+					printf("\b \b");
+				}
+				continue;
 			}
-			continue;
+			if (c == 0x17) /* ^W */ {
+				while (bytesRead && buffer[bytesRead-1] == ' ') {
+					bytesRead--;
+					buffer[bytesRead] = '\0';
+					printf("\b \b");
+				}
+				while (bytesRead && buffer[bytesRead-1] != ' ') {
+					bytesRead--;
+					buffer[bytesRead] = '\0';
+					printf("\b \b");
+				}
+				continue;
+			}
+			buffer[bytesRead++] = c;
+			printf("%c", c);
+			if (c == '\n') break;
+		} else {
+			buffer[0] = c;
+			return 1;
 		}
-		buffer[bytesRead++] = c;
-		printf("%c", c);
-		if (c == '\n') break;
 	}
 	return bytesRead;
 }
 
-static fs_node_t _early_log = { .write = &_early_log_write_fs, .read = &_early_log_read_fs };
+static int _early_log_ioctl(fs_node_t * node, int request, void * argp) {
+	switch (request) {
+		case IOCTLDTYPE:
+			return IOCTL_DTYPE_TTY;
+		case TIOCGWINSZ:
+			if (!argp) return -EINVAL;
+			((struct winsize*)argp)->ws_row = 45;
+			((struct winsize*)argp)->ws_col = 159;
+			return 0;
+	}
+	return -EINVAL;
+}
+
+static fs_node_t _early_log = {
+	.write = &_early_log_write_fs,
+	.read = &_early_log_read_fs,
+	.ioctl = &_early_log_ioctl,
+};
 
 static void setup_serial(void) {
 	int port = SERIAL_PORT_A;

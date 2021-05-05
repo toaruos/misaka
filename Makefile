@@ -87,7 +87,7 @@ ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X)
 
 KRK_SRC = $(sort $(wildcard kuroko/src/*.c))
 $(BASE)/bin/kuroko: $(KRK_SRC) | $(LC)
-	$(CC) -O2 -o $@ -Wl,--export-dynamic -Ikuroko/src -DNO_RLINE -DKRK_DISABLE_THREADS $(KRK_SRC)
+	$(CC) -O2 -o $@ -Wl,--export-dynamic -Ikuroko/src -DKRK_DISABLE_THREADS $(KRK_SRC) kuroko/src/vendor/rline.c
 
 $(BASE)/lib/libkuroko.so: $(KRK_SRC) | $(LC)
 	$(CC) -O2 -shared -fPIC -Ikuroko/src -DKRK_DISABLE_THREADS -o $@ $(filter-out kuroko/src/kuroko.c,$(KRK_SRC))

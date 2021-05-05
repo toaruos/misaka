@@ -242,7 +242,7 @@ void elf_loadFromFile(const char * filePath) {
 	userStack[3] = (uintptr_t)c;
 	c += snprintf(c, 30, "/bin/kuroko") + 1;
 	userStack[4] = (uintptr_t)c;
-	c += snprintf(c, 30, "-r") + 1;
+	c += snprintf(c, 30, "-d") + 1;
 
 	// arch_enter_user? (ip, stack...)
 	ret.rflags = (1 << 21);
