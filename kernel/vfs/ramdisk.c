@@ -8,10 +8,14 @@
  * Provide raw block access to files loaded into kernel memory.
  */
 
+#include <errno.h>
 #include <kernel/types.h>
 #include <kernel/vfs.h>
 #include <kernel/printf.h>
 #include <kernel/string.h>
+#include <kernel/process.h>
+
+#include <kernel/arch/x86_64/mmu.h>
 
 static uint64_t read_ramdisk(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer);
 static uint64_t write_ramdisk(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer);
@@ -57,7 +61,6 @@ static void close_ramdisk(fs_node_t * node) {
 }
 
 static int ioctl_ramdisk(fs_node_t * node, int request, void * argp) {
-#if 0
 	switch (request) {
 		case 0x4001:
 			if (current_process->user != 0) {
@@ -70,7 +73,7 @@ static int ioctl_ramdisk(fs_node_t * node, int request, void * argp) {
 						node->length -= node->length % 0x1000;
 					}
 					for (uintptr_t i = node->inode; i < (node->inode + node->length); i += 0x1000) {
-						clear_frame(i);
+						mmu_frame_clear(i);
 					}
 				}
 				/* Mark the file length as 0 */
@@ -80,7 +83,6 @@ static int ioctl_ramdisk(fs_node_t * node, int request, void * argp) {
 		default:
 			return -EINVAL;
 	}
-#endif
 	return -1;
 }
 

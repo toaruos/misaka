@@ -14,6 +14,7 @@
 #include <kernel/printf.h>
 #include <kernel/string.h>
 #include <kernel/vfs.h>
+#include <kernel/process.h>
 
 #include <kernel/list.h>
 #include <kernel/hashmap.h>
@@ -27,17 +28,6 @@ tree_t    * fs_tree = NULL; /* File system mountpoint tree */
 fs_node_t * fs_root = NULL; /* Pointer to the root mount fs_node (must be some form of filesystem, even ramdisk) */
 
 hashmap_t * fs_types = NULL;
-
-/** FIXME */
-struct _tmp_fs_process {
-	uint64_t user;
-	char wd_name[512];
-} _current_process = {
-	0,
-	"/"
-};
-
-struct _tmp_fs_process * current_process = &_current_process;
 
 #define MIN(l,r) ((l) < (r) ? (l) : (r))
 #define MAX(l,r) ((l) > (r) ? (l) : (r))

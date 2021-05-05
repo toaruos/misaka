@@ -333,9 +333,9 @@ static void enable_fpu(void) {
 
 extern fs_node_t * ramdisk_mount(uintptr_t, size_t);
 extern void tarfs_register_init(void);
+extern void tmpfs_register_init(void);
 extern void elf_parseFromMemory(void * atAddress);
 extern void elf_loadFromFile(const char * filePath);
-
 extern void mmu_init(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
@@ -357,6 +357,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	vfs_install();
 	tarfs_register_init();
+	tmpfs_register_init();
 	map_vfs_directory("/dev");
 
 	/* Assume first module is ramdisk? */
@@ -364,6 +365,8 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	ramdisk_mount(mods[0].mod_start, mods[0].mod_end - mods[0].mod_start);
 
 	vfs_mount_type("tar","/dev/ram0","/");
+	vfs_mount_type("tmpfs","tmp,777","/tmp");
+	vfs_mount_type("tmpfs","var,555","/var");
 
 
 #if 0

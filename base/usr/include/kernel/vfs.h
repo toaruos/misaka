@@ -1,9 +1,7 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
- */
-
 #pragma once
 
 #include <stdint.h>
+#include <sys/types.h>
 
 #define PATH_SEPARATOR '/'
 #define PATH_SEPARATOR_STRING "/"
@@ -64,8 +62,8 @@ typedef struct fs_node {
 	char name[256];         /* The filename. */
 	void * device;          /* Device object (optional) */
 	uint64_t mask;          /* The permissions mask. */
-	uint64_t uid;           /* The owning user. */
-	uint64_t gid;           /* The owning group. */
+	uid_t uid;           /* The owning user. */
+	uid_t gid;           /* The owning group. */
 	uint64_t flags;         /* Flags (node type, etc). */
 	uint64_t inode;         /* Inode number. */
 	uint64_t length;        /* Size of the file, in byte. */

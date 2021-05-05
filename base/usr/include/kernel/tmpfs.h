@@ -1,6 +1,7 @@
-#ifndef _TMPFS_H__
-#define _TMPFS_H__
-#include <kernel/fs.h>
+#pragma once
+#include <kernel/vfs.h>
+#include <kernel/list.h>
+#include <sys/types.h>
 
 fs_node_t * tmpfs_create(char * name);
 
@@ -8,8 +9,8 @@ struct tmpfs_file {
 	char * name;
 	int    type;
 	int    mask;
-	int    uid;
-	int    gid;
+	uid_t    uid;
+	uid_t    gid;
 	unsigned int atime;
 	unsigned int mtime;
 	unsigned int ctime;
@@ -35,4 +36,3 @@ struct tmpfs_dir {
 	struct tmpfs_dir * parent;
 };
 
-#endif /* _TMPFS_H__ */

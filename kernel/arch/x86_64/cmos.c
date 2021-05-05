@@ -7,6 +7,7 @@
 #include <kernel/printf.h>
 #include <kernel/string.h>
 #include <kernel/arch/x86_64/ports.h>
+#include <sys/time.h>
 
 #define from_bcd(val)  ((val / 16) * 10 + (val & 0xf))
 #define CMOS_ADDRESS   0x70
@@ -119,16 +120,20 @@ uint32_t read_cmos(void) {
 	return time;
 }
 
-#if 0
+/* FIXME */
+static uint64_t boot_time = 0;
+static uint64_t timer_ticks = 0;
+static uint64_t timer_subticks = 0;
+static uint64_t timer_drift = 0;
+
 int gettimeofday(struct timeval * t, void *z) {
 	t->tv_sec = boot_time + timer_ticks + timer_drift;
 	t->tv_usec = timer_subticks * 1000;
 	return 0;
 }
 
-uint32_t now(void) {
+uint64_t now(void) {
 	struct timeval t;
 	gettimeofday(&t, NULL);
 	return t.tv_sec;
 }
-#endif
