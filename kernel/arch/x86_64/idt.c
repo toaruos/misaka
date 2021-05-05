@@ -180,38 +180,86 @@ static void dump_regs(struct regs * r) {
 
 extern void syscall_handler(struct regs *);
 
+static const char *exception_messages[32] = {
+	"Division by zero",
+	"Debug",
+	"Non-maskable interrupt",
+	"Breakpoint",
+	"Detected overflow",
+	"Out-of-bounds",
+	"Invalid opcode",
+	"No coprocessor",
+	"Double fault",
+	"Coprocessor segment overrun",
+	"Bad TSS",
+	"Segment not present",
+	"Stack fault",
+	"General protection fault",
+	"Page fault",
+	"Unknown interrupt",
+	"Coprocessor fault",
+	"Alignment check",
+	"Machine check",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved"
+};
+
 struct regs * isr_handler(struct regs * r) {
-	/* XXX for demo purposes */
-	if (r->int_no == 14) {
-		printf("Page fault\n");
-		uintptr_t faulting_address;
-		asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
-		printf("cr2: 0x%016lx\n", faulting_address);
-		dump_regs(r);
-		printf("Stack is at ~%p\n", r);
-		printf("(halting)\n");
-		while (1) {};
-	} else if (r->int_no == 13) {
-		/* GPF */
-		printf("General Protection Fault\n");
-		dump_regs(r);
-		while (1) {};
-	} else if (r->int_no == 8) {
-		printf("Double fault?\n");
-		uintptr_t faulting_address;
-		asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
-		printf("cr2: 0x%016lx\n", faulting_address);
-		dump_regs(r);
-	} else if (r->int_no == 6) {
-		printf("Invalid opcode\n");
-		dump_regs(r);
-		while (1) {};
-	} else if (r->int_no == 127) {
-		syscall_handler(r);
-		return r;
-	} else {
-		printf("Unhandled interrupt: %ld\n", r->int_no);
-		dump_regs(r);
+	switch (r->int_no) {
+		case 14: /* Page fault */ {
+			printf("Page fault\n");
+			uintptr_t faulting_address;
+			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
+			printf("cr2: 0x%016lx\n", faulting_address);
+			dump_regs(r);
+			printf("Stack is at ~%p\n", r);
+			printf("(halting)\n");
+			while (1) {};
+			break;
+		}
+		case 13: /* GPF */ {
+			printf("General Protection Fault\n");
+			dump_regs(r);
+			while (1) {};
+			break;
+		}
+		case 8: /* Double fault */ {
+			printf("Double fault?\n");
+			uintptr_t faulting_address;
+			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
+			printf("cr2: 0x%016lx\n", faulting_address);
+			dump_regs(r);
+			break;
+		}
+		case 6: /* Invalid opcode */ {
+			printf("Invalid opcode\n");
+			dump_regs(r);
+			while (1) {};
+			break;
+		}
+		case 127: /* syscall */ {
+			syscall_handler(r);
+			return r;
+		}
+		default: {
+			if (r->int_no < 32) {
+				printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
+			} else {
+				printf("Unhandled interrupt: %d\n", r->int_no - 32);
+			}
+			dump_regs(r);
+		}
 	}
 
 	return r;

@@ -7,6 +7,7 @@
 #include <kernel/pci.h>
 #include <kernel/hashmap.h>
 #include <kernel/vfs.h>
+#include <kernel/process.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/idt.h>
@@ -26,12 +27,6 @@ void * sbrk(size_t bytes) {
 
 	void * out = heapStart;
 	heapStart += bytes;
-	return out;
-}
-
-char * strdup(const char * c) {
-	char * out = malloc(strlen(c) + 1);
-	memcpy(out, c, strlen(c)+1);
 	return out;
 }
 
@@ -142,8 +137,66 @@ static size_t _early_log_write(size_t size, uint8_t *buffer) {
 	return size;
 }
 
+static uint64_t _early_log_write_fs(fs_node_t * self, uint64_t offset, uint64_t size, uint8_t * buffer) {
+	return _early_log_write(size,buffer);
+}
+
+#define SERIAL_PORT_A 0x3F8
+static int serial_rcvd(int device) {
+	return inportb(device + 5) & 1;
+}
+
+static char serial_recv(int device) {
+	while (serial_rcvd(device) == 0) ;
+	return inportb(device);
+}
+
+/**
+ * Implements some quick-and-dirty line buffering.
+ */
+static uint64_t _early_log_read_fs(fs_node_t * self, uint64_t offset, uint64_t size, uint8_t * buffer) {
+	uint64_t bytesRead = 0;
+	while (bytesRead < size) {
+		while (serial_rcvd(SERIAL_PORT_A) == 0);
+		char c = serial_recv(SERIAL_PORT_A);
+		if (c == '\r') c = '\n';
+		if (c == 127) {
+			if (bytesRead) {
+				bytesRead--;
+				buffer[bytesRead] = '\0';
+				printf("\b \b");
+			}
+			continue;
+		}
+		buffer[bytesRead++] = c;
+		printf("%c", c);
+		if (c == '\n') break;
+	}
+	return bytesRead;
+}
+
+static fs_node_t _early_log = { .write = &_early_log_write_fs, .read = &_early_log_read_fs };
+
+static void setup_serial(void) {
+	int port = SERIAL_PORT_A;
+	outportb(port + 1, 0x00); /* Disable interrupts */
+	outportb(port + 3, 0x80); /* Enable divisor mode */
+	outportb(port + 0, 0x01); /* Div Low:  01 Set the port to 115200 bps */
+	outportb(port + 1, 0x00); /* Div High: 00 */
+	outportb(port + 3, 0x03); /* Disable divisor mode, set parity */
+	outportb(port + 2, 0xC7); /* Enable FIFO and clear */
+	//outportb(port + 4, 0x0B); /* Enable interrupts */
+	//outportb(port + 1, 0x01); /* Enable interrupts */
+}
+
 static void startup_initializeFramebuffer(void) {
 	printf_output = &_early_log_write;
+
+	setup_serial();
+	current_process->fds->entries[0] = &_early_log;
+	current_process->fds->entries[1] = &_early_log;
+	current_process->fds->entries[2] = &_early_log;
+
 	_setup_framebuffer(1440,900);
 	memset(framebuffer, 0x05, width * height * 4);
 }
@@ -337,6 +390,7 @@ extern void tmpfs_register_init(void);
 extern void elf_parseFromMemory(void * atAddress);
 extern void elf_loadFromFile(const char * filePath);
 extern void mmu_init(void);
+extern void arch_clock_initialize(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_initializeFramebuffer(); /* TODO: lfbvideo module */
@@ -344,6 +398,8 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_processMultiboot(mboot);
 	startup_processSymbols();        /* TODO: move to generic kernel/misc/symbols.c and/or ditch when we switch to an ELF with a DYN table? */
 	startup_initializePat();         /* TODO: arch/x86-64/mem.c? */
+
+	arch_clock_initialize();
 
 	mmu_init();
 

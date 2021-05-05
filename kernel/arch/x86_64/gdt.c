@@ -83,3 +83,7 @@ void gdt_install(void) {
 		: : "r"(&gdt.pointer)
 	);
 }
+
+void arch_set_tls_base(uintptr_t tlsbase) {
+	asm volatile ("wrmsr" : : "c"(0xc0000100), "d"((uint32_t)(tlsbase >> 32)), "a"((uint32_t)(tlsbase & 0xFFFFFFFF)));
+}

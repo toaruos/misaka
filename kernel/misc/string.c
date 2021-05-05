@@ -441,3 +441,10 @@ char *strstr(const char * h, const char * n) {
 uint8_t startswith(const char * str, const char * accept) {
 	return strstr(str, accept) == str;
 }
+
+char * strdup(const char * c) {
+	char * out = malloc(strlen(c) + 1);
+	memcpy(out, c, strlen(c)+1);
+	return out;
+}
+

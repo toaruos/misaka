@@ -7,7 +7,7 @@ static fs_node_t * _entries[24] = {
 };
 
 static uint64_t _offsets[24] = {0};
-static int _modes[24] = {O_RDWR, O_RDWR, O_RDWR, 0};
+static int _modes[24] = {1, 2, 2, 0};
 
 static fd_table_t _fake_fds = {
 	_entries,

@@ -120,15 +120,42 @@ uint32_t read_cmos(void) {
 	return time;
 }
 
-/* FIXME */
 static uint64_t boot_time = 0;
 static uint64_t timer_ticks = 0;
 static uint64_t timer_subticks = 0;
-static uint64_t timer_drift = 0;
+
+static unsigned long tsc_mhz = 3500; /* XXX */
+
+static inline uint64_t read_tsc(void) {
+	uint32_t lo, hi;
+	asm volatile ( "rdtsc" : "=a"(lo), "=d"(hi) );
+	return ((uint64_t)hi << 32) | (uint64_t)lo;
+}
+
+void arch_clock_initialize(void) {
+	boot_time = read_cmos();
+
+	/* FIXME: This is a terrible fallback tsc calculator, it takes at least two seconds */
+#if 0
+	uint32_t a_cmos, b_cmos;
+	while ((a_cmos = read_cmos()) == boot_time);
+	uint64_t a_tsc  = read_tsc();
+	while ((b_cmos = read_cmos()) == a_cmos);
+	uint64_t b_tsc = read_tsc();
+
+	tsc_mhz = (b_tsc - a_tsc) / 1000000;
+#endif
+}
 
 int gettimeofday(struct timeval * t, void *z) {
-	t->tv_sec = boot_time + timer_ticks + timer_drift;
-	t->tv_usec = timer_subticks * 1000;
+	uint64_t tsc = read_tsc();
+
+	timer_subticks = tsc / tsc_mhz;
+	timer_ticks = timer_subticks / 1000000;
+	timer_subticks = timer_subticks % 1000000;
+
+	t->tv_sec = boot_time + timer_ticks;
+	t->tv_usec = timer_subticks;
 	return 0;
 }
 

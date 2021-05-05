@@ -13,6 +13,7 @@
 #include <kernel/arch/x86_64/regs.h>
 #include <kernel/arch/x86_64/mmu.h>
 
+/* TODO: kernel/arch/x86_64/syscall.c/h ? */
 static unsigned long arch_syscall_number(struct regs * r) {
 	return (unsigned long)r->rax;
 }
@@ -120,77 +121,103 @@ static long unimplemented(void) {
 	return -EINVAL;
 }
 
-static uintptr_t sbrk_address = 0x20000000;
 static long sys_sbrk(ssize_t size) {
-	/* FIXME this is a massive hack */
-	long out = (long)sbrk_address;
-	for (uintptr_t i = sbrk_address; i < sbrk_address + size; i += 0x1000) {
+	if (size & 0xFFF) return -EINVAL;
+	uintptr_t out = current_process->image.heap;
+	for (uintptr_t i = out; i < out + size; i += 0x1000) {
 		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
 	}
-	sbrk_address += size;
-	return out;
+	current_process->image.heap += size;
+	return (long)out;
 }
 
+extern void arch_set_tls_base(uintptr_t tlsbase);
 static long sys_sysfunc(long fn, char ** args) {
 	/* FIXME: Most of these should be top-level, many are hacks/broken in Misaka */
 	switch (fn) {
 		case TOARU_SYS_FUNC_SYNC:
+			/* FIXME: There is no sync ability in the VFS at the moment. */
 			printf("sync: not implemented\n");
 			return -EINVAL;
 		case TOARU_SYS_FUNC_LOGHERE:
+			/* FIXME: Needs to redirect kprintf to the argument */
 			printf("loghere: not implemented\n");
 			return -EINVAL;
 		case TOARU_SYS_FUNC_SETFDS:
+			/* XXX Unused */
 			printf("setfds: not implemented\n");
 			return -EINVAL;
 		case TOARU_SYS_FUNC_WRITESDB:
+			/* XXX Unused */
 			printf("writesdb: not implemented\n");
 			return -EINVAL;
 		case TOARU_SYS_FUNC_KDEBUG:
+			/* FIXME: Starts kernel debugger as a child task of this process */
 			printf("kdebug: not implemented\n");
 			return -EINVAL;
 		case TOARU_SYS_FUNC_INSMOD:
+			/* FIXME: Load module */
 			printf("insmod: not implemented\n");
 			return -EINVAL;
 		/* Begin unpriv */
 		case TOARU_SYS_FUNC_SETHEAP:
-			sbrk_address = (uintptr_t)args[0];
+			current_process->image.heap = (uintptr_t)args[0];
 			return 0;
 		case TOARU_SYS_FUNC_MMAP:
+			/* FIXME: This whole thing should be removed, tbh */
 			for (uintptr_t i = (uintptr_t)args[0]; i < (uintptr_t)args[0] + (size_t)args[1]; i += 0x1000) {
 				union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 				mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
 			}
 			return 0;
-		case TOARU_SYS_FUNC_THREADNAME:
-			printf("threadname: not implemented\n");
-			return -EINVAL;
+		case TOARU_SYS_FUNC_THREADNAME: {
+			/* This should probably be moved to a new system call. */
+			int count = 0;
+			char **arg = args;
+			PTR_VALIDATE(args);
+			while (*arg) {
+				PTR_VALIDATE(*args);
+				count++;
+				arg++;
+			}
+			current_process->cmdline = malloc(sizeof(char*)*(count+1));
+			int i = 0;
+			while (i < count) {
+				current_process->cmdline[i] = strdup(args[i]);
+				i++;
+			}
+			current_process->cmdline[i] = NULL;
+			return 0;
+		}
 		case TOARU_SYS_FUNC_DEBUGPRINT:
+			/* XXX I think _xlog uses this? */
 			printf("debugprint: not implemented\n");
 			return -EINVAL;
 		case TOARU_SYS_FUNC_SETVGACURSOR:
+			/* XXX This should be a device driver, along with the text-mode window... */
 			printf("setvgacursor: not implemented\n");
 			return -EINVAL;
 		case TOARU_SYS_FUNC_SETGSBASE:
-			printf("settlsbase: should set tlsbase here to %p\n", args[0]);
-			return -1;
+			PTR_VALIDATE(args);
+			current_process->thread.tls_base = (uintptr_t)args[0];
+			arch_set_tls_base(current_process->thread.tls_base);
+			return 0;
 		default:
-			printf("invalid sysfunc: %ld\n", fn);
+			printf("Bad system function: %ld\n", fn);
 			return -EINVAL;
 	}
 }
 
+__attribute__((noreturn))
 static long sys_exit(long exitcode) {
+	/* FIXME: @ref task_exit */
 	printf("(process exited with %ld)\n", exitcode);
 	while (1) {};
-	return -EINVAL;
 }
 
 static long sys_write(long fd, char * ptr, unsigned long len) {
-	if (fd == 1 || fd == 2) {
-		return printf("%.*s", (int)len, ptr);
-	} else if (FD_CHECK(fd)) {
+	if (FD_CHECK(fd)) {
 		PTR_VALIDATE(ptr);
 		fs_node_t * node = FD_ENTRY(fd);
 		if (!(FD_MODE(fd) & 2)) return -EACCES;
@@ -207,8 +234,8 @@ static long stat_node(fs_node_t * fn, uintptr_t st) {
 	PTR_VALIDATE(f);
 
 	if (!fn) {
+		/* XXX: Does this need to zero the stat struct when returning -ENOENT? */
 		memset(f, 0x00, sizeof(struct stat));
-		printf("nope\n");
 		return -ENOENT;
 	}
 
@@ -396,11 +423,6 @@ static long sys_seek(long fd, long offset, long whence) {
 }
 
 static long sys_read(long fd, char * ptr, unsigned long len) {
-	/* FIXME */
-	if (fd < 3) {
-		return -EBADF;
-	}
-
 	if (FD_CHECK(fd)) {
 		PTR_VALIDATE(ptr);
 
@@ -526,6 +548,7 @@ static long sys_setsid(void) {
 }
 
 static long sys_setpgid(pid_t pid, pid_t pgid) {
+	/* FIXME: @ref process_from_pid */
 	if (pgid < 0) {
 		return -EINVAL;
 	}
@@ -559,6 +582,7 @@ static long sys_setpgid(pid_t pid, pid_t pgid) {
 }
 
 static long sys_getpgid(pid_t pid) {
+	/* FIXME: @ref process_from_pid */
 	process_t * proc;
 	if (pid == 0) {
 		proc = (process_t*)current_process;
@@ -587,11 +611,11 @@ static long sys_uname(struct utsname * name) {
 			__kernel_build_date,
 			__kernel_build_time);
 	strcpy(name->sysname,  __kernel_name);
-	strcpy(name->nodename, "localhost");
+	strcpy(name->nodename, hostname);
 	strcpy(name->release,  version_number);
 	strcpy(name->version,  version_string);
 	strcpy(name->machine,  __kernel_arch);
-	strcpy(name->domainname, "");
+	strcpy(name->domainname, ""); /* TODO */
 	return 0;
 }
 

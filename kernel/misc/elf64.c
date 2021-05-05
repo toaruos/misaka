@@ -9,6 +9,7 @@
 #include <kernel/string.h>
 #include <kernel/elf.h>
 #include <kernel/vfs.h>
+#include <kernel/process.h>
 
 #include <kernel/arch/x86_64/mmu.h>
 
@@ -179,6 +180,7 @@ void elf_loadFromFile(const char * filePath) {
 		return;
 	}
 
+	uintptr_t heapBase = 0;
 	for (int i = 0; i < header.e_phnum; ++i) {
 		Elf64_Phdr phdr;
 		read_fs(file, header.e_phoff + header.e_phentsize * i, sizeof(Elf64_Phdr), (uint8_t*)&phdr);
@@ -192,13 +194,21 @@ void elf_loadFromFile(const char * filePath) {
 			for (size_t i = phdr.p_filesz; i < phdr.p_memsz; ++i) {
 				*(char*)(phdr.p_vaddr + i) = 0;
 			}
+
+			if (phdr.p_vaddr + phdr.p_memsz > heapBase) {
+				heapBase = phdr.p_vaddr + phdr.p_memsz;
+			}
 		}
 		/* TODO: Should also be setting up TLS PHDRs. */
 	}
 
+	current_process->image.heap  = (heapBase + 0xFFF) & (~0xFFF);
+	current_process->image.entry = header.e_entry;
+
 	/**
 	 * Userspace segment descriptors
 	 */
+	// arch_set_...?
 	ret.cs = 0x18 | 0x03;
 	ret.ss = 0x20 | 0x03;
 	ret.rip = header.e_entry;
@@ -232,8 +242,9 @@ void elf_loadFromFile(const char * filePath) {
 	userStack[3] = (uintptr_t)c;
 	c += snprintf(c, 30, "/bin/kuroko") + 1;
 	userStack[4] = (uintptr_t)c;
-	c += snprintf(c, 30, "/bin/demo.krk") + 1;
+	c += snprintf(c, 30, "-r") + 1;
 
+	// arch_enter_user? (ip, stack...)
 	ret.rflags = (1 << 21);
 	asm volatile (
 		"pushq %0\n"
