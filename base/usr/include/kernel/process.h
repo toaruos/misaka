@@ -87,5 +87,6 @@ typedef struct {
 } sleeper_t;
 
 extern volatile process_t * current_process;
+extern unsigned long process_append_fd(process_t * proc, fs_node_t * node);
 
 #define USER_ROOT_UID 0
