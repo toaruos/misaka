@@ -32,9 +32,7 @@ hashmap_t * fs_types = NULL;
 #define MIN(l,r) ((l) < (r) ? (l) : (r))
 #define MAX(l,r) ((l) > (r) ? (l) : (r))
 
-static uint64_t now(void) {
-	return 0;
-}
+extern uint64_t now(void);
 
 #define debug_print(x, ...) do { if (0) {printf("vfs.c [%s] ", #x); printf(__VA_ARGS__); printf("\n"); } } while (0)
 

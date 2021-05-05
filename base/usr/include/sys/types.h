@@ -28,9 +28,9 @@ typedef long suseconds_t;
 typedef int pid_t;
 
 #define FD_SETSIZE 64 /* compatibility with newlib */
-typedef long fd_mask;
+typedef unsigned int fd_mask;
 typedef struct _fd_set {
-    fd_mask fds_bits[2]; /* should be 64 bits */
+    fd_mask fds_bits[1]; /* should be 64 bits */
 } fd_set;
 
 _End_C_Header
