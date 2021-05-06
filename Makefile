@@ -62,7 +62,7 @@ LIBS=$(patsubst lib/%.c,%,$(wildcard lib/*.c))
 LIBS_X=$(foreach lib,$(LIBS),$(BASE)/lib/libtoaru_$(lib).so)
 LIBS_Y=$(foreach lib,$(LIBS),.make/$(lib).lmak)
 
-CFLAGS= -O2 -s -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-parameter
+CFLAGS= -O2 -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-parameter
 
 LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
 LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
@@ -86,14 +86,14 @@ ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X)
 	cd base; tar -cf ../ramdisk.tar *
 
 KRK_SRC = $(sort $(wildcard kuroko/src/*.c))
-$(BASE)/bin/kuroko: $(KRK_SRC) | $(LC)
+$(BASE)/bin/kuroko: $(KRK_SRC) $(CRTS) | $(LC)
 	$(CC) -O2 -o $@ -Wl,--export-dynamic -Ikuroko/src -DKRK_DISABLE_THREADS $(KRK_SRC) kuroko/src/vendor/rline.c
 
 $(BASE)/lib/libkuroko.so: $(KRK_SRC) | $(LC)
 	$(CC) -O2 -shared -fPIC -Ikuroko/src -DKRK_DISABLE_THREADS -o $@ $(filter-out kuroko/src/kuroko.c,$(KRK_SRC))
 
 $(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs
-	$(CC) -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<
+	$(CC) -g -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<
 
 run: system
 	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd ramdisk.tar

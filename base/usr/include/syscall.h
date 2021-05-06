@@ -23,7 +23,7 @@ _Begin_C_Header
 	long syscall_##fn(P1 p1) { \
 		long __res = num; __asm__ __volatile__("int $0x7F" \
 				: "=a" (__res) \
-				: "a" (__res), "b" ((int)(p1))); \
+				: "a" (__res), "b" ((long)(p1))); \
 		return __res; \
 	}
 
@@ -31,7 +31,7 @@ _Begin_C_Header
 	long syscall_##fn(P1 p1, P2 p2) { \
 		long __res = num; __asm__ __volatile__("int $0x7F" \
 				: "=a" (__res) \
-				: "a" (__res), "b" ((int)(p1)), "c"((int)(p2))); \
+				: "a" (__res), "b" ((long)(p1)), "c"((long)(p2))); \
 		return __res; \
 	}
 
@@ -39,7 +39,7 @@ _Begin_C_Header
 	long syscall_##fn(P1 p1, P2 p2, P3 p3) { \
 		long __res = num; __asm__ __volatile__("int $0x7F" \
 				: "=a" (__res) \
-				: "a" (__res), "b" ((int)(p1)), "c"((int)(p2)), "d"((int)(p3))); \
+				: "a" (__res), "b" ((long)(p1)), "c"((long)(p2)), "d"((long)(p3))); \
 		return __res; \
 	}
 
@@ -47,7 +47,7 @@ _Begin_C_Header
 	long syscall_##fn(P1 p1, P2 p2, P3 p3, P4 p4) { \
 		long __res = num; __asm__ __volatile__("int $0x7F" \
 				: "=a" (__res) \
-				: "a" (__res), "b" ((int)(p1)), "c"((int)(p2)), "d"((int)(p3)), "S"((int)(p4))); \
+				: "a" (__res), "b" ((long)(p1)), "c"((long)(p2)), "d"((long)(p3)), "S"((long)(p4))); \
 		return __res; \
 	}
 
@@ -55,7 +55,7 @@ _Begin_C_Header
 	long syscall_##fn(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) { \
 		long __res = num; __asm__ __volatile__("int $0x7F" \
 				: "=a" (__res) \
-				: "a" (__res), "b" ((int)(p1)), "c"((int)(p2)), "d"((int)(p3)), "S"((int)(p4)), "D"((int)(p5))); \
+				: "a" (__res), "b" ((long)(p1)), "c"((long)(p2)), "d"((long)(p3)), "S"((long)(p4)), "D"((long)(p5))); \
 		return __res; \
 	}
 

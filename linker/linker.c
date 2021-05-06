@@ -796,7 +796,7 @@ int main(int argc, char * argv[]) {
 
 	/* Enable tracing if requested */
 	char * trace_ld_env = getenv("LD_DEBUG");
-	if (1 || (trace_ld_env && (!strcmp(trace_ld_env,"1") || !strcmp(trace_ld_env,"yes")))) {
+	if (trace_ld_env && (!strcmp(trace_ld_env,"1") || !strcmp(trace_ld_env,"yes"))) {
 		__trace_ld = 1;
 	}
 

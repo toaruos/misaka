@@ -205,44 +205,50 @@ void elf_loadFromFile(const char * filePath) {
 	current_process->image.heap  = (heapBase + 0xFFF) & (~0xFFF);
 	current_process->image.entry = header.e_entry;
 
-	/**
-	 * Userspace segment descriptors
-	 */
 	// arch_set_...?
 	ret.cs = 0x18 | 0x03;
 	ret.ss = 0x20 | 0x03;
 	ret.rip = header.e_entry;
 
-	/* This should really be mapped at the top the userspace region when we set up
-	 * proper page allocation... */
-	ret.rsp = 0x60000000 - 32 * 0x400;
-
 	/* Map stack space */
-	for (uintptr_t i = 0x60000000 - 64 * 0x400; i < 0x60000000; i += 0x1000) {
+	ret.rsp = 0x80000000;
+	for (uintptr_t i = ret.rsp - 64 * 0x400; i < ret.rsp; i += 0x1000) {
 		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
 	}
+#define PUSH(type,val) do { \
+	ret.rsp -= sizeof(type); \
+	while (ret.rsp & (sizeof(type)-1)) ret.rsp--; \
+	*((type*)ret.rsp) = (val); \
+} while (0)
+#define PUSHSTR(s) do { \
+	ssize_t l = strlen(s); \
+	do { \
+		PUSH(char,s[l]); \
+		l--; \
+	} while (l>=0); \
+} while (0)
 
-	/**
-	 * Temporary stuff for startup environment loaded at bottom of stack.
-	 * TODO: I think the placement of these is defined in the SysV ABI.
-	 */
-	uintptr_t * userStack = (uintptr_t*)ret.rsp;
-	userStack[0] = 3;
-	userStack[1] = (uintptr_t)&userStack[2];
-	userStack[2] = (uintptr_t)&userStack[8];
-	userStack[5] = 0;
+	int argc = 2;
+	PUSHSTR(filePath);
+	char * argv_0 = (char*)ret.rsp;
+	PUSHSTR("/bin/misaka-test");
+	char * argv_1 = (char*)ret.rsp;
+	/* envp stuff here */
+	PUSH(uintptr_t, 0);
+	PUSH(uintptr_t, current_process->user);
+	PUSH(uintptr_t, 11); /* AT_UID */
+	PUSH(uintptr_t, current_process->real_user);
+	PUSH(uintptr_t, 12); /* AT_EUID */
+	PUSH(uintptr_t, 0);
+	PUSH(uintptr_t, 0); /* envp NULL */
+	char ** envp = (char**)ret.rsp;
+	PUSH(uintptr_t, 0);
+	PUSH(char*,argv_1);
+	PUSH(char*,argv_0);
+	char ** argv = (char**)ret.rsp;
+	PUSH(uintptr_t, argc);
 
-	userStack[6] = 0; /* env */
-	userStack[7] = 0; /* auxv */
-
-	/* TODO: argv from exec... */
-	char * c = (char*)&userStack[8];
-	c += snprintf(c, 30, "/lib/ld.so") + 1;
-	userStack[3] = (uintptr_t)c;
-	c += snprintf(c, 30, "/bin/kuroko") + 1;
-	userStack[4] = (uintptr_t)c;
-	c += snprintf(c, 30, "-d") + 1;
 
 	// arch_enter_user? (ip, stack...)
 	ret.rflags = (1 << 21);
@@ -254,6 +260,6 @@ void elf_loadFromFile(const char * filePath) {
 		"pushq %4\n"
 		"iretq"
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
-	    "D"(userStack[0]), "S"(userStack[1]), "d"(NULL));
+	    "D"(argc), "S"(argv), "d"(envp));
 
 }

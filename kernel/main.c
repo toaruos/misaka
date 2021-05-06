@@ -280,7 +280,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	arch_clock_initialize();
 
-	startup_printSymbols();
+	//startup_printSymbols();
 	//acpi_initialize();
 	//startup_scanPci();
 

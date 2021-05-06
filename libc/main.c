@@ -41,7 +41,6 @@ static void _libc_init(void) {
 	__make_tls();
 	__stdio_init_buffers();
 
-#if 0
 	unsigned int x = 0;
 	unsigned int nulls = 0;
 	for (x = 0; 1; ++x) {
@@ -57,7 +56,6 @@ static void _libc_init(void) {
 			break;
 		}
 	}
-#endif
 	if (!environ) {
 		environ = malloc(sizeof(char *) * 4);
 		environ[0] = NULL;
@@ -100,7 +98,7 @@ static void _libc_init(void) {
 	_argv_0 = __get_argv()[0];
 }
 
-void pre_main(int (*main)(int,char**), int argc, char * argv[]) {
+void pre_main(int argc, char * argv[], char ** envp, int (*main)(int,char**)) {
 	if (!__get_argv()) {
 		/* Statically loaded, must set __argv so __get_argv() works */
 		__argv = argv;
