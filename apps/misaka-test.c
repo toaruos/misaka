@@ -43,7 +43,7 @@ int main(int argc, char * argv[]) {
 	char * args[] = {
 		"/bin/sh",
 		"-c",
-		"echo hi",
+		"sleep 2; echo hi; sleep 2; echo glorp",
 		NULL,
 	};
 	pid_t pid = fork();
@@ -55,7 +55,10 @@ int main(int argc, char * argv[]) {
 		printf("returned from fork with pid = %d\n", pid);
 		int status;
 		waitpid(pid, &status, 0);
-		printf("done with waitpid, returning\n");
+		printf("done with waitpid, looping\n");
+		while (1) {
+			sched_yield();
+		}
 		return WEXITSTATUS(status);
 	}
 

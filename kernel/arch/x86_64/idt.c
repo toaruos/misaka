@@ -217,18 +217,18 @@ static const char *exception_messages[32] = {
 };
 
 extern void irq_ack(size_t irq_no);
+extern void cmos_time_stuff(void);
 
 struct regs * isr_handler(struct regs * r) {
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
-			printf("Page fault in pid=%d\n", (int)current_process->id);
+			printf("Page fault in pid=%d (%s)\n", (int)current_process->id, current_process->name);
 			uintptr_t faulting_address;
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
 			printf("cr2: 0x%016lx\n", faulting_address);
 			dump_regs(r);
 			printf("Stack is at ~%p\n", r);
-			printf("(halting)\n");
-			while (1) {};
+			task_exit(1);
 			break;
 		}
 		case 13: /* GPF */ {
@@ -260,6 +260,7 @@ struct regs * isr_handler(struct regs * r) {
 			 *    We need to port over the IRQ chaining stuff from toaru32
 			 *    for quite a lot of our hardware to work
 			 **/
+			cmos_time_stuff();
 			irq_ack(0);
 			break;
 		default: {

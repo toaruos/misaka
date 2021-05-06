@@ -6,6 +6,7 @@
 
 #include <kernel/printf.h>
 #include <kernel/string.h>
+#include <kernel/process.h>
 #include <kernel/arch/x86_64/ports.h>
 #include <sys/time.h>
 
@@ -121,8 +122,8 @@ uint32_t read_cmos(void) {
 }
 
 static uint64_t boot_time = 0;
-static uint64_t timer_ticks = 0;
-static uint64_t timer_subticks = 0;
+uint64_t timer_ticks = 0;
+uint64_t timer_subticks = 0;
 
 static unsigned long tsc_mhz = 3500; /* XXX */
 
@@ -147,13 +148,15 @@ void arch_clock_initialize(void) {
 #endif
 }
 
-int gettimeofday(struct timeval * t, void *z) {
+static void update_ticks(void) {
 	uint64_t tsc = read_tsc();
-
 	timer_subticks = tsc / tsc_mhz;
 	timer_ticks = timer_subticks / 1000000;
 	timer_subticks = timer_subticks % 1000000;
+}
 
+int gettimeofday(struct timeval * t, void *z) {
+	update_ticks();
 	t->tv_sec = boot_time + timer_ticks;
 	t->tv_usec = timer_subticks;
 	return 0;
@@ -168,6 +171,7 @@ uint64_t now(void) {
 #define SUBTICKS_PER_TICK 1000000
 
 void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds) {
+	update_ticks();
 	if (subseconds + timer_subticks > SUBTICKS_PER_TICK) {
 		*out_seconds    = timer_ticks + seconds + 1;
 		*out_subseconds = (subseconds + timer_subticks) - SUBTICKS_PER_TICK;
@@ -176,3 +180,10 @@ void relative_time(unsigned long seconds, unsigned long subseconds, unsigned lon
 		*out_subseconds = timer_subticks + subseconds;
 	}
 }
+
+void cmos_time_stuff(void) {
+	update_ticks();
+	wakeup_sleepers(timer_ticks, timer_subticks);
+	switch_task(1);
+}
+

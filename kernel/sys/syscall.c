@@ -756,6 +756,35 @@ static long sys_waitpid(pid_t pid, int * status, int options) {
 	return waitpid(pid, status, options);
 }
 
+static long sys_yield(void) {
+	switch_task(1);
+	return 1;
+}
+
+extern void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds);
+static long sys_sleepabs(unsigned long seconds, unsigned long subseconds) {
+	/* Mark us as asleep until <some time period> */
+	sleep_until((process_t *)current_process, seconds, subseconds);
+
+	/* Switch without adding us to the queue */
+	switch_task(0);
+
+	unsigned long timer_ticks = 0, timer_subticks = 0;
+	relative_time(0,0,&timer_ticks,&timer_subticks);
+	if (seconds > timer_ticks || (seconds == timer_ticks && subseconds >= timer_subticks)) {
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+static long sys_sleep(unsigned long seconds, unsigned long subseconds) {
+	unsigned long s, ss;
+	relative_time(seconds, subseconds * 10000, &s, &ss);
+	return sys_sleepabs(s, ss);
+}
+
+
 static long (*syscalls[])() = {
 	/* System Call Table */
 	[SYS_EXT]          = sys_exit,
@@ -798,14 +827,14 @@ static long (*syscalls[])() = {
 	[SYS_EXECVE]       = sys_execve,
 	[SYS_FORK]         = sys_fork,
 	[SYS_WAITPID]      = sys_waitpid,
+	[SYS_YIELD]        = sys_yield,
+	[SYS_SLEEPABS]     = sys_sleepabs,
+	[SYS_SLEEP]        = sys_sleep,
 
 	[SYS_OPENPTY]      = unimplemented,
 	[SYS_MKPIPE]       = unimplemented,
 	[SYS_REBOOT]       = unimplemented,
 	[SYS_CLONE]        = unimplemented,
-	[SYS_SLEEPABS]     = unimplemented,
-	[SYS_SLEEP]        = unimplemented,
-	[SYS_YIELD]        = unimplemented,
 	[SYS_SHM_OBTAIN]   = unimplemented,
 	[SYS_SHM_RELEASE]  = unimplemented,
 	[SYS_KILL]         = unimplemented,
