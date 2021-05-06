@@ -97,27 +97,19 @@ void switch_next(void) {
 		"movq %0, %%rbx\n"
 		"movq %1, %%rsp\n"
 		"movq %2, %%rbp\n"
-		"movq $1, %%rax\n"
+		"movq $0x10000, %%rax\n"
 		"jmpq *%%rbx\n"
 		: : "r"(ip), "r"(sp), "r"(bp)
 		: "rbx","rsp","rax");
 }
 
-__attribute__((noinline))
-int arch_collect_state(struct arch_thread_state *ts) {
-	long out = 0;
+extern uintptr_t read_ip(void);
+
+void arch_collect_state(struct arch_thread_state *ts) {
 	asm volatile(
-		"movq $0, %%rax\n"
-		"leaq (%%rip), %0\n"
-		"cmp $0, %%rax\n"
-		"je .next\n"
-		"retq\n"
-		".next:\n"
-		"movq %%rsp, %1\n"
-		"movq %%rbp, %2\n"
-		"movq %%rax, %3\n"
-		: "=r"(ts->ip), "=r"(ts->sp), "=r"(ts->bp), "=r"(out));
-	return out;
+		"movq %%rsp, %0\n"
+		"movq %%rbp, %1\n"
+		: "=r"(ts->sp), "=r"(ts->bp));
 }
 
 __attribute__((noreturn))
@@ -152,9 +144,10 @@ void switch_task(uint8_t reschedule) {
 	}
 
 	struct arch_thread_state ts;
-	if (arch_collect_state(&ts) != 0) {
+	arch_collect_state(&ts);
+	ts.ip = read_ip();
+	if (ts.ip == 0x10000) {
 		/* TODO signals */
-		//printf("switched into %p\n", current_process);
 		#if 0
 		if (!(current_process->flags & PROC_FLAG_FINISHED)) {
 			node_t * node = list_dequeue(current_process->signal_queue);
@@ -801,6 +794,13 @@ process_t * process_get_parent(process_t * process) {
 
 void task_exit(int retval) {
 	//cleanup_process((process_t *)current_process, retval);
+	current_process->status = retval;
+	current_process->flags |= PROC_FLAG_FINISHED;
+	/* TODO free queues */
+	/* TODO free shm */
+	/* TODO release directory */
+	/* TODO release fds */
+
 	process_t * parent = process_get_parent((process_t *)current_process);
 	if (parent && !(parent->flags & PROC_FLAG_FINISHED)) {
 		//send_signal(parent->group, SIGCHLD, 1);

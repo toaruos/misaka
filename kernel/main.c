@@ -307,10 +307,14 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	tasking_start();
 	pit_initialize();
 
+	vfs_mount("/dev/null", &_early_log);
+
 	/* XXX Set actual process file descriptors (this is temporary; init should do this) */
+	#if 0
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 1;
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
+	#endif
 
 
 #if 0
@@ -321,7 +325,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 #if 1
 	/* Load elf from file */
-	const char * boot_app = "/bin/misaka-test";
+	const char * boot_app = "/bin/init";
 	const char * boot_arg = NULL;
 	const char * argv[] = {
 		boot_app,

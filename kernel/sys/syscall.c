@@ -9,6 +9,7 @@
 #include <kernel/process.h>
 #include <kernel/string.h>
 #include <kernel/version.h>
+#include <kernel/pipe.h>
 
 #include <kernel/arch/x86_64/regs.h>
 #include <kernel/arch/x86_64/mmu.h>
@@ -213,7 +214,9 @@ extern void task_exit(int retval);
 
 __attribute__((noreturn))
 static long sys_exit(long exitcode) {
-	/* FIXME: @ref task_exit */
+	/* TODO remove print */
+	printf("(process %d exited with %ld)\n", current_process->id, exitcode);
+
 	task_exit(exitcode);
 	__builtin_unreachable();
 }
@@ -767,14 +770,17 @@ static long sys_sleepabs(unsigned long seconds, unsigned long subseconds) {
 	sleep_until((process_t *)current_process, seconds, subseconds);
 
 	/* Switch without adding us to the queue */
+	//printf("process %p (pid=%d) entering sleep until %ld.%06ld\n", current_process, current_process->id, seconds, subseconds);
 	switch_task(0);
 
 	unsigned long timer_ticks = 0, timer_subticks = 0;
 	relative_time(0,0,&timer_ticks,&timer_subticks);
+	//printf("process %p (pid=%d) resumed from sleep at %ld.%06ld\n", current_process, current_process->id, timer_ticks, timer_subticks);
+
 	if (seconds > timer_ticks || (seconds == timer_ticks && subseconds >= timer_subticks)) {
-		return 0;
-	} else {
 		return 1;
+	} else {
+		return 0;
 	}
 }
 
@@ -782,6 +788,25 @@ static long sys_sleep(unsigned long seconds, unsigned long subseconds) {
 	unsigned long s, ss;
 	relative_time(seconds, subseconds * 10000, &s, &ss);
 	return sys_sleepabs(s, ss);
+}
+
+static long sys_pipe(int pipes[2]) {
+	if (pipes && !PTR_INRANGE(pipes)) {
+		return -EFAULT;
+	}
+
+	fs_node_t * outpipes[2];
+
+	make_unix_pipe(outpipes);
+
+	open_fs(outpipes[0], 0);
+	open_fs(outpipes[1], 0);
+
+	pipes[0] = process_append_fd((process_t *)current_process, outpipes[0]);
+	pipes[1] = process_append_fd((process_t *)current_process, outpipes[1]);
+	FD_MODE(pipes[0]) = 03;
+	FD_MODE(pipes[1]) = 03;
+	return 0;
 }
 
 
@@ -830,6 +855,7 @@ static long (*syscalls[])() = {
 	[SYS_YIELD]        = sys_yield,
 	[SYS_SLEEPABS]     = sys_sleepabs,
 	[SYS_SLEEP]        = sys_sleep,
+	[SYS_PIPE]         = sys_pipe,
 
 	[SYS_OPENPTY]      = unimplemented,
 	[SYS_MKPIPE]       = unimplemented,
@@ -839,7 +865,6 @@ static long (*syscalls[])() = {
 	[SYS_SHM_RELEASE]  = unimplemented,
 	[SYS_KILL]         = unimplemented,
 	[SYS_SIGNAL]       = unimplemented,
-	[SYS_PIPE]         = unimplemented,
 	[SYS_FSWAIT]       = unimplemented,
 	[SYS_FSWAIT2]      = unimplemented,
 	[SYS_FSWAIT3]      = unimplemented,

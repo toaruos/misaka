@@ -131,3 +131,10 @@ isr_common:
 
     /* Return from interrupt  */
     iretq
+
+
+.global read_ip
+.type read_ip, @function
+read_ip:
+    mov (%rsp), %rax
+    retq

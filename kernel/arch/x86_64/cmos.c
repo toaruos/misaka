@@ -148,11 +148,12 @@ void arch_clock_initialize(void) {
 #endif
 }
 
+#define SUBTICKS_PER_TICK 1000000
 static void update_ticks(void) {
 	uint64_t tsc = read_tsc();
 	timer_subticks = tsc / tsc_mhz;
-	timer_ticks = timer_subticks / 1000000;
-	timer_subticks = timer_subticks % 1000000;
+	timer_ticks = timer_subticks / SUBTICKS_PER_TICK;
+	timer_subticks = timer_subticks % SUBTICKS_PER_TICK;
 }
 
 int gettimeofday(struct timeval * t, void *z) {
@@ -168,13 +169,12 @@ uint64_t now(void) {
 	return t.tv_sec;
 }
 
-#define SUBTICKS_PER_TICK 1000000
 
 void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds) {
 	update_ticks();
-	if (subseconds + timer_subticks > SUBTICKS_PER_TICK) {
-		*out_seconds    = timer_ticks + seconds + 1;
-		*out_subseconds = (subseconds + timer_subticks) - SUBTICKS_PER_TICK;
+	if (subseconds + timer_subticks >= SUBTICKS_PER_TICK) {
+		*out_seconds    = timer_ticks + seconds + (subseconds + timer_subticks) / SUBTICKS_PER_TICK;
+		*out_subseconds = (subseconds + timer_subticks) % SUBTICKS_PER_TICK;
 	} else {
 		*out_seconds    = timer_ticks + seconds;
 		*out_subseconds = timer_subticks + subseconds;

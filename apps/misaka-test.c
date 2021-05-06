@@ -43,7 +43,7 @@ int main(int argc, char * argv[]) {
 	char * args[] = {
 		"/bin/sh",
 		"-c",
-		"sleep 2; echo hi; sleep 2; echo glorp",
+		"sleep 2; echo hi; echo glorp",
 		NULL,
 	};
 	pid_t pid = fork();
