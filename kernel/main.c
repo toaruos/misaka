@@ -321,7 +321,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 #if 1
 	/* Load elf from file */
-	const char * boot_app = "/bin/misaka-test";
+	const char * boot_app = "/bin/init";
 	const char * boot_arg = NULL;
 	const char * argv[] = {
 		boot_app,
