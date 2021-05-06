@@ -88,5 +88,8 @@ typedef struct {
 
 extern volatile process_t * current_process;
 extern unsigned long process_append_fd(process_t * proc, fs_node_t * node);
+extern long process_move_fd(process_t * proc, long src, long dest);
+extern void initialize_process_tree(void);
+extern process_t * process_from_pid(pid_t pid);
 
 #define USER_ROOT_UID 0

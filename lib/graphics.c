@@ -96,6 +96,7 @@ static int framebuffer_fd = 0;
 gfx_context_t * init_graphics_fullscreen() {
 	gfx_context_t * out = malloc(sizeof(gfx_context_t));
 	out->clips = NULL;
+	out->buffer = NULL;
 
 	if (!framebuffer_fd) {
 		framebuffer_fd = open("/dev/fb0", 0, 0);

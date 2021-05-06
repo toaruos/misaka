@@ -448,3 +448,20 @@ char * strdup(const char * c) {
 	return out;
 }
 
+int atoi(const char * c) {
+	int sign = 1;
+	long out = 0;
+	if (*c == '-') {
+		sign = '-';
+		c++;
+	}
+
+	while (*c) {
+		out *= 10;
+		out += (*c - '0');
+		c++;
+	}
+
+	return out * sign;
+}
+

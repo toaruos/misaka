@@ -47,7 +47,7 @@ static size_t hostname_len = 0;
 #define PTR_VALIDATE(PTR) \
 	ptr_validate((void *)(PTR), __func__)
 
-static void ptr_validate(void * ptr, const char * syscall) {
+void ptr_validate(void * ptr, const char * syscall) {
 	if (ptr && !PTR_INRANGE(ptr)) {
 		printf("invalid pointer passed to %s (%p < %p)\n",
 			syscall, ptr, current_process->image.entry);
@@ -548,7 +548,6 @@ static long sys_setsid(void) {
 }
 
 static long sys_setpgid(pid_t pid, pid_t pgid) {
-	/* FIXME: @ref process_from_pid */
 	if (pgid < 0) {
 		return -EINVAL;
 	}
@@ -556,8 +555,7 @@ static long sys_setpgid(pid_t pid, pid_t pgid) {
 	if (pid == 0) {
 		proc = (process_t*)current_process;
 	} else {
-		/* FIXME */
-		//proc = process_from_pid(pid);
+		proc = process_from_pid(pid);
 	}
 
 	if (!proc) {
@@ -570,7 +568,7 @@ static long sys_setpgid(pid_t pid, pid_t pgid) {
 	if (pgid == 0) {
 		proc->job = proc->group;
 	} else {
-		process_t * pgroup = NULL; /* FIXME process_from_pid(pgid); */
+		process_t * pgroup = process_from_pid(pgid);
 
 		if (!pgroup || pgroup->session != proc->session) {
 			return -EPERM;
@@ -582,12 +580,11 @@ static long sys_setpgid(pid_t pid, pid_t pgid) {
 }
 
 static long sys_getpgid(pid_t pid) {
-	/* FIXME: @ref process_from_pid */
 	process_t * proc;
 	if (pid == 0) {
 		proc = (process_t*)current_process;
 	} else {
-		proc = NULL; /* FIXME process_from_pid(pid); */
+		proc = NULL; process_from_pid(pid);
 	}
 
 	if (!proc) {
@@ -649,6 +646,10 @@ static long sys_getcwd(char * buf, size_t size) {
 		return (long)memcpy(buf, current_process->wd_name, size < len ? size : len);
 	}
 	return 0;
+}
+
+static long sys_dup2(int old, int new) {
+	return process_move_fd((process_t *)current_process, old, new);
 }
 
 static long sys_sethostname(char * new_hostname) {
@@ -736,12 +737,12 @@ static long (*syscalls[])() = {
 	[SYS_SETSID]       = sys_setsid,
 	[SYS_SETPGID]      = sys_setpgid,
 	[SYS_GETPGID]      = sys_getpgid,
+	[SYS_DUP2]         = sys_dup2,
 
 	[SYS_EXECVE]       = unimplemented,
 	[SYS_FORK]         = unimplemented,
 	[SYS_OPENPTY]      = unimplemented,
 	[SYS_MKPIPE]       = unimplemented,
-	[SYS_DUP2]         = unimplemented,
 	[SYS_REBOOT]       = unimplemented,
 	[SYS_CLONE]        = unimplemented,
 	[SYS_SLEEPABS]     = unimplemented,

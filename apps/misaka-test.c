@@ -18,17 +18,7 @@ static void demo_runKurokoSnippet(void) {
 
 static void demo_drawWallpaper(void) {
 	/* Set up a wrapper context for the framebuffer */
-	gfx_context_t ctx = {
-		clips: NULL,
-		clips_size: 0,
-		width: 1440,
-		height: 900,
-		depth: 32,
-		stride: 4 * 1440,
-		buffer: (char*)0xfd000000,
-		size: 1440 * 900 * 4,
-		backbuffer: (char*)0xfd000000,
-	};
+	gfx_context_t * ctx = init_graphics_fullscreen();
 
 	/* Load the wallpaper. */
 	sprite_t wallpaper = { 0 };
@@ -37,8 +27,8 @@ static void demo_drawWallpaper(void) {
 
 	printf("wallpaper sprite info: %d x %d\n", wallpaper.width, wallpaper.height);
 
-	draw_sprite_scaled(&ctx, &wallpaper, 0, 0, 1440, 900);
-	flip(&ctx);
+	draw_sprite_scaled(ctx, &wallpaper, 0, 0, 1440, 900);
+	flip(ctx);
 	//blur_context_box(&ctx, 10);
 }
 
