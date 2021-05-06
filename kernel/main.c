@@ -262,12 +262,13 @@ extern fs_node_t * ramdisk_mount(uintptr_t, size_t);
 extern void tarfs_register_init(void);
 extern void tmpfs_register_init(void);
 extern void elf_parseFromMemory(void * atAddress);
-extern void elf_loadFromFile(const char * filePath);
+extern int system(const char * path, int argc, const char ** argv, const char ** envin);
 extern void mmu_init(void);
 extern void arch_clock_initialize(void);
 extern void pit_initialize(void);
 extern fs_node_t * lfb_device;
 extern void acpi_initialize(void);
+extern void tasking_start(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_processMultiboot(mboot);
@@ -304,6 +305,13 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	vfs_mount_type("tmpfs","tmp,777","/tmp");
 	vfs_mount_type("tmpfs","var,555","/var");
 
+	tasking_start();
+
+	/* XXX Set actual process file descriptors (this is temporary; init should do this) */
+	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 1;
+	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
+	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
+
 
 #if 0
 	/* Let's take an aside here to look at a module */
@@ -313,7 +321,16 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 #if 1
 	/* Load elf from file */
-	elf_loadFromFile("/lib/ld.so");
+	const char * boot_app = "/bin/misaka-test";
+	const char * boot_arg = NULL;
+	const char * argv[] = {
+		boot_app,
+		boot_arg,
+		NULL
+	};
+	int argc = 0;
+	while (argv[argc]) argc++;
+	system(argv[0], argc, argv, NULL);
 #endif
 
 	while (1);

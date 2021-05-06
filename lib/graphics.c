@@ -771,8 +771,8 @@ uint32_t getBilinearFilteredPixelColor(sprite_t * tex, double u, double v) {
 	int y = floor(v);
 	if (x >= tex->width)  return 0;
 	if (y >= tex->height) return 0;
-	if (x <= 0) return 0;
-	if (y <= 0) return 0;
+	if (x < 0) return 0;
+	if (y < 0) return 0;
 	double u_ratio = u - x;
 	double v_ratio = v - y;
 	double u_o = 1 - u_ratio;

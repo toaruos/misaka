@@ -104,18 +104,6 @@ void mmu_frame_map_address(union PML * page, unsigned int flags, uintptr_t physA
 	mmu_frame_set(physAddr);
 }
 
-void mmu_frame_free(union PML * page) {
-	uint64_t frame;
-	if (!(frame = page->bits.page)) {
-		printf("error: attempted to free bad page?");
-		while (1) {};
-		return;
-	}
-
-	mmu_frame_clear(frame << 12);
-	page->bits.page = 0;
-}
-
 /* Initial memory maps loaded by boostrap */
 union PML init_page_region[2][512] __attribute__((aligned(0x1000))) = {0};
 
@@ -124,6 +112,8 @@ union PML high_base_pml[512] __attribute__((aligned(0x1000))) = {0};
 /* Direct mapping of low memory */
 union PML low_base_pmls[20][512] __attribute__((aligned(0x1000)))  = {0};
 extern uint32_t * framebuffer;
+
+union PML * current_pml = (union PML *)&init_page_region[0];
 
 /**
  * Find the physical address at a given virtual address.
@@ -136,7 +126,7 @@ uintptr_t mmu_map_to_physical(uintptr_t virtAddr) {
 	unsigned int pd_entry   = (pageAddr >> 9)  & 0x1FF;
 	unsigned int pt_entry   = (pageAddr) & 0x1FF;
 
-	union PML * root = (union PML *)&init_page_region[0]; /* temporary */
+	union PML * root = current_pml;
 
 	/* Get the PML4 entry for this address */
 	if (!root[pml4_entry].bits.present) return (uintptr_t)-1;
@@ -165,7 +155,7 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 	unsigned int pd_entry   = (pageAddr >> 9)  & 0x1FF;
 	unsigned int pt_entry   = (pageAddr) & 0x1FF;
 
-	union PML * root = (union PML *)&init_page_region[0]; /* temporary */
+	union PML * root = current_pml;
 
 	/* Get the PML4 entry for this address */
 	if (!root[pml4_entry].bits.present) {
@@ -213,6 +203,128 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 	return (union PML *)&pt[pt_entry];
 }
 
+union PML * mmu_clone(union PML * from) {
+	/* Clone the current PMLs... */
+	if (!from) from = current_pml;
+
+	/* First get a page for ourselves. */
+	uintptr_t newPage = mmu_first_frame() << 12;
+	union PML * pml4_out = (union PML*)(0xFFFFffff00000000UL | newPage);
+	mmu_frame_set(newPage);
+
+	/* Zero bottom half */
+	memset(&pml4_out[0], 0, 256 * sizeof(union PML));
+
+	/* Copy top half */
+	memcpy(&pml4_out[256], &from[256], 256 * sizeof(union PML));
+
+	/* Copy PDPs */
+	for (size_t i = 0; i < 256; ++i) {
+		if (from[i].bits.present) {
+			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			uintptr_t newPage = mmu_first_frame() << 12;
+			union PML * pdp_out = (union PML*)(0xFFFFffff00000000UL | newPage);
+			mmu_frame_set(newPage);
+			memset(pdp_out, 0, 512 * sizeof(union PML));
+			pml4_out[i].raw = (newPage) | 0x07;
+
+			/* Copy the PDs */
+			for (size_t j = 0; j < 512; ++j) {
+				if (pdp_in[j].bits.present) {
+					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					uintptr_t newPage = mmu_first_frame() << 12;
+					union PML * pd_out = (union PML*)(0xFFFFffff00000000UL | newPage);
+					mmu_frame_set(newPage);
+					memset(pd_out, 0, 512 * sizeof(union PML));
+					pdp_out[j].raw = (newPage) | 0x07;
+
+					/* Now copy the PTs */
+					for (size_t k = 0; k < 512; ++k) {
+						if (pd_in[k].bits.present) {
+							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							uintptr_t newPage = mmu_first_frame() << 12;
+							union PML * pt_out = (union PML*)(0xFFFFffff00000000UL | newPage);
+							mmu_frame_set(newPage);
+							memset(pt_out, 0, 512 * sizeof(union PML));
+							pd_out[k].raw = (newPage) | 0x07;
+
+							/* Now, finally, copy pages */
+							for (size_t l = 0; l < 512; ++l) {
+								if (pt_in[l].bits.present) {
+									if (pt_in[l].bits.user) {
+										char * page_in = (char*)(0xFFFFffff00000000UL | (pt_in[l].bits.page << 12));
+										uintptr_t newPage = mmu_first_frame() << 12;
+										char * page_out = (char *)(0xFFFFffff00000000UL | newPage);
+										memcpy(page_out,page_in,4096);
+										pt_out[l].bits.page = newPage >> 12;
+										pt_out[l].bits.present = 1;
+										pt_out[l].bits.user = 1;
+										pt_out[l].bits.writable = pt_in[l].bits.writable;
+										pt_out[l].bits.writethrough = pt_out[l].bits.writethrough;
+										pt_out[l].bits.accessed = pt_out[l].bits.accessed;
+										pt_out[l].bits.size = pt_out[l].bits.size;
+										pt_out[l].bits.global = pt_out[l].bits.global;
+										pt_out[l].bits.nx = pt_out[l].bits.nx;
+									} else {
+										/* If it's not a user page, just copy directly */
+										pt_out[l].raw = pt_in[l].raw;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return pml4_out;
+}
+
+void mmu_free(union PML * from) {
+	if (!from) {
+		printf("can't clear NULL directory\n");
+		return;
+	}
+
+	for (size_t i = 0; i < 256; ++i) {
+		if (from[i].bits.present) {
+			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			for (size_t j = 0; j < 512; ++j) {
+				if (pdp_in[j].bits.present) {
+					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					for (size_t k = 0; k < 512; ++k) {
+						if (pd_in[k].bits.present) {
+							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							for (size_t l = 0; l < 512; ++l) {
+								if (pt_in[l].bits.present) {
+									if (pt_in[l].bits.user) {
+										mmu_frame_clear(pt_in[l].bits.page << 12);
+									}
+								}
+							}
+							mmu_frame_clear(pd_in[k].bits.page << 12);
+						}
+					}
+					mmu_frame_clear(pdp_in[j].bits.page << 12);
+				}
+			}
+			mmu_frame_clear(from[i].bits.page << 12);
+		}
+	}
+
+	mmu_frame_clear((((uintptr_t)from) & 0xFFFFFFFF));
+}
+
+void mmu_set_directory(union PML * new_pml) {
+	if (!new_pml) new_pml = (union PML*)((uintptr_t)&init_page_region[0] | 0xFFFFffff00000000UL);
+	current_pml = new_pml;
+
+	asm volatile (
+		"movq %0, %%cr3"
+		: : "r"((uintptr_t)new_pml & 0xFFFFffff));
+}
+
 /**
  * @brief Switch from the boot-time 1GiB-page identity map to 4KiB pages.
  */
@@ -254,4 +366,5 @@ void mmu_init(void) {
 		frames[i] = (uint32_t)-1;
 	}
 
+	current_pml = (union PML*)((uintptr_t)current_pml | 0xFFFFffff00000000UL);
 }

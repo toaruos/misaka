@@ -4,6 +4,7 @@
 #include <kernel/types.h>
 #include <kernel/vfs.h>
 #include <kernel/tree.h>
+#include <kernel/arch/x86_64/pml.h>
 #include <sys/types.h>
 #include <sys/time.h>
 
@@ -14,6 +15,7 @@ typedef struct thread {
 	uintptr_t tls_base;
 	unsigned int flags;
 	uint8_t fp_regs[512];
+	union PML * directory;
 } thread_t;
 
 typedef struct image {
@@ -36,6 +38,11 @@ typedef struct file_descriptors {
 	size_t capacity;
 	size_t refs;
 } fd_table_t;
+
+#define PROC_FLAG_IS_TASKLET 0x01
+#define PROC_FLAG_FINISHED   0x02
+#define PROC_FLAG_STARTED    0x04
+#define PROC_FLAG_RUNNING    0x08
 
 typedef struct process {
 	pid_t id;    /* PID */

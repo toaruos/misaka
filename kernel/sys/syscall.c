@@ -699,6 +699,50 @@ static long sys_unlink(char * file) {
 	return unlink_fs(file);
 }
 
+extern int exec(const char * path, int argc, char *const argv[], char *const env[], int interp_depth);
+static long sys_execve(const char * filename, char *const argv[], char *const envp[]) {
+	PTR_VALIDATE(filename);
+	PTR_VALIDATE(argv);
+	PTR_VALIDATE(envp);
+
+	int argc = 0;
+	int envc = 0;
+	while (argv[argc]) {
+		PTR_VALIDATE(argv[argc]);
+		++argc;
+	}
+
+	if (envp) {
+		while (envp[envc]) {
+			PTR_VALIDATE(envp[envc]);
+			++envc;
+		}
+	}
+
+	char **argv_ = malloc(sizeof(char*) * (argc + 1));
+	for (int j = 0; j < argc; ++j) {
+		argv_[j] = malloc(strlen(argv[j]) + 1);
+		memcpy(argv_[j], argv[j], strlen(argv[j]) + 1);
+	}
+	argv_[argc] = 0;
+	char ** envp_;
+	if (envp && envc) {
+		envp_ = malloc(sizeof(char*) * (envc + 1));
+		for (int j = 0; j < envc; ++j) {
+			envp_[j] = malloc(strlen(envp[j]) + 1);
+			memcpy(envp_[j], envp[j], strlen(envp[j]) + 1);
+		}
+		envp_[envc] = 0;
+	} else {
+		envp_ = malloc(sizeof(char*));
+		envp_[0] = NULL;
+	}
+
+	// shm_release_all
+	current_process->cmdline = argv_;
+	return exec(filename, argc, argv_, envp_, 0);
+}
+
 static long (*syscalls[])() = {
 	/* System Call Table */
 	[SYS_EXT]          = sys_exit,
@@ -738,8 +782,8 @@ static long (*syscalls[])() = {
 	[SYS_SETPGID]      = sys_setpgid,
 	[SYS_GETPGID]      = sys_getpgid,
 	[SYS_DUP2]         = sys_dup2,
+	[SYS_EXECVE]       = sys_execve,
 
-	[SYS_EXECVE]       = unimplemented,
 	[SYS_FORK]         = unimplemented,
 	[SYS_OPENPTY]      = unimplemented,
 	[SYS_MKPIPE]       = unimplemented,

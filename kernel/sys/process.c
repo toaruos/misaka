@@ -34,6 +34,7 @@ list_t * process_list;  /* Flat storage */
 list_t * process_queue; /* Ready queue */
 list_t * sleep_queue;
 volatile process_t * current_process = &_fake_process;
+static process_t * kernel_idle_task = NULL;
 static spin_lock_t tree_lock = { 0 };
 static spin_lock_t process_queue_lock = { 0 };
 static spin_lock_t wait_lock_tmp = { 0 };
@@ -92,13 +93,101 @@ unsigned long process_append_fd(process_t * proc, fs_node_t * node) {
 }
 
 pid_t get_next_pid(void) {
-	static pid_t _next_pid = 1;
+	static pid_t _next_pid = 2;
 	return _next_pid++;
 }
 
 #define PROC_REUSE_FDS 0x0001
-
 #define KERNEL_STACK_SIZE 0x8000
+
+extern union PML * current_pml;
+
+static void _kidle(void) {
+	while (1) {
+		/* FIXME: arch_pause()? */
+		asm volatile (
+			"sti\n"
+			"hlt\n"
+		);
+	}
+}
+
+
+process_t * spawn_kidle(void) {
+	process_t * idle = calloc(1,sizeof(process_t));
+	idle->id = -1;
+	idle->name = strdup("[kidle]");
+	idle->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
+	idle->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+	idle->thread.ip = (uintptr_t)&_kidle;
+	idle->thread.sp = idle->image.stack;
+	idle->thread.bp = idle->image.stack;
+	idle->wait_queue = list_create();
+	idle->shm_mappings = list_create();
+	idle->signal_queue = list_create();
+	gettimeofday(&idle->start, NULL);
+	idle->thread.directory = current_pml;
+	return idle;
+}
+
+process_t * spawn_init(void) {
+	process_t * init = calloc(1,sizeof(process_t));
+	tree_set_root(process_tree, (void*)init);
+
+	init->tree_entry = process_tree->root;
+	init->id         = 1;
+	init->group      = 0;
+	init->job        = 1;
+	init->session    = 1;
+	init->name       = strdup("init");
+	init->cmdline    = NULL;
+	init->user       = USER_ROOT_UID;
+	init->real_user  = USER_ROOT_UID;
+	init->mask       = 022;
+	init->status     = 0;
+
+	init->fds           = malloc(sizeof(fd_table_t));
+	init->fds->refs     = 1;
+	init->fds->length   = 0;
+	init->fds->capacity = 4;
+	init->fds->entries  = malloc(init->fds->capacity * sizeof(fs_node_t *));
+	init->fds->modes    = malloc(init->fds->capacity * sizeof(int));
+	init->fds->offsets  = malloc(init->fds->capacity * sizeof(uint64_t));
+
+	init->wd_node = clone_fs(fs_root);
+	init->wd_name = strdup("/");
+
+	extern void * stack_top;
+	init->image.entry       = 0;
+	init->image.heap        = 0;
+	init->image.heap_actual = 0;
+	init->image.stack       = (uintptr_t)&stack_top;
+	init->image.user_stack  = 0;
+	init->image.size        = 0;
+	init->image.shm_heap    = 0x200000000; /* That's 8GiB? That should work fine... */
+
+	init->flags         = PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
+	init->wait_queue    = list_create();
+	init->shm_mappings  = list_create();
+	init->signal_queue  = list_create();
+	init->signal_kstack = NULL; /* Initialized later */
+
+	init->sched_node.prev = NULL;
+	init->sched_node.next = NULL;
+	init->sched_node.value = init;
+
+	init->sleep_node.prev = NULL;
+	init->sleep_node.next = NULL;
+	init->sleep_node.value = init;
+
+	init->timed_sleep_node = NULL;
+
+	init->thread.directory = current_pml;
+	init->description = strdup("[init]");
+	list_insert(process_list, (void*)init);
+
+	return init;
+}
 
 process_t * spawn_process(volatile process_t * parent, int flags) {
 	process_t * proc = calloc(1,sizeof(process_t));
@@ -194,4 +283,12 @@ long process_move_fd(process_t * proc, long src, long dest) {
 		open_fs(proc->fds->entries[dest], 0);
 	}
 	return dest;
+}
+
+
+
+void tasking_start(void) {
+	current_process = spawn_init();
+	kernel_idle_task = spawn_kidle();
+
 }

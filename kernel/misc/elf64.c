@@ -3,6 +3,7 @@
  * @brief Elf64 parsing tools for modules and static userspace binaries.
  */
 
+#include <errno.h>
 #include <kernel/types.h>
 #include <kernel/symboltable.h>
 #include <kernel/printf.h>
@@ -64,99 +65,8 @@ void elf_parseModuleFromMemory(void * atAddress) {
 
 static struct regs ret = {0};
 
-#if 0
-/**
- * @brief (temporary) Load an ELF Executable as a userspace program and jump to its entry point.
- *
- * Basic ELF64 parsing for LOAD PHDRs and the necessary hooks to jump to CPL3.
- */
-void elf_parseFromMemory(void * atAddress) {
-	struct Elf64_Header * elfHeader = atAddress;
-
-	/* Sanity check the ELF header... */
-	if (elfHeader->e_ident[0] != ELFMAG0 ||
-	    elfHeader->e_ident[1] != ELFMAG1 ||
-	    elfHeader->e_ident[2] != ELFMAG2 ||
-	    elfHeader->e_ident[3] != ELFMAG3) {
-		printf("(Not an elf)\n");
-		return;
-	}
-
-	/* We do not support 32-bit ELFs. */
-	if (elfHeader->e_ident[EI_CLASS] != ELFCLASS64) {
-		printf("(Wrong Elf class)\n");
-		return;
-	}
-
-	/* This loader can only handle basic executables. */
-	if (elfHeader->e_type != ET_EXEC) {
-		printf("(Not an executable)\n");
-		return;
-	}
-
-	/** Load any LOAD PHDRs */
-	for (int i = 0; i < elfHeader->e_phnum; ++i) {
-		Elf64_Phdr * phdr = (void*)((uintptr_t)elfHeader + elfHeader->e_phoff + i * elfHeader->e_phentsize);
-		if (phdr->p_type == PT_LOAD) {
-			memcpy((void*)phdr->p_vaddr, (void*)((uintptr_t)elfHeader + phdr->p_offset), phdr->p_filesz);
-			for (size_t i = phdr->p_filesz; i < phdr->p_memsz; ++i) {
-				*(char*)(phdr->p_vaddr + i) = 0;
-			}
-		}
-		/* TODO: Should also be setting up TLS PHDRs. */
-	}
-
-	/**
-	 * Userspace segment descriptors
-	 */
-	ret.cs = 0x18 | 0x03;
-	ret.ss = 0x20 | 0x03;
-	ret.rip = elfHeader->e_entry;
-
-	/* This should really be mapped at the top the userspace region when we set up
-	 * proper page allocation... */
-	ret.rsp = 0x3FFFF000;
-
-	/**
-	 * Temporary stuff for startup environment loaded at bottom of stack.
-	 * TODO: I think the placement of these is defined in the SysV ABI.
-	 */
-	uintptr_t * userStack = (uintptr_t*)ret.rsp;
-	userStack[0] = 2;
-	userStack[1] = (uintptr_t)&userStack[2];
-	userStack[2] = (uintptr_t)&userStack[7];
-	userStack[4] = 0;
-
-	userStack[5] = 0; /* env */
-	userStack[6] = 0; /* auxv */
-
-	/* TODO: argv from exec... */
-	char * c = (char*)&userStack[7];
-	c += snprintf(c, 30, "/lib/ld.so") + 1;
-	userStack[3] = (uintptr_t)c;
-	snprintf(c, 30, "/bin/demo");
-
-	ret.rflags = (1 << 21);
-	asm volatile (
-		"pushq %0\n"
-		"pushq %1\n"
-		"pushq %2\n"
-		"pushq %3\n"
-		"pushq %4\n"
-		"iretq"
-	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
-	    "a"(2), "b"(&userStack[1]), "c"(NULL));
-}
-#endif
-
-void elf_loadFromFile(const char * filePath) {
+int elf_exec(const char * path, fs_node_t * file, int argc, const char *const argv[], const char *const env[], int interp) {
 	Elf64_Header header;
-
-	fs_node_t * file = kopen(filePath, 0);
-	if (!file) {
-		printf("Unable to load file.\n");
-		return;
-	}
 
 	read_fs(file, 0, sizeof(Elf64_Header), (uint8_t*)&header);
 
@@ -166,21 +76,51 @@ void elf_loadFromFile(const char * filePath) {
 	    header.e_ident[3] != ELFMAG3) {
 		printf("Invalid file: Bad header.\n");
 		close_fs(file);
-		return;
+		return -EINVAL;
 	}
 
 	if (header.e_ident[EI_CLASS] != ELFCLASS64) {
 		printf("(Wrong Elf class)\n");
-		return;
+		return -EINVAL;
 	}
 
 	/* This loader can only handle basic executables. */
 	if (header.e_type != ET_EXEC) {
 		printf("(Not an executable)\n");
-		return;
+		/* TODO: what about DYN? */
+		return -EINVAL;
 	}
 
+	if (file->mask & 0x800) {
+		/* setuid */
+		current_process->user = file->uid;
+	}
+
+	/* First check if it is dynamic and needs an interpreter */
+	for (int i = 0; i < header.e_phnum; ++i) {
+		Elf64_Phdr phdr;
+		read_fs(file, header.e_phoff + header.e_phentsize * i, sizeof(Elf64_Phdr), (uint8_t*)&phdr);
+		if (phdr.p_type == PT_DYNAMIC) {
+			close_fs(file);
+			unsigned int nargc = argc + 3;
+			const char * args[nargc+1]; /* oh yeah, great, a stack-allocated dynamic array... wonderful... */
+			args[0] = "ld.so";
+			args[1] = "-e";
+			args[2] = strdup(current_process->name);
+			int j = 3;
+			for (int i = 0; i < argc; ++i, ++j) {
+				args[j] = argv[i];
+			}
+			args[j] = NULL;
+			fs_node_t * file = kopen("/lib/ld.so",0); /* FIXME PT_INTERP value */
+			if (!file) return -EINVAL;
+			return elf_exec(NULL, file, nargc, args, env, 1);
+		}
+	}
+
+	uintptr_t execBase = -1;
 	uintptr_t heapBase = 0;
+
 	for (int i = 0; i < header.e_phnum; ++i) {
 		Elf64_Phdr phdr;
 		read_fs(file, header.e_phoff + header.e_phentsize * i, sizeof(Elf64_Phdr), (uint8_t*)&phdr);
@@ -198,12 +138,19 @@ void elf_loadFromFile(const char * filePath) {
 			if (phdr.p_vaddr + phdr.p_memsz > heapBase) {
 				heapBase = phdr.p_vaddr + phdr.p_memsz;
 			}
+
+			if (phdr.p_vaddr < execBase) {
+				execBase = phdr.p_vaddr;
+			}
 		}
 		/* TODO: Should also be setting up TLS PHDRs. */
 	}
 
 	current_process->image.heap  = (heapBase + 0xFFF) & (~0xFFF);
 	current_process->image.entry = header.e_entry;
+	current_process->image.size  = heapBase - execBase;
+
+	close_fs(file);
 
 	// arch_set_...?
 	ret.cs = 0x18 | 0x03;
@@ -211,7 +158,7 @@ void elf_loadFromFile(const char * filePath) {
 	ret.rip = header.e_entry;
 
 	/* Map stack space */
-	ret.rsp = 0x80000000;
+	ret.rsp = 0x800000000000;
 	for (uintptr_t i = ret.rsp - 64 * 0x400; i < ret.rsp; i += 0x1000) {
 		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
@@ -229,24 +176,48 @@ void elf_loadFromFile(const char * filePath) {
 	} while (l>=0); \
 } while (0)
 
-	int argc = 2;
-	PUSHSTR(filePath);
-	char * argv_0 = (char*)ret.rsp;
-	PUSHSTR("/bin/misaka-test");
-	char * argv_1 = (char*)ret.rsp;
-	/* envp stuff here */
+	/* XXX This should probably be done backwards so we can be
+	 *     sure that we're aligning the stack properly. It
+	 *     doesn't matter too much as our crt0+libc align it
+	 *     correctly for us and environ + auxv detection is
+	 *     based on the addresses of argv, not the actual
+	 *     stack pointer, but it's still weird. */
+	char * argv_ptrs[argc];
+	for (int i = 0; i < argc; ++i) {
+		PUSHSTR(argv[i]);
+		argv_ptrs[i] = (char*)ret.rsp;
+	}
+
+	/* Now push envp */
+	int envc = 0;
+	char ** envpp = (char**)env;
+	while (*envpp) {
+		envc++;
+		envpp++;
+	}
+	char * envp_ptrs[envc];
+	for (int i = 0; i < envc; ++i) {
+		PUSHSTR(env[i]);
+		envp_ptrs[i] = (char*)ret.rsp;
+	}
+
 	PUSH(uintptr_t, 0);
 	PUSH(uintptr_t, current_process->user);
 	PUSH(uintptr_t, 11); /* AT_UID */
 	PUSH(uintptr_t, current_process->real_user);
 	PUSH(uintptr_t, 12); /* AT_EUID */
 	PUSH(uintptr_t, 0);
+
 	PUSH(uintptr_t, 0); /* envp NULL */
-	char ** envp = (char**)ret.rsp;
-	PUSH(uintptr_t, 0);
-	PUSH(char*,argv_1);
-	PUSH(char*,argv_0);
-	char ** argv = (char**)ret.rsp;
+	for (int i = envc; i > 0; i--) {
+		PUSH(char*,envp_ptrs[i-1]);
+	}
+	char ** _envp = (char**)ret.rsp;
+	PUSH(uintptr_t, 0); /* argv NULL */
+	for (int i = argc; i > 0; i--) {
+		PUSH(char*,argv_ptrs[i-1]);
+	}
+	char ** _argv = (char**)ret.rsp;
 	PUSH(uintptr_t, argc);
 
 
@@ -260,6 +231,7 @@ void elf_loadFromFile(const char * filePath) {
 		"pushq %4\n"
 		"iretq"
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
-	    "D"(argc), "S"(argv), "d"(envp));
+	    "D"(argc), "S"(_argv), "d"(_envp));
 
+	return -EINVAL;
 }

@@ -3,6 +3,7 @@
  * @brief Test app for Misaka with a bunch of random stuff.
  */
 #include <stdio.h>
+#include <unistd.h>
 
 #include <toaru/graphics.h>
 
@@ -36,4 +37,5 @@ int main(int argc, char * argv[]) {
 	demo_drawWallpaper();
 	demo_runKurokoSnippet();
 
+	return execve("/bin/kuroko",(char*[]){"kuroko",NULL},(char*[]){NULL});
 }

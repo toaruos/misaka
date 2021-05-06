@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 #include <sys/types.h>
 
 #define PATH_SEPARATOR '/'

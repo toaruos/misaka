@@ -948,7 +948,7 @@ nope:
 	_malloc_minimum = 0x40000000;
 
 	/* Jump to the entry for the main object */
-	TRACE_LD("Jumping to entry point");
+	TRACE_LD("Jumping to entry point 0x%lx", main_obj->header.e_entry);
 	entry_point_t entry = (entry_point_t)main_obj->header.e_entry;
 	entry(argc-arg_offset,argv+arg_offset,environ);
 
