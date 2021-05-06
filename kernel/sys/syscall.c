@@ -209,11 +209,13 @@ static long sys_sysfunc(long fn, char ** args) {
 	}
 }
 
+extern void task_exit(int retval);
+
 __attribute__((noreturn))
 static long sys_exit(long exitcode) {
 	/* FIXME: @ref task_exit */
-	printf("(process exited with %ld)\n", exitcode);
-	while (1) {};
+	task_exit(exitcode);
+	__builtin_unreachable();
 }
 
 static long sys_write(long fd, char * ptr, unsigned long len) {
@@ -743,6 +745,17 @@ static long sys_execve(const char * filename, char *const argv[], char *const en
 	return exec(filename, argc, argv_, envp_, 0);
 }
 
+extern pid_t fork(void);
+static long sys_fork(void) {
+	return fork();
+}
+
+extern int waitpid(int pid, int * status, int options);
+static long sys_waitpid(pid_t pid, int * status, int options) {
+	if (status && !PTR_INRANGE(status)) return -EINVAL;
+	return waitpid(pid, status, options);
+}
+
 static long (*syscalls[])() = {
 	/* System Call Table */
 	[SYS_EXT]          = sys_exit,
@@ -783,8 +796,9 @@ static long (*syscalls[])() = {
 	[SYS_GETPGID]      = sys_getpgid,
 	[SYS_DUP2]         = sys_dup2,
 	[SYS_EXECVE]       = sys_execve,
+	[SYS_FORK]         = sys_fork,
+	[SYS_WAITPID]      = sys_waitpid,
 
-	[SYS_FORK]         = unimplemented,
 	[SYS_OPENPTY]      = unimplemented,
 	[SYS_MKPIPE]       = unimplemented,
 	[SYS_REBOOT]       = unimplemented,
@@ -796,7 +810,6 @@ static long (*syscalls[])() = {
 	[SYS_SHM_RELEASE]  = unimplemented,
 	[SYS_KILL]         = unimplemented,
 	[SYS_SIGNAL]       = unimplemented,
-	[SYS_WAITPID]      = unimplemented,
 	[SYS_PIPE]         = unimplemented,
 	[SYS_FSWAIT]       = unimplemented,
 	[SYS_FSWAIT2]      = unimplemented,

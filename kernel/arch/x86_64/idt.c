@@ -5,6 +5,7 @@
 #include <kernel/arch/x86_64/regs.h>
 #include <kernel/vfs.h>
 #include <kernel/version.h>
+#include <kernel/process.h>
 
 #include <sys/time.h>
 #include <sys/utsname.h>
@@ -220,7 +221,7 @@ extern void irq_ack(size_t irq_no);
 struct regs * isr_handler(struct regs * r) {
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
-			printf("Page fault\n");
+			printf("Page fault in pid=%d\n", (int)current_process->id);
 			uintptr_t faulting_address;
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
 			printf("cr2: 0x%016lx\n", faulting_address);

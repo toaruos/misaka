@@ -1,9 +1,14 @@
+#include <errno.h>
 #include <kernel/process.h>
+#include <kernel/printf.h>
 #include <kernel/string.h>
 #include <kernel/vfs.h>
 #include <kernel/spinlock.h>
 #include <kernel/tree.h>
 #include <kernel/list.h>
+#include <kernel/mmu.h>
+#include <kernel/arch/x86_64/regs.h>
+#include <sys/wait.h>
 
 static fs_node_t * _entries[24] = {
 	(fs_node_t *)1, (fs_node_t *)1, (fs_node_t *)1,
@@ -33,12 +38,143 @@ tree_t * process_tree;  /* Parent->Children tree */
 list_t * process_list;  /* Flat storage */
 list_t * process_queue; /* Ready queue */
 list_t * sleep_queue;
-volatile process_t * current_process = &_fake_process;
+volatile process_t * volatile current_process = &_fake_process;
 static process_t * kernel_idle_task = NULL;
 static spin_lock_t tree_lock = { 0 };
 static spin_lock_t process_queue_lock = { 0 };
 static spin_lock_t wait_lock_tmp = { 0 };
 static spin_lock_t sleep_lock = { 0 };
+
+/* Tasking stuff here */
+
+struct arch_thread_state {
+	uintptr_t sp;
+	uintptr_t bp;
+	uintptr_t ip;
+};
+
+extern void arch_set_kernel_stack(uintptr_t stack);
+
+static uint8_t saves[512] __attribute__((aligned(16)));
+void restore_fpu(process_t * proc) {
+	memcpy(&saves,(uint8_t *)&proc->thread.fp_regs,512);
+	asm volatile ("fxrstor (%0)" :: "r"(saves));
+}
+
+void save_fpu(process_t * proc) {
+	asm volatile ("fxsave (%0)" :: "r"(saves));
+	memcpy((uint8_t *)&proc->thread.fp_regs,&saves,512);
+}
+
+
+void switch_next(void) {
+	uintptr_t sp, bp, ip;
+	current_process = next_ready_process();
+	ip = current_process->thread.ip;
+	sp = current_process->thread.sp;
+	bp = current_process->thread.bp;
+	//FIXME set tls base
+	restore_fpu((process_t*)current_process);
+
+	//FIXME process checks
+
+	if (current_process->flags & PROC_FLAG_FINISHED) {
+		switch_next();
+	}
+
+	mmu_set_directory(current_process->thread.directory);
+	arch_set_kernel_stack(current_process->image.stack);
+
+	if (current_process->flags & PROC_FLAG_STARTED) {
+		/* TODO signal stacks */
+	} else {
+		current_process->flags |= PROC_FLAG_STARTED;
+	}
+	current_process->flags |= PROC_FLAG_RUNNING;
+
+	//printf("Switching to %p in %p (pid=%d)\n", ip, current_process, current_process->id);
+	asm volatile(
+		"movq %0, %%rbx\n"
+		"movq %1, %%rsp\n"
+		"movq %2, %%rbp\n"
+		"movq $1, %%rax\n"
+		"jmpq *%%rbx\n"
+		: : "r"(ip), "r"(sp), "r"(bp)
+		: "rbx","rsp","rax");
+}
+
+__attribute__((noinline))
+int arch_collect_state(struct arch_thread_state *ts) {
+	long out = 0;
+	asm volatile(
+		"movq $0, %%rax\n"
+		"leaq (%%rip), %0\n"
+		"cmp $0, %%rax\n"
+		"je .next\n"
+		"retq\n"
+		".next:\n"
+		"movq %%rsp, %1\n"
+		"movq %%rbp, %2\n"
+		"movq %%rax, %3\n"
+		: "=r"(ts->ip), "=r"(ts->sp), "=r"(ts->bp), "=r"(out));
+	return out;
+}
+
+__attribute__((noreturn))
+__attribute__((naked))
+void arch_resume_user(void) {
+	asm volatile (
+		"pop %r15\n"
+		"pop %r14\n"
+		"pop %r13\n"
+		"pop %r12\n"
+		"pop %r11\n"
+		"pop %r10\n"
+		"pop %r9\n"
+		"pop %r8\n"
+		"pop %rbp\n"
+		"pop %rdi\n"
+		"pop %rsi\n"
+		"pop %rdx\n"
+		"pop %rcx\n"
+		"pop %rbx\n"
+		"pop %rax\n"
+		"add $16, %rsp\n"
+		"iretq\n"
+	);
+	__builtin_unreachable();
+}
+
+void switch_task(uint8_t reschedule) {
+	if (!current_process) return;
+	if (!(current_process->flags & PROC_FLAG_RUNNING)) {
+		switch_next();
+	}
+
+	struct arch_thread_state ts;
+	if (arch_collect_state(&ts) != 0) {
+		/* TODO signals */
+		//printf("switched into %p\n", current_process);
+		#if 0
+		if (!(current_process->flags & PROC_FLAG_FINISHED)) {
+			node_t * node = list_dequeue(current_process->signal_queue);
+		}
+		#endif
+		return;
+	}
+
+	current_process->thread.ip = ts.ip;
+	current_process->thread.sp = ts.sp;
+	current_process->thread.bp = ts.bp;
+	//current_process->thread.tls_base = FIXME
+	save_fpu((process_t*)current_process);
+
+	if (reschedule && current_process != kernel_idle_task) {
+		make_process_ready((process_t*)current_process);
+	}
+
+	switch_next();
+}
 
 uint8_t process_compare(void * proc_v, void * pid_v) {
 	pid_t pid = (*(pid_t *)pid_v);
@@ -250,9 +386,178 @@ process_t * spawn_process(volatile process_t * parent, int flags) {
 	tree_node_t * entry = tree_node_create(proc);
 	proc->tree_entry = entry;
 
-	/* FIXME insert into process tree? */
-	/* FIXME insert into process list? */
+	spin_lock(tree_lock);
+	tree_node_insert_child_node(process_tree, parent->tree_entry, entry);
+	list_insert(process_list, (void*)proc);
+	spin_unlock(tree_lock);
 	return proc;
+}
+
+void process_disown(process_t * proc) {
+	tree_node_t * entry = proc->tree_entry;
+	spin_lock(tree_lock);
+	tree_break_off(process_tree, entry);
+	tree_node_insert_child(process_tree, process_tree->root, entry);
+	spin_unlock(tree_lock);
+}
+
+extern void tree_remove_reparent_root(tree_t * tree, tree_node_t * node);
+void process_delete(process_t * proc) {
+	tree_node_t * entry = proc->tree_entry;
+	if (!entry) return;
+	if (process_tree->root == entry) {
+		return;
+	}
+	spin_lock(tree_lock);
+	int has_children = entry->children->length;
+	tree_remove_reparent_root(process_tree, entry);
+	list_delete(process_list, list_find(process_list, proc));
+	spin_unlock(tree_lock);
+	if (has_children) {
+		process_t * init = process_tree->root->value;
+		wakeup_queue(init->wait_queue);
+	}
+	// FIXME bitset_clear(&pid_set, proc->id);
+	free(proc);
+}
+
+void make_process_ready(process_t * proc) {
+	if (proc->sleep_node.owner != NULL) {
+		if (proc->sleep_node.owner == sleep_queue) {
+			if (proc->timed_sleep_node) {
+				spin_lock(sleep_lock);
+				list_delete(sleep_queue, proc->timed_sleep_node);
+				spin_unlock(sleep_lock);
+				proc->sleep_node.owner = NULL;
+				free(proc->timed_sleep_node->value);
+			}
+		} else {
+			proc->flags |= PROC_FLAG_SLEEP_INT;
+			spin_lock(wait_lock_tmp);
+			list_delete((list_t*)proc->sleep_node.owner, &proc->sleep_node);
+			spin_unlock(wait_lock_tmp);
+		}
+	}
+	spin_lock(process_queue_lock);
+	list_append(process_queue, &proc->sched_node);
+	spin_unlock(process_queue_lock);
+}
+
+int process_available(void) {
+	return (process_queue->head != NULL);
+}
+
+process_t * next_ready_process(void) {
+	if (!process_available()) {
+		return kernel_idle_task;
+	}
+	if (process_queue->head->owner != process_queue) {
+		printf("Uh oh.\n");
+	}
+	node_t * np = list_dequeue(process_queue);
+	process_t * next = np->value;
+	return next;
+}
+
+int wakeup_queue(list_t * queue) {
+	int awoken_processes = 0;
+	while (queue->length > 0) {
+		spin_lock(wait_lock_tmp);
+		node_t * node = list_pop(queue);
+		spin_unlock(wait_lock_tmp);
+		if (!(((process_t *)node->value)->flags & PROC_FLAG_FINISHED)) {
+			make_process_ready(node->value);
+		}
+		awoken_processes++;
+	}
+	return awoken_processes;
+}
+
+int wakeup_queue_interrupted(list_t * queue) {
+	int awoken_processes = 0;
+	while (queue->length > 0) {
+		spin_lock(wait_lock_tmp);
+		node_t * node = list_pop(queue);
+		spin_unlock(wait_lock_tmp);
+		if (!(((process_t *)node->value)->flags & PROC_FLAG_FINISHED)) {
+			process_t * proc = node->value;
+			proc->flags |= PROC_FLAG_SLEEP_INT;
+			make_process_ready(proc);
+		}
+		awoken_processes++;
+	}
+	return awoken_processes;
+}
+
+int sleep_on(list_t * queue) {
+	if (current_process->sleep_node.owner) {
+		switch_task(0);
+		return 0;
+	}
+	current_process->flags &= ~(PROC_FLAG_SLEEP_INT);
+	spin_lock(wait_lock_tmp);
+	list_append(queue, (node_t*)&current_process->sleep_node);
+	spin_unlock(wait_lock_tmp);
+	switch_task(0);
+	return !!(current_process->flags & PROC_FLAG_SLEEP_INT);
+}
+
+int process_is_ready(process_t * proc) {
+	return (proc->sched_node.owner != NULL);
+}
+
+void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
+	spin_lock(sleep_lock);
+	if (sleep_queue->length) {
+		sleeper_t * proc = ((sleeper_t *)sleep_queue->head->value);
+		while (proc && (proc->end_tick < seconds || (proc->end_tick == seconds && proc->end_subtick <= subseconds))) {
+
+			if (proc->is_fswait) {
+				proc->is_fswait = -1;
+				process_alert_node(proc->process,proc);
+			} else {
+				process_t * process = proc->process;
+				process->sleep_node.owner = NULL;
+				process->timed_sleep_node = NULL;
+				if (!process_is_ready(process)) {
+					make_process_ready(process);
+				}
+			}
+			free(proc);
+			free(list_dequeue(sleep_queue));
+			if (sleep_queue->length) {
+				proc = ((sleeper_t *)sleep_queue->head->value);
+			} else {
+				break;
+			}
+		}
+	}
+	spin_unlock(sleep_lock);
+}
+
+void sleep_until(process_t * process, unsigned long seconds, unsigned long subseconds) {
+	if (current_process->sleep_node.owner) {
+		/* Can't sleep, sleeping already */
+		return;
+	}
+	process->sleep_node.owner = sleep_queue;
+
+	spin_lock(sleep_lock);
+	node_t * before = NULL;
+	foreach(node, sleep_queue) {
+		sleeper_t * candidate = ((sleeper_t *)node->value);
+		if (candidate->end_tick > seconds || (candidate->end_tick == seconds && candidate->end_subtick > subseconds)) {
+			break;
+		}
+		before = node;
+	}
+	sleeper_t * proc = malloc(sizeof(sleeper_t));
+	proc->process     = process;
+	proc->end_tick    = seconds;
+	proc->end_subtick = subseconds;
+	proc->is_fswait = 0;
+	process->timed_sleep_node = list_insert_after(sleep_queue, before, proc);
+	spin_unlock(sleep_lock);
 }
 
 process_t * process_from_pid(pid_t pid) {
@@ -285,10 +590,249 @@ long process_move_fd(process_t * proc, long src, long dest) {
 	return dest;
 }
 
-
-
 void tasking_start(void) {
 	current_process = spawn_init();
 	kernel_idle_task = spawn_kidle();
+}
 
+static int wait_candidate(process_t * parent, int pid, int options, process_t * proc) {
+	if (!proc) return 0;
+
+	if (options & WNOKERN) {
+		/* Skip kernel processes */
+		if (proc->flags & PROC_FLAG_IS_TASKLET) return 0;
+	}
+
+	if (pid < -1) {
+		if (proc->job == -pid || proc->id == -pid) return 1;
+	} else if (pid == 0) {
+		/* Matches our group ID */
+		if (proc->job == parent->id) return 1;
+	} else if (pid > 0) {
+		/* Specific pid */
+		if (proc->id == pid) return 1;
+	} else {
+		return 1;
+	}
+	return 0;
+}
+
+void reap_process(process_t * proc) {
+	free(proc->name);
+	process_delete(proc);
+}
+
+int waitpid(int pid, int * status, int options) {
+	process_t * volatile proc = (process_t*)current_process;
+	if (proc->group) {
+		proc = process_from_pid(proc->group);
+	}
+
+	do {
+		process_t * candidate = NULL;
+		int has_children = 0;
+
+		/* First, find out if there is anyone to reap */
+		foreach(node, proc->tree_entry->children) {
+			if (!node->value) {
+				continue;
+			}
+			process_t * child = ((tree_node_t *)node->value)->value;
+
+			if (wait_candidate(proc, pid, options, child)) {
+				has_children = 1;
+				if (child->flags & PROC_FLAG_FINISHED) {
+					candidate = child;
+					break;
+				}
+				if ((options & WSTOPPED) && child->flags & PROC_FLAG_SUSPENDED) {
+					candidate = child;
+					break;
+				}
+			}
+		}
+
+		if (!has_children) {
+			/* No valid children matching this description */
+			return -ECHILD;
+		}
+
+		if (candidate) {
+			if (status) {
+				*status = candidate->status;
+			}
+			int pid = candidate->id;
+			if (candidate->flags & PROC_FLAG_FINISHED) {
+				reap_process(candidate);
+			}
+			return pid;
+		} else {
+			if (options & WNOHANG) {
+				return 0;
+			}
+			/* Wait */
+			if (sleep_on(proc->wait_queue) != 0) {
+				return -EINTR;
+			}
+		}
+	} while (1);
+}
+
+extern void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds);
+
+int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
+	fs_node_t ** n = nodes;
+	int index = 0;
+	if (*n) {
+		do {
+			int result = selectcheck_fs(*n);
+			if (result < 0) {
+				return -1;
+			}
+			if (result == 0) {
+				return index;
+			}
+			n++;
+			index++;
+		} while (*n);
+	}
+
+	if (timeout == 0) {
+		return -2;
+	}
+
+	n = nodes;
+
+	process->node_waits = list_create();
+	if (*n) {
+		do {
+			if (selectwait_fs(*n, process) < 0) {
+				printf("bad selectwait?\n");
+			}
+			n++;
+		} while (*n);
+	}
+
+	if (timeout > 0) {
+		unsigned long s, ss;
+		relative_time(0, timeout, &s, &ss);
+
+		spin_lock(sleep_lock);
+		node_t * before = NULL;
+		foreach(node, sleep_queue) {
+			sleeper_t * candidate = ((sleeper_t *)node->value);
+			if (candidate->end_tick > s || (candidate->end_tick == s && candidate->end_subtick > ss)) {
+				break;
+			}
+			before = node;
+		}
+		sleeper_t * proc = malloc(sizeof(sleeper_t));
+		proc->process     = process;
+		proc->end_tick    = s;
+		proc->end_subtick = ss;
+		proc->is_fswait = 1;
+		list_insert(((process_t *)process)->node_waits, proc);
+		process->timeout_node = list_insert_after(sleep_queue, before, proc);
+		spin_unlock(sleep_lock);
+	} else {
+		process->timeout_node = NULL;
+	}
+
+	process->awoken_index = -1;
+	/* Wait. */
+	switch_task(0);
+
+	return process->awoken_index;
+}
+
+int process_awaken_from_fswait(process_t * process, int index) {
+	process->awoken_index = index;
+	list_free(process->node_waits);
+	free(process->node_waits);
+	process->node_waits = NULL;
+	if (process->timeout_node && process->timeout_node->owner == sleep_queue) {
+		sleeper_t * proc = process->timeout_node->value;
+		if (proc->is_fswait != -1) {
+			list_delete(sleep_queue, process->timeout_node);
+			free(process->timeout_node->value);
+			free(process->timeout_node);
+		}
+	}
+	process->timeout_node = NULL;
+	make_process_ready(process);
+	return 0;
+}
+
+int process_alert_node(process_t * process, void * value) {
+
+	if (!is_valid_process(process)) {
+		printf("invalid process\n");
+		return 0;
+	}
+
+	if (!process->node_waits) {
+		return 0; /* Possibly already returned. Wait for another call. */
+	}
+
+	int index = 0;
+	foreach(node, process->node_waits) {
+		if (value == node->value) {
+			return process_awaken_from_fswait(process, index);
+		}
+		index++;
+	}
+
+	return -1;
+}
+
+process_t * process_get_parent(process_t * process) {
+	process_t * result = NULL;
+	spin_lock(tree_lock);
+
+	tree_node_t * entry = process->tree_entry;
+
+	if (entry->parent) {
+		result = entry->parent->value;
+	}
+
+	spin_unlock(tree_lock);
+	return result;
+}
+
+void task_exit(int retval) {
+	//cleanup_process((process_t *)current_process, retval);
+	process_t * parent = process_get_parent((process_t *)current_process);
+	if (parent && !(parent->flags & PROC_FLAG_FINISHED)) {
+		//send_signal(parent->group, SIGCHLD, 1);
+		wakeup_queue(parent->wait_queue);
+	}
+	switch_next();
+}
+
+#define PUSH(stack, type, item) stack -= sizeof(type); \
+							*((type *) stack) = item
+
+pid_t fork(void) {
+	uintptr_t sp, bp;
+	process_t * parent = (process_t*)current_process;
+	union PML * directory = mmu_clone(parent->thread.directory);
+	process_t * new_proc = spawn_process(parent, 0);
+	new_proc->thread.directory = directory;
+
+	struct regs r;
+	memcpy(&r, parent->syscall_registers, sizeof(struct regs));
+	new_proc->syscall_registers = &r; /* what why here */
+	sp = new_proc->image.stack;
+	bp = sp;
+
+	/* This is all very arch specific... */
+	r.rax = 0; /* make fork return 0 */
+	PUSH(sp, struct regs, r);
+	new_proc->thread.sp = sp;
+	new_proc->thread.bp = bp;
+	new_proc->thread.tls_base = parent->thread.tls_base;
+	new_proc->thread.ip = (uintptr_t)&arch_resume_user;
+	if (parent->flags & PROC_FLAG_IS_TASKLET) new_proc->flags |= PROC_FLAG_IS_TASKLET;
+	make_process_ready(new_proc);
+	return new_proc->id;
 }

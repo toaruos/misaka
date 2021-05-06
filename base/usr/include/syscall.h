@@ -15,7 +15,7 @@ _Begin_C_Header
 
 #define DEFN_SYSCALL0(fn, num) \
 	long syscall_##fn() { \
-		long a = num; __asm__ __volatile__("int $0x7F" : "=a" (a) : "a" (a)); \
+		long a = num; __asm__ __volatile__("int $0x7F" : "=a" (a) : "a" ((long)a)); \
 		return a; \
 	}
 

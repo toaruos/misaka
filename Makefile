@@ -130,8 +130,8 @@ clean:
 	-rm -f $(LIBC_OBJS)
 	-rm -f $(BASE)/bin/kuroko
 
-libc/%.o: libc/%.c
-	$(CC) -fPIC -c -o $@ $<
+libc/%.o: libc/%.c base/usr/include/syscall.h 
+	$(CC) -O2 -std=gnu11 -Wall -Wextra -Wno-unused-parameter -fPIC -c -o $@ $<
 
 .PHONY: libc
 libc: $(BASE)/lib/libc.a $(BASE)/lib/libc.so

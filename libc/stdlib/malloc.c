@@ -1001,8 +1001,7 @@ static void * __attribute__ ((malloc)) klcalloc(uintptr_t nmemb, uintptr_t size)
 	 */
 
 	void *ptr = klmalloc(nmemb * size);
-	if (__builtin_expect(ptr != NULL, 1))
-		memset(ptr,0x00,nmemb * size);
+	if (ptr) memset(ptr,0x00,nmemb * size);
 	return ptr;
 }
 /* }}} */

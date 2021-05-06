@@ -238,7 +238,7 @@ size_t xvasprintf(int (*callback)(void *, char), void * userData, const char * f
 				break;
 			case 'p':
 				alt = 1;
-				if (sizeof(void*) == sizeof(long long)) big = 2;
+				if (sizeof(void*) == sizeof(long long)) big = 2; /* fallthrough */
 			case 'X':
 			case 'x': /* Hexadecimal number */
 				{

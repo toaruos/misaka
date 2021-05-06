@@ -84,6 +84,10 @@ void gdt_install(void) {
 	);
 }
 
+void arch_set_kernel_stack(uintptr_t stack) {
+	gdt.tss.rsp[0] = stack;
+}
+
 void arch_set_tls_base(uintptr_t tlsbase) {
 	asm volatile ("wrmsr" : : "c"(0xc0000100), "d"((uint32_t)(tlsbase >> 32)), "a"((uint32_t)(tlsbase & 0xFFFFFFFF)));
 }

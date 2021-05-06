@@ -11,8 +11,7 @@
 #include <kernel/elf.h>
 #include <kernel/vfs.h>
 #include <kernel/process.h>
-
-#include <kernel/arch/x86_64/mmu.h>
+#include <kernel/mmu.h>
 
 static Elf64_Shdr * elf_getSection(Elf64_Header * this, Elf64_Word index) {
 	return (Elf64_Shdr*)((uintptr_t)this + this->e_shoff + index * this->e_shentsize);
@@ -61,9 +60,7 @@ void elf_parseModuleFromMemory(void * atAddress) {
 	}
 }
 
-#include <kernel/arch/x86_64/regs.h>
-
-static struct regs ret = {0};
+extern void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[], uintptr_t stack);
 
 int elf_exec(const char * path, fs_node_t * file, int argc, const char *const argv[], const char *const env[], int interp) {
 	Elf64_Header header;
@@ -147,26 +144,24 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	}
 
 	current_process->image.heap  = (heapBase + 0xFFF) & (~0xFFF);
+	current_process->image.heap_actual = current_process->image.heap;
 	current_process->image.entry = header.e_entry;
 	current_process->image.size  = heapBase - execBase;
 
 	close_fs(file);
 
 	// arch_set_...?
-	ret.cs = 0x18 | 0x03;
-	ret.ss = 0x20 | 0x03;
-	ret.rip = header.e_entry;
 
 	/* Map stack space */
-	ret.rsp = 0x800000000000;
-	for (uintptr_t i = ret.rsp - 64 * 0x400; i < ret.rsp; i += 0x1000) {
+	uintptr_t userstack = 0x800000000000;
+	for (uintptr_t i = userstack - 64 * 0x400; i < userstack; i += 0x1000) {
 		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
 	}
 #define PUSH(type,val) do { \
-	ret.rsp -= sizeof(type); \
-	while (ret.rsp & (sizeof(type)-1)) ret.rsp--; \
-	*((type*)ret.rsp) = (val); \
+	userstack -= sizeof(type); \
+	while (userstack & (sizeof(type)-1)) userstack--; \
+	*((type*)userstack) = (val); \
 } while (0)
 #define PUSHSTR(s) do { \
 	ssize_t l = strlen(s); \
@@ -185,7 +180,7 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	char * argv_ptrs[argc];
 	for (int i = 0; i < argc; ++i) {
 		PUSHSTR(argv[i]);
-		argv_ptrs[i] = (char*)ret.rsp;
+		argv_ptrs[i] = (char*)userstack;
 	}
 
 	/* Now push envp */
@@ -198,7 +193,7 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	char * envp_ptrs[envc];
 	for (int i = 0; i < envc; ++i) {
 		PUSHSTR(env[i]);
-		envp_ptrs[i] = (char*)ret.rsp;
+		envp_ptrs[i] = (char*)userstack;
 	}
 
 	PUSH(uintptr_t, 0);
@@ -212,26 +207,17 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	for (int i = envc; i > 0; i--) {
 		PUSH(char*,envp_ptrs[i-1]);
 	}
-	char ** _envp = (char**)ret.rsp;
+	char ** _envp = (char**)userstack;
 	PUSH(uintptr_t, 0); /* argv NULL */
 	for (int i = argc; i > 0; i--) {
 		PUSH(char*,argv_ptrs[i-1]);
 	}
-	char ** _argv = (char**)ret.rsp;
+	char ** _argv = (char**)userstack;
 	PUSH(uintptr_t, argc);
 
+	arch_enter_user(header.e_entry, argc, _argv, _envp, userstack);
 
 	// arch_enter_user? (ip, stack...)
-	ret.rflags = (1 << 21);
-	asm volatile (
-		"pushq %0\n"
-		"pushq %1\n"
-		"pushq %2\n"
-		"pushq %3\n"
-		"pushq %4\n"
-		"iretq"
-	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
-	    "D"(argc), "S"(_argv), "d"(_envp));
 
 	return -EINVAL;
 }

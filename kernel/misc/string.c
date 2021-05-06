@@ -15,10 +15,10 @@ unsigned short * memsetw(unsigned short * dest, unsigned short val, int count) {
 }
 
 void * memcpy(void * restrict dest, const void * restrict src, size_t n) {
-	asm volatile("rep movsb"
+	asm volatile("cld; rep movsb"
 	            : "=c"((int){0})
 	            : "D"(dest), "S"(src), "c"(n)
-	            : "flags", "memory");
+	            : "flags", "memory", "cc");
 	return dest;
 }
 
@@ -56,8 +56,8 @@ int strcmp(const char * a, const char * b) {
 void * memset(void * dest, int c, size_t n) {
 	asm volatile("cld; rep stosb"
 	             : "=c"((int){0})
-	             : "D"(dest), "a"(c), "c"(n)
-	             : "flags", "memory");
+	             : "rdi"(dest), "a"(c), "c"(n)
+	             : "flags", "memory", "rdi", "cc");
 	return dest;
 }
 

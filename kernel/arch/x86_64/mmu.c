@@ -255,6 +255,7 @@ union PML * mmu_clone(union PML * from) {
 										char * page_in = (char*)(0xFFFFffff00000000UL | (pt_in[l].bits.page << 12));
 										uintptr_t newPage = mmu_first_frame() << 12;
 										char * page_out = (char *)(0xFFFFffff00000000UL | newPage);
+										mmu_frame_set(newPage);
 										memcpy(page_out,page_in,4096);
 										pt_out[l].bits.page = newPage >> 12;
 										pt_out[l].bits.present = 1;

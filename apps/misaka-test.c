@@ -3,7 +3,9 @@
  * @brief Test app for Misaka with a bunch of random stuff.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include <toaru/graphics.h>
 
@@ -37,5 +39,25 @@ int main(int argc, char * argv[]) {
 	demo_drawWallpaper();
 	demo_runKurokoSnippet();
 
-	return execve("/bin/kuroko",(char*[]){"kuroko",NULL},(char*[]){NULL});
+	//execve("/bin/kuroko",(char*[]){"kuroko",NULL},(char*[]){NULL});
+	char * args[] = {
+		"/bin/sh",
+		"-c",
+		"echo hi",
+		NULL,
+	};
+	pid_t pid = fork();
+	if (!pid) {
+		printf("returned from fork in child\n");
+		execvp(args[0], args);
+		exit(1);
+	} else {
+		printf("returned from fork with pid = %d\n", pid);
+		int status;
+		waitpid(pid, &status, 0);
+		printf("done with waitpid, returning\n");
+		return WEXITSTATUS(status);
+	}
+
+	return 0;
 }

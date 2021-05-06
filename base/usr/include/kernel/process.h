@@ -43,6 +43,8 @@ typedef struct file_descriptors {
 #define PROC_FLAG_FINISHED   0x02
 #define PROC_FLAG_STARTED    0x04
 #define PROC_FLAG_RUNNING    0x08
+#define PROC_FLAG_SLEEP_INT  0x10
+#define PROC_FLAG_SUSPENDED  0x20
 
 typedef struct process {
 	pid_t id;    /* PID */
@@ -90,13 +92,23 @@ typedef struct {
 	uint64_t end_tick;
 	uint64_t end_subtick;
 	process_t * process;
-	unsigned int flags; /* is_fswait */
+	int is_fswait;
 } sleeper_t;
 
-extern volatile process_t * current_process;
+extern volatile process_t * volatile current_process;
 extern unsigned long process_append_fd(process_t * proc, fs_node_t * node);
 extern long process_move_fd(process_t * proc, long src, long dest);
 extern void initialize_process_tree(void);
 extern process_t * process_from_pid(pid_t pid);
+
+extern void process_disown(process_t * proc);
+extern void process_delete(process_t * proc);
+extern void make_process_ready(process_t * proc);
+extern int process_available(void);
+extern process_t * next_ready_process(void);
+extern int wakeup_queue(list_t * queue);
+extern int wakeup_queue_interrupted(list_t * queue);
+extern int sleep_on(list_t * queue);
+extern int process_alert_node(process_t * process, void * value);
 
 #define USER_ROOT_UID 0

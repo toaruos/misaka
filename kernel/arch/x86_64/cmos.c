@@ -164,3 +164,15 @@ uint64_t now(void) {
 	gettimeofday(&t, NULL);
 	return t.tv_sec;
 }
+
+#define SUBTICKS_PER_TICK 1000000
+
+void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds) {
+	if (subseconds + timer_subticks > SUBTICKS_PER_TICK) {
+		*out_seconds    = timer_ticks + seconds + 1;
+		*out_subseconds = (subseconds + timer_subticks) - SUBTICKS_PER_TICK;
+	} else {
+		*out_seconds    = timer_ticks + seconds;
+		*out_subseconds = timer_subticks + subseconds;
+	}
+}
