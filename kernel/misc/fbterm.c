@@ -212,10 +212,11 @@ static void process_char(char ch) {
 		x = LEFT_PAD;
 	}
 	if (y > lfb_resolution_y - char_height) {
-		y -= char_height;
+		y = 0;
 		/* scroll everything?*/
-		memmove(lfb_vid_memory, lfb_vid_memory + sizeof(uint32_t) * lfb_resolution_x * char_height, (lfb_resolution_y - char_height) * lfb_resolution_x * 4);
-		memset(lfb_vid_memory + sizeof(uint32_t) * (lfb_resolution_y - char_height) * lfb_resolution_x, 0x05, char_height * lfb_resolution_x * 4);
+		//y -= char_height;
+		//memmove(lfb_vid_memory, lfb_vid_memory + sizeof(uint32_t) * lfb_resolution_x * char_height, (lfb_resolution_y - char_height) * lfb_resolution_x * 4);
+		//memset(lfb_vid_memory + sizeof(uint32_t) * (lfb_resolution_y - char_height) * lfb_resolution_x, 0x05, char_height * lfb_resolution_x * 4);
 	}
 	invert_at(x,y);
 }

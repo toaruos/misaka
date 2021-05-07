@@ -64,6 +64,9 @@ static void receive_packet(fs_node_t * socket, packet_t ** out) {
 static void send_to_server(pex_ex_t * p, pex_client_t * c, size_t size, void * data) {
 	size_t p_size = size + sizeof(struct packet);
 	packet_t * packet = malloc(p_size);
+	if ((uintptr_t)c < 0x800000000) {
+		printf("suspicious pex client received: %p\n", c);
+	}
 
 	packet->source = c;
 	packet->size = size;
@@ -83,6 +86,10 @@ static int send_to_client(pex_ex_t * p, pex_client_t * c, size_t size, void * da
 	/* Verify there is space on the client */
 	if (pipe_unsize(c->pipe) < (int)p_size) {
 		return -1;
+	}
+
+	if ((uintptr_t)c < 0x800000000) {
+		printf("suspicious pex client received: %p\n", c);
 	}
 
 	packet_t * packet = malloc(p_size);

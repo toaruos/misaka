@@ -66,11 +66,6 @@ typedef struct process {
 	fs_node_t * wd_node;
 	fd_table_t *  fds;               /* File descriptor table */
 
-	thread_t thread;
-	thread_t signal_state;
-
-	image_t image;
-
 	tree_node_t * tree_entry;
 	struct regs * syscall_registers;
 	list_t * wait_queue;
@@ -86,6 +81,10 @@ typedef struct process {
 
 	struct timeval start;
 	int awoken_index;
+
+	thread_t thread;
+	//thread_t signal_state;
+	image_t image;
 } process_t;
 
 typedef struct {
@@ -103,7 +102,7 @@ extern process_t * process_from_pid(pid_t pid);
 
 extern void process_disown(process_t * proc);
 extern void process_delete(process_t * proc);
-extern void make_process_ready(process_t * proc);
+extern void make_process_ready(volatile process_t * proc);
 extern int process_available(void);
 extern process_t * next_ready_process(void);
 extern int wakeup_queue(list_t * queue);

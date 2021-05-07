@@ -10,6 +10,9 @@
 #include <kernel/arch/x86_64/regs.h>
 #include <sys/wait.h>
 
+extern void arch_enter_critical(void);
+extern void arch_exit_critical(void);
+
 static fs_node_t * _entries[24] = {
 	(fs_node_t *)1, (fs_node_t *)1, (fs_node_t *)1,
 	NULL,
@@ -76,13 +79,18 @@ void switch_next(void) {
 	//FIXME set tls base
 	restore_fpu((process_t*)current_process);
 
-	//FIXME process checks
+	if (ip < 0x100000 || ip > 0x100000000) {
+		printf("This process looks bad, skipping it.\n");
+		switch_next();
+	}
 
 	if (current_process->flags & PROC_FLAG_FINISHED) {
 		switch_next();
 	}
 
 	mmu_set_directory(current_process->thread.directory);
+
+	//printf("setting kernel stack to %p\n", current_process->image.stack);
 	arch_set_kernel_stack(current_process->image.stack);
 
 	if (current_process->flags & PROC_FLAG_STARTED) {
@@ -160,6 +168,7 @@ void switch_task(uint8_t reschedule) {
 	current_process->thread.sp = ts.sp;
 	current_process->thread.bp = ts.bp;
 	//current_process->thread.tls_base = FIXME
+	current_process->flags &= ~(PROC_FLAG_RUNNING);
 	save_fpu((process_t*)current_process);
 
 	if (reschedule && current_process != kernel_idle_task) {
@@ -227,7 +236,7 @@ pid_t get_next_pid(void) {
 }
 
 #define PROC_REUSE_FDS 0x0001
-#define KERNEL_STACK_SIZE 0x8000
+#define KERNEL_STACK_SIZE 0x9000
 
 extern union PML * current_pml;
 
@@ -248,6 +257,11 @@ process_t * spawn_kidle(void) {
 	idle->name = strdup("[kidle]");
 	idle->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
 	idle->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+
+	union PML * stack_protector = mmu_get_page(idle->image.stack - KERNEL_STACK_SIZE, 0);
+	stack_protector->bits.writable = 0;
+	mmu_invalidate(idle->image.stack - KERNEL_STACK_SIZE);
+
 	idle->thread.ip = (uintptr_t)&_kidle;
 	idle->thread.sp = idle->image.stack;
 	idle->thread.bp = idle->image.stack;
@@ -286,11 +300,14 @@ process_t * spawn_init(void) {
 	init->wd_node = clone_fs(fs_root);
 	init->wd_name = strdup("/");
 
-	extern void * stack_top;
 	init->image.entry       = 0;
 	init->image.heap        = 0;
 	init->image.heap_actual = 0;
-	init->image.stack       = (uintptr_t)&stack_top;
+	//init->image.stack       = (uintptr_t)&stack_top;
+	init->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+	union PML * stack_protector = mmu_get_page(init->image.stack - KERNEL_STACK_SIZE, 0);
+	stack_protector->bits.writable = 0;
+	mmu_invalidate(init->image.stack - KERNEL_STACK_SIZE);
 	init->image.user_stack  = 0;
 	init->image.size        = 0;
 	init->image.shm_heap    = 0x200000000; /* That's 8GiB? That should work fine... */
@@ -337,13 +354,19 @@ process_t * spawn_process(volatile process_t * parent, int flags) {
 	proc->thread.bp = 0;
 	proc->thread.ip = 0;
 	proc->thread.flags = 0;
-	memcpy((void*)proc->thread.fp_regs, (void*)parent->thread.fp_regs, sizeof(parent->thread.fp_regs));
+	memcpy((void*)proc->thread.fp_regs, (void*)parent->thread.fp_regs, 512);
 
 	proc->image.entry       = parent->image.entry;
 	proc->image.heap        = parent->image.heap;
 	proc->image.heap_actual = parent->image.heap_actual; /* XXX is this used? */
 	proc->image.size        = parent->image.size; /* XXX same ^^ */
-	proc->image.stack       = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+	proc->image.stack       = (uintptr_t)valloc(KERNEL_STACK_SIZE + 0x1000) + KERNEL_STACK_SIZE;
+	union PML * stack_protector = mmu_get_page(proc->image.stack - KERNEL_STACK_SIZE, 0);
+	stack_protector->bits.writable = 0;
+	mmu_invalidate(proc->image.stack - KERNEL_STACK_SIZE);
+	stack_protector = mmu_get_page(proc->image.stack, 0);
+	stack_protector->bits.writable = 0;
+	mmu_invalidate(proc->image.stack);
 	proc->image.user_stack  = parent->image.user_stack;
 	proc->image.shm_heap    = 0x200000000;
 
@@ -411,28 +434,36 @@ void process_delete(process_t * proc) {
 		wakeup_queue(init->wait_queue);
 	}
 	// FIXME bitset_clear(&pid_set, proc->id);
-	free(proc);
+	proc->tree_entry = NULL;
+	//free(proc);
 }
 
-void make_process_ready(process_t * proc) {
+void make_process_ready(volatile process_t * proc) {
 	if (proc->sleep_node.owner != NULL) {
 		if (proc->sleep_node.owner == sleep_queue) {
 			if (proc->timed_sleep_node) {
+				arch_enter_critical();
 				spin_lock(sleep_lock);
 				list_delete(sleep_queue, proc->timed_sleep_node);
 				spin_unlock(sleep_lock);
+				arch_exit_critical();
 				proc->sleep_node.owner = NULL;
 				free(proc->timed_sleep_node->value);
 			}
 		} else {
 			proc->flags |= PROC_FLAG_SLEEP_INT;
 			spin_lock(wait_lock_tmp);
-			list_delete((list_t*)proc->sleep_node.owner, &proc->sleep_node);
+			list_delete((list_t*)proc->sleep_node.owner, (node_t*)&proc->sleep_node);
 			spin_unlock(wait_lock_tmp);
 		}
 	}
+	if (proc->sched_node.owner) {
+		printf("Can't make process ready without removing it from owner list: %d\n", proc->id);
+		printf("  (This is a bug) Current owner list is %p (ready queue is %p)\n", proc->sched_node.owner, process_queue);
+		return;
+	}
 	spin_lock(process_queue_lock);
-	list_append(process_queue, &proc->sched_node);
+	list_append(process_queue, (node_t*)&proc->sched_node);
 	spin_unlock(process_queue_lock);
 }
 
@@ -500,6 +531,7 @@ int process_is_ready(process_t * proc) {
 }
 
 void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
+	arch_enter_critical();
 	spin_lock(sleep_lock);
 	if (sleep_queue->length) {
 		sleeper_t * proc = ((sleeper_t *)sleep_queue->head->value);
@@ -526,6 +558,7 @@ void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
 		}
 	}
 	spin_unlock(sleep_lock);
+	arch_exit_critical();
 }
 
 void sleep_until(process_t * process, unsigned long seconds, unsigned long subseconds) {
@@ -535,10 +568,15 @@ void sleep_until(process_t * process, unsigned long seconds, unsigned long subse
 	}
 	process->sleep_node.owner = sleep_queue;
 
+	arch_enter_critical();
 	spin_lock(sleep_lock);
 	node_t * before = NULL;
 	foreach(node, sleep_queue) {
 		sleeper_t * candidate = ((sleeper_t *)node->value);
+		if (!candidate) {
+			printf("null candidate?\n");
+			continue;
+		}
 		if (candidate->end_tick > seconds || (candidate->end_tick == seconds && candidate->end_subtick > subseconds)) {
 			break;
 		}
@@ -551,6 +589,7 @@ void sleep_until(process_t * process, unsigned long seconds, unsigned long subse
 	proc->is_fswait = 0;
 	process->timed_sleep_node = list_insert_after(sleep_queue, before, proc);
 	spin_unlock(sleep_lock);
+	arch_exit_critical();
 }
 
 process_t * process_from_pid(pid_t pid) {
@@ -611,7 +650,8 @@ static int wait_candidate(volatile process_t * parent, int pid, int options, vol
 }
 
 void reap_process(process_t * proc) {
-	free(proc->name);
+	//printf("reaping %p\n", proc);
+	//free(proc->name);
 	process_delete(proc);
 }
 
@@ -708,8 +748,9 @@ int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
 
 	if (timeout > 0) {
 		unsigned long s, ss;
-		relative_time(0, timeout, &s, &ss);
+		relative_time(0, timeout * 1000, &s, &ss);
 
+		arch_enter_critical();
 		spin_lock(sleep_lock);
 		node_t * before = NULL;
 		foreach(node, sleep_queue) {
@@ -727,6 +768,7 @@ int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
 		list_insert(((process_t *)process)->node_waits, proc);
 		process->timeout_node = list_insert_after(sleep_queue, before, proc);
 		spin_unlock(sleep_lock);
+		arch_exit_critical();
 	} else {
 		process->timeout_node = NULL;
 	}
@@ -799,19 +841,22 @@ void task_exit(int retval) {
 	/* TODO free queues */
 	/* TODO free shm */
 	/* TODO release directory */
-	current_process->fds->refs--;
-	if (current_process->fds->refs == 0) {
-		for (uint32_t i = 0; i < current_process->fds->length; ++i) {
-			if (current_process->fds->entries[i]) {
-				close_fs(current_process->fds->entries[i]);
-				current_process->fds->entries[i] = NULL;
+	if (current_process->fds) {
+		current_process->fds->refs--;
+		if (current_process->fds->refs == 0) {
+			for (uint32_t i = 0; i < current_process->fds->length; ++i) {
+				if (current_process->fds->entries[i]) {
+					close_fs(current_process->fds->entries[i]);
+					current_process->fds->entries[i] = NULL;
+				}
 			}
+			free(current_process->fds->entries);
+			free(current_process->fds->offsets);
+			free(current_process->fds->modes);
+			free(current_process->fds);
+			current_process->fds = NULL;
+			free((void *)(current_process->image.stack - KERNEL_STACK_SIZE));
 		}
-		free(current_process->fds->entries);
-		free(current_process->fds->offsets);
-		free(current_process->fds->modes);
-		free(current_process->fds);
-		free((void *)(current_process->image.stack - KERNEL_STACK_SIZE));
 	}
 
 	process_t * parent = process_get_parent((process_t *)current_process);
@@ -826,6 +871,7 @@ void task_exit(int retval) {
 							*((type *) stack) = item
 
 pid_t fork(void) {
+	arch_enter_critical();
 	uintptr_t sp, bp;
 	process_t * parent = (process_t*)current_process;
 	union PML * directory = mmu_clone(parent->thread.directory);
@@ -847,10 +893,12 @@ pid_t fork(void) {
 	new_proc->thread.ip = (uintptr_t)&arch_resume_user;
 	if (parent->flags & PROC_FLAG_IS_TASKLET) new_proc->flags |= PROC_FLAG_IS_TASKLET;
 	make_process_ready(new_proc);
+	arch_exit_critical();
 	return new_proc->id;
 }
 
 pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
+	arch_enter_critical();
 	uintptr_t sp, bp;
 	process_t * parent = (process_t *)current_process;
 	process_t * new_proc = spawn_process(current_process, 1);
@@ -885,5 +933,6 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	new_proc->thread.ip = (uintptr_t)&arch_resume_user;
 	if (parent->flags & PROC_FLAG_IS_TASKLET) new_proc->flags |= PROC_FLAG_IS_TASKLET;
 	make_process_ready(new_proc);
+	arch_exit_critical();
 	return new_proc->id;
 }

@@ -108,6 +108,7 @@
 
 #include <kernel/string.h>
 #include <kernel/printf.h>
+#include <kernel/spinlock.h>
 /* }}} */
 /* Definitions {{{ */
 
@@ -152,24 +153,44 @@ static void * __attribute__ ((malloc)) klcalloc(uintptr_t nmemb, uintptr_t size)
 static void * __attribute__ ((malloc)) klvalloc(uintptr_t size);
 static void klfree(void * ptr);
 
+static spin_lock_t mem_lock =  { 0 };
+
 void * __attribute__ ((malloc)) malloc(uintptr_t size) {
-	return klmalloc(size);
+	spin_lock(mem_lock);
+	void * out = klmalloc(size);
+	spin_unlock(mem_lock);
+	return out;
 }
 
 void * __attribute__ ((malloc)) realloc(void * ptr, uintptr_t size) {
-	return klrealloc(ptr, size);
+	spin_lock(mem_lock);
+	void * out = klrealloc(ptr, size);
+	spin_unlock(mem_lock);
+	return out;
 }
 
 void * __attribute__ ((malloc)) calloc(uintptr_t nmemb, uintptr_t size) {
-	return klcalloc(nmemb, size);
+	spin_lock(mem_lock);
+	void * out = klcalloc(nmemb, size);
+	spin_unlock(mem_lock);
+	return out;
 }
 
 void * __attribute__ ((malloc)) valloc(uintptr_t size) {
-	return klvalloc(size);
+	spin_lock(mem_lock);
+	void * out = klvalloc(size);
+	spin_unlock(mem_lock);
+	return out;
 }
 
 void free(void * ptr) {
+	spin_lock(mem_lock);
+	if (ptr < (void*)0xffffff0000000000) {
+		printf("Invalid free detected.\n");
+		while (1) {};
+	}
 	klfree(ptr);
+	spin_unlock(mem_lock);
 }
 
 /* Bin management {{{ */

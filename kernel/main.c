@@ -32,6 +32,7 @@ void * sbrk(size_t bytes) {
 		for (uintptr_t p = (uintptr_t)out; p < (uintptr_t)out + bytes; p += 0x1000) {
 			union PML * page = mmu_get_page(p, MMU_GET_MAKE);
 			mmu_frame_allocate(page, MMU_FLAG_WRITABLE | MMU_FLAG_KERNEL);
+			mmu_invalidate(p);
 		}
 	}
 

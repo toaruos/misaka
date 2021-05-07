@@ -106,8 +106,7 @@ static shm_chunk_t * create_chunk (shm_node_t * parent, size_t size) {
 	/* Now grab some frames for this guy. */
 	for (uint32_t i = 0; i < chunk->num_frames; i++) {
 		/* Allocate frame */
-		uintptr_t index = mmu_first_frame();
-		mmu_frame_set(index << 12);
+		uintptr_t index = mmu_allocate_a_frame();
 		chunk->frames[i] = index;
 	}
 
@@ -177,6 +176,7 @@ static void * map_in (shm_chunk_t * chunk, volatile process_t * volatile proc) {
 					union PML * page = mmu_get_page(last_address + (i << 12), MMU_GET_MAKE);
 					page->bits.page = chunk->frames[i];
 					mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+					mmu_invalidate(last_address + (i << 12));
 					mapping->vaddrs[i] = last_address + (i << 12);
 				}
 
@@ -197,6 +197,7 @@ static void * map_in (shm_chunk_t * chunk, volatile process_t * volatile proc) {
 				union PML * page = mmu_get_page(last_address + (i << 12), MMU_GET_MAKE);
 				page->bits.page = chunk->frames[i];
 				mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+				mmu_invalidate(last_address + (i << 12));
 				mapping->vaddrs[i] = last_address + (i << 12);
 			}
 
@@ -212,6 +213,7 @@ static void * map_in (shm_chunk_t * chunk, volatile process_t * volatile proc) {
 		union PML * page = mmu_get_page(new_vpage, MMU_GET_MAKE);
 		page->bits.page = chunk->frames[i];
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+		mmu_invalidate(new_vpage);
 		mapping->vaddrs[i] = new_vpage;
 	}
 

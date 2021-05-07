@@ -17,7 +17,7 @@ KERNEL_CFLAGS  = -ffreestanding -O2 -std=c11 -g -static
 
 # Arch-specific arguments
 KERNEL_CFLAGS += -mcmodel=large -mno-red-zone -fno-omit-frame-pointer
-KERNEL_CFLAGS += -mno-mmx -mno-sse -mno-sse2  -z max-page-size=0x1000 -nostdlib
+KERNEL_CFLAGS += -mgeneral-regs-only -z max-page-size=0x1000 -nostdlib
 
 # Warnings
 KERNEL_CFLAGS += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter
@@ -113,6 +113,8 @@ kernel/symbols.o: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} util/gensym.krk
 kernel/%.o: kernel/%.S
 	echo ${PATH}
 	${CC} -c $< -o $@
+
+HEADERS = $(wildcard base/usr/include/kernel/*.h)
 
 kernel/%.o: kernel/%.c ${HEADERS}
 	${CC} ${KERNEL_CFLAGS} -nostdlib -g -Iinclude -c -o $@ $<

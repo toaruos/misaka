@@ -21,3 +21,5 @@ void mmu_set_directory(union PML * new_pml);
 void mmu_free(union PML * from);
 union PML * mmu_clone(union PML * from);
 void mmu_init(void);
+void mmu_invalidate(uintptr_t addr);
+uintptr_t mmu_allocate_a_frame(void);

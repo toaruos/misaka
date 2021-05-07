@@ -13,6 +13,9 @@
 #include <kernel/process.h>
 #include <kernel/mmu.h>
 
+extern void arch_set_kernel_stack(uintptr_t);
+extern void arch_enter_critical(void);
+
 static Elf64_Shdr * elf_getSection(Elf64_Header * this, Elf64_Word index) {
 	return (Elf64_Shdr*)((uintptr_t)this + this->e_shoff + index * this->e_shentsize);
 }
@@ -130,6 +133,7 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 			for (uintptr_t i = phdr.p_vaddr; i < phdr.p_vaddr + phdr.p_memsz; i += 0x1000) {
 				union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 				mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+				mmu_invalidate(i);
 			}
 
 			read_fs(file, phdr.p_offset, phdr.p_filesz, (void*)phdr.p_vaddr);
@@ -162,6 +166,7 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	for (uintptr_t i = userstack - 64 * 0x400; i < userstack; i += 0x1000) {
 		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+		mmu_invalidate(i);
 	}
 #define PUSH(type,val) do { \
 	userstack -= sizeof(type); \
@@ -220,6 +225,11 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	char ** _argv = (char**)userstack;
 	PUSH(uintptr_t, argc);
 
+	arch_enter_critical();
+	if (!current_process->image.stack) {
+		printf("wtf\n");
+	}
+	arch_set_kernel_stack(current_process->image.stack);
 	arch_enter_user(header.e_entry, argc, _argv, _envp, userstack);
 
 	// arch_enter_user? (ip, stack...)

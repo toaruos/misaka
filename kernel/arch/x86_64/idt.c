@@ -36,6 +36,7 @@ struct idt_pointer {
 static struct idt_pointer idtp;
 static idt_entry_t idt[256];
 
+extern void arch_enter_critical(void);
 extern void arch_exit_critical(void);
 extern void idt_load(void *);
 
@@ -264,14 +265,17 @@ struct regs * isr_handler(struct regs * r) {
 			printf("cr2: 0x%016lx\n", faulting_address);
 			dump_regs(r);
 			printf("Stack is at ~%p\n", r);
-			task_exit(1);
+			arch_enter_critical();
+			while (1) { asm volatile ("hlt"); }
+			//task_exit(1);
 			break;
 		}
 		case 13: /* GPF */ {
-			printf("General Protection Fault\n");
 			printf("General Protection Fault in pid=%d (%s)\n", (int)current_process->id, current_process->name);
 			dump_regs(r);
-			task_exit(1);
+			arch_enter_critical();
+			while (1) { asm volatile ("hlt"); }
+			//task_exit(1);
 			break;
 		}
 		case 8: /* Double fault */ {
@@ -290,7 +294,7 @@ struct regs * isr_handler(struct regs * r) {
 		}
 		case 127: /* syscall */ {
 			syscall_handler(r);
-			arch_exit_critical();
+			asm volatile("sti");
 			return r;
 		}
 		case 32: /* Generally the PIT */
@@ -312,6 +316,7 @@ struct regs * isr_handler(struct regs * r) {
 			break;
 		}
 		default: {
+			printf("In pid=%d (%s):\n", current_process->id, current_process->name);
 			if (r->int_no < 32) {
 				printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
 			} else {
@@ -322,7 +327,7 @@ struct regs * isr_handler(struct regs * r) {
 		}
 	}
 
-	arch_exit_critical();
+	asm volatile("sti");
 	return r;
 }
 

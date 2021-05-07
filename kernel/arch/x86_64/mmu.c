@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <kernel/string.h>
 #include <kernel/printf.h>
+#include <kernel/spinlock.h>
 #include <kernel/arch/x86_64/pml.h>
 #include <kernel/arch/x86_64/mmu.h>
 
@@ -45,6 +46,8 @@ int mmu_frame_test(uintptr_t frame_addr) {
 	return !!(frames[index] & ((uint32_t)1 << offset));
 }
 
+static spin_lock_t frame_alloc_lock = { 0 };
+
 uintptr_t mmu_first_n_frames(int n) {
 	for (uint64_t i = 0; i < nframes * 0x1000; i += 0x1000) {
 		int bad = 0;
@@ -84,7 +87,7 @@ void mmu_frame_allocate(union PML * page, unsigned int flags) {
 		page->bits.user     = (flags & MMU_FLAG_KERNEL)   ? 0 : 1;
 		/* TODO NX, etc. */
 	} else {
-		/* TODO lock */
+		spin_lock(frame_alloc_lock);
 		uintptr_t index = mmu_first_frame();
 		mmu_frame_set(index << 12);
 		page->bits.size     = 0;
@@ -92,6 +95,7 @@ void mmu_frame_allocate(union PML * page, unsigned int flags) {
 		page->bits.present  = 1;
 		page->bits.writable = (flags & MMU_FLAG_WRITABLE) ? 1 : 0;
 		page->bits.user     = (flags & MMU_FLAG_KERNEL)   ? 0 : 1;
+		spin_unlock(frame_alloc_lock);
 	}
 }
 
@@ -161,8 +165,10 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 	/* Get the PML4 entry for this address */
 	if (!root[pml4_entry].bits.present) {
 		if (!(flags & MMU_GET_MAKE)) return NULL;
+		spin_lock(frame_alloc_lock);
 		uintptr_t newPage = mmu_first_frame() << 12;
 		mmu_frame_set(newPage);
+		spin_unlock(frame_alloc_lock);
 		/* zero it */
 		memset((void*)(0xFFFFffff00000000UL | newPage), 0, 4096);
 		root[pml4_entry].raw = (newPage) | 0x07;
@@ -172,8 +178,10 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 
 	if (!pdp[pdp_entry].bits.present) {
 		if (!(flags & MMU_GET_MAKE)) return NULL;
+		spin_lock(frame_alloc_lock);
 		uintptr_t newPage = mmu_first_frame() << 12;
 		mmu_frame_set(newPage);
+		spin_unlock(frame_alloc_lock);
 		/* zero it */
 		memset((void*)(0xFFFFffff00000000UL | newPage), 0, 4096);
 		pdp[pdp_entry].raw = (newPage) | 0x07;
@@ -188,8 +196,10 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 
 	if (!pd[pd_entry].bits.present) {
 		if (!(flags & MMU_GET_MAKE)) return NULL;
+		spin_lock(frame_alloc_lock);
 		uintptr_t newPage = mmu_first_frame() << 12;
 		mmu_frame_set(newPage);
+		spin_unlock(frame_alloc_lock);
 		/* zero it */
 		memset((void*)(0xFFFFffff00000000UL | newPage), 0, 4096);
 		pd[pd_entry].raw = (newPage) | 0x07;
@@ -209,9 +219,11 @@ union PML * mmu_clone(union PML * from) {
 	if (!from) from = current_pml;
 
 	/* First get a page for ourselves. */
+	spin_lock(frame_alloc_lock);
 	uintptr_t newPage = mmu_first_frame() << 12;
-	union PML * pml4_out = (union PML*)(0xFFFFffff00000000UL | newPage);
 	mmu_frame_set(newPage);
+	spin_unlock(frame_alloc_lock);
+	union PML * pml4_out = (union PML*)(0xFFFFffff00000000UL | newPage);
 
 	/* Zero bottom half */
 	memset(&pml4_out[0], 0, 256 * sizeof(union PML));
@@ -223,9 +235,11 @@ union PML * mmu_clone(union PML * from) {
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
 			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			spin_lock(frame_alloc_lock);
 			uintptr_t newPage = mmu_first_frame() << 12;
-			union PML * pdp_out = (union PML*)(0xFFFFffff00000000UL | newPage);
 			mmu_frame_set(newPage);
+			spin_unlock(frame_alloc_lock);
+			union PML * pdp_out = (union PML*)(0xFFFFffff00000000UL | newPage);
 			memset(pdp_out, 0, 512 * sizeof(union PML));
 			pml4_out[i].raw = (newPage) | 0x07;
 
@@ -233,9 +247,11 @@ union PML * mmu_clone(union PML * from) {
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
 					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					spin_lock(frame_alloc_lock);
 					uintptr_t newPage = mmu_first_frame() << 12;
-					union PML * pd_out = (union PML*)(0xFFFFffff00000000UL | newPage);
 					mmu_frame_set(newPage);
+					spin_unlock(frame_alloc_lock);
+					union PML * pd_out = (union PML*)(0xFFFFffff00000000UL | newPage);
 					memset(pd_out, 0, 512 * sizeof(union PML));
 					pdp_out[j].raw = (newPage) | 0x07;
 
@@ -243,9 +259,11 @@ union PML * mmu_clone(union PML * from) {
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
 							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							spin_lock(frame_alloc_lock);
 							uintptr_t newPage = mmu_first_frame() << 12;
-							union PML * pt_out = (union PML*)(0xFFFFffff00000000UL | newPage);
 							mmu_frame_set(newPage);
+							spin_unlock(frame_alloc_lock);
+							union PML * pt_out = (union PML*)(0xFFFFffff00000000UL | newPage);
 							memset(pt_out, 0, 512 * sizeof(union PML));
 							pd_out[k].raw = (newPage) | 0x07;
 
@@ -256,9 +274,11 @@ union PML * mmu_clone(union PML * from) {
 								if (pt_in[l].bits.present) {
 									if (pt_in[l].bits.user) {
 										char * page_in = (char*)(0xFFFFffff00000000UL | (pt_in[l].bits.page << 12));
+										spin_lock(frame_alloc_lock);
 										uintptr_t newPage = mmu_first_frame() << 12;
-										char * page_out = (char *)(0xFFFFffff00000000UL | newPage);
 										mmu_frame_set(newPage);
+										spin_unlock(frame_alloc_lock);
+										char * page_out = (char *)(0xFFFFffff00000000UL | newPage);
 										memcpy(page_out,page_in,4096);
 										pt_out[l].bits.page = newPage >> 12;
 										pt_out[l].bits.present = 1;
@@ -283,6 +303,14 @@ union PML * mmu_clone(union PML * from) {
 	}
 
 	return pml4_out;
+}
+
+uintptr_t mmu_allocate_a_frame(void) {
+	spin_lock(frame_alloc_lock);
+	uintptr_t index = mmu_first_frame();
+	mmu_frame_set(index << 12);
+	spin_unlock(frame_alloc_lock);
+	return index;
 }
 
 void mmu_free(union PML * from) {
@@ -328,6 +356,13 @@ void mmu_set_directory(union PML * new_pml) {
 		"movq %0, %%cr3"
 		: : "r"((uintptr_t)new_pml & 0xFFFFffff));
 }
+
+void mmu_invalidate(uintptr_t addr) {
+	asm volatile (
+		"invlpg (%0)"
+		: : "r"(addr));
+}
+
 
 /**
  * @brief Switch from the boot-time 1GiB-page identity map to 4KiB pages.

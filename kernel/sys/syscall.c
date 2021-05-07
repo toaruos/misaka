@@ -139,6 +139,7 @@ static long sys_sbrk(ssize_t size) {
 			printf("odd, %p is already allocated?\n", i);
 		}
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+		mmu_invalidate(i);
 	}
 	proc->image.heap += size;
 	spin_unlock(proc->image.lock);
@@ -174,16 +175,28 @@ static long sys_sysfunc(long fn, char ** args) {
 			printf("insmod: not implemented\n");
 			return -EINVAL;
 		/* Begin unpriv */
-		case TOARU_SYS_FUNC_SETHEAP:
-			current_process->image.heap = (uintptr_t)args[0];
+		case TOARU_SYS_FUNC_SETHEAP: {
+			volatile process_t * volatile proc = current_process;
+			if (proc->group != 0) proc = process_from_pid(proc->group);
+			spin_lock(proc->image.lock);
+			proc->image.heap = (uintptr_t)args[0];
+			proc->image.heap_actual = (uintptr_t)args[0];
+			spin_unlock(proc->image.lock);
 			return 0;
-		case TOARU_SYS_FUNC_MMAP:
+		}
+		case TOARU_SYS_FUNC_MMAP: {
 			/* FIXME: This whole thing should be removed, tbh */
+			volatile process_t * volatile proc = current_process;
+			if (proc->group != 0) proc = process_from_pid(proc->group);
+			spin_lock(proc->image.lock);
 			for (uintptr_t i = (uintptr_t)args[0]; i < (uintptr_t)args[0] + (size_t)args[1]; i += 0x1000) {
 				union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 				mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+				mmu_invalidate(i);
 			}
+			spin_unlock(proc->image.lock);
 			return 0;
+		}
 		case TOARU_SYS_FUNC_THREADNAME: {
 			/* This should probably be moved to a new system call. */
 			int count = 0;
@@ -233,12 +246,12 @@ static long sys_exit(long exitcode) {
 	__builtin_unreachable();
 }
 
-static long sys_write(long fd, char * ptr, unsigned long len) {
+static long sys_write(int fd, char * ptr, unsigned long len) {
 	if (FD_CHECK(fd)) {
 		PTR_VALIDATE(ptr);
 		fs_node_t * node = FD_ENTRY(fd);
 		if (!(FD_MODE(fd) & 2)) return -EACCES;
-		long out = write_fs(node, FD_OFFSET(fd), len, (uint8_t*)ptr);
+		uint64_t out = write_fs(node, FD_OFFSET(fd), len, (uint8_t*)ptr);
 		FD_OFFSET(fd) += out;
 		return out;
 	}
@@ -286,7 +299,7 @@ static long stat_node(fs_node_t * fn, uintptr_t st) {
 	return 0;
 }
 
-static long sys_stat(long fd, uintptr_t st) {
+static long sys_stat(int fd, uintptr_t st) {
 	PTR_VALIDATE(st);
 	if (FD_CHECK(fd)) {
 		return stat_node(FD_ENTRY(fd), st);
@@ -399,7 +412,7 @@ static long sys_open(const char * file, long flags, long mode) {
 		close_fs(node);
 		return -EISDIR;
 	}
-	long fd = process_append_fd((process_t *)current_process, node);
+	int fd = process_append_fd((process_t *)current_process, node);
 	FD_MODE(fd) = access_bits;
 	if (flags & O_APPEND) {
 		FD_OFFSET(fd) = node->length;
@@ -409,7 +422,7 @@ static long sys_open(const char * file, long flags, long mode) {
 	return fd;
 }
 
-static long sys_close(long fd) {
+static long sys_close(int fd) {
 	if (FD_CHECK(fd)) {
 		close_fs(FD_ENTRY(fd));
 		FD_ENTRY(fd) = NULL;
@@ -418,7 +431,7 @@ static long sys_close(long fd) {
 	return -EBADF;
 }
 
-static long sys_seek(long fd, long offset, long whence) {
+static long sys_seek(int fd, long offset, long whence) {
 	if (FD_CHECK(fd)) {
 		if ((FD_ENTRY(fd)->flags & FS_PIPE) || (FD_ENTRY(fd)->flags & FS_CHARDEVICE)) return -ESPIPE;
 		switch (whence) {
@@ -439,7 +452,7 @@ static long sys_seek(long fd, long offset, long whence) {
 	return -EBADF;
 }
 
-static long sys_read(long fd, char * ptr, unsigned long len) {
+static long sys_read(int fd, char * ptr, unsigned long len) {
 	if (FD_CHECK(fd)) {
 		PTR_VALIDATE(ptr);
 
@@ -447,14 +460,14 @@ static long sys_read(long fd, char * ptr, unsigned long len) {
 		if (!(FD_MODE(fd) & 01)) {
 			return -EACCES;
 		}
-		long out = read_fs(node, FD_OFFSET(fd), len, (uint8_t *)ptr);
+		uint64_t out = read_fs(node, FD_OFFSET(fd), len, (uint8_t *)ptr);
 		FD_OFFSET(fd) += out;
 		return out;
 	}
 	return -EBADF;
 }
 
-static long sys_ioctl(long fd, long request, void * argp) {
+static long sys_ioctl(int fd, int request, void * argp) {
 	if (FD_CHECK(fd)) {
 		PTR_VALIDATE(argp);
 		return ioctl_fs(FD_ENTRY(fd), request, argp);
@@ -462,7 +475,7 @@ static long sys_ioctl(long fd, long request, void * argp) {
 	return -EBADF;
 }
 
-static long sys_readdir(long fd, long index, struct dirent * entry) {
+static long sys_readdir(int fd, long index, struct dirent * entry) {
 	if (FD_CHECK(fd)) {
 		PTR_VALIDATE(entry);
 		struct dirent * kentry = readdir_fs(FD_ENTRY(fd), (uint64_t)index);

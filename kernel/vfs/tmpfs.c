@@ -147,8 +147,7 @@ static char * tmpfs_file_getset_block(struct tmpfs_file * t, size_t blockid, int
 			tmpfs_file_blocks_embiggen(t);
 		}
 		while (blockid >= t->block_count) {
-			uintptr_t index = mmu_first_frame();
-			mmu_frame_set(index * 0x1000);
+			uintptr_t index = mmu_allocate_a_frame();
 			t->blocks[t->block_count] = (char*)index;
 			t->block_count += 1;
 		}
