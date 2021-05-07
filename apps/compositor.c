@@ -175,7 +175,7 @@ static int next_wid(void) {
 	return _next++;
 }
 
-uint32_t yutani_current_time(yutani_globals_t * yg) {
+uint64_t yutani_current_time(yutani_globals_t * yg) {
 	struct timeval t;
 	gettimeofday(&t, NULL);
 
@@ -187,13 +187,13 @@ uint32_t yutani_current_time(yutani_globals_t * yg) {
 		usec_diff = (1000000 + t.tv_usec) - yg->start_subtime;
 	}
 
-	return (uint32_t)(sec_diff * 1000 + usec_diff / 1000);
+	return (uint64_t)(sec_diff * 1000 + usec_diff / 1000);
 }
 
-uint32_t yutani_time_since(yutani_globals_t * yg, uint32_t start_time) {
+uint64_t yutani_time_since(yutani_globals_t * yg, uint64_t start_time) {
 
-	uint32_t now = yutani_current_time(yg);
-	uint32_t diff = now - start_time; /* Milliseconds */
+	uint64_t now = yutani_current_time(yg);
+	uint64_t diff = now - start_time; /* Milliseconds */
 
 	return diff;
 }

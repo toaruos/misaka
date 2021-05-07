@@ -6,4 +6,5 @@ file-browser --wallpaper &
 cd ~
 #tutorial &
 terminal /bin/sh -c "sysinfo; sh" &
+sh -c "sleep 5; about" &
 exec panel --really

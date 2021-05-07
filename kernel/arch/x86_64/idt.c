@@ -1,15 +1,17 @@
 #include <kernel/types.h>
 #include <kernel/string.h>
 #include <kernel/printf.h>
-#include <kernel/arch/x86_64/pml.h>
-#include <kernel/arch/x86_64/regs.h>
 #include <kernel/vfs.h>
+#include <kernel/pipe.h>
 #include <kernel/version.h>
 #include <kernel/process.h>
 
 #include <sys/time.h>
 #include <sys/utsname.h>
 #include <kernel/arch/x86_64/mmu.h>
+#include <kernel/arch/x86_64/ports.h>
+#include <kernel/arch/x86_64/pml.h>
+#include <kernel/arch/x86_64/regs.h>
 
 /**
  * Interrupt descriptor table
@@ -219,6 +221,34 @@ static const char *exception_messages[32] = {
 extern void irq_ack(size_t irq_no);
 extern void cmos_time_stuff(void);
 
+#define KEY_DEVICE  0x60
+#define KEY_PENDING 0x64
+#define KEY_IRQ     1
+
+static fs_node_t * keyboard_pipe;
+static void keyboard_wait(void) {
+	while(inportb(KEY_PENDING) & 2);
+}
+static int keyboard_handler(struct regs *r) {
+	unsigned char scancode;
+	if (inportb(KEY_PENDING) & 0x01) {
+		scancode = inportb(KEY_DEVICE);
+
+		write_fs(keyboard_pipe, 0, 1, (uint8_t []){scancode});
+	}
+
+	irq_ack(KEY_IRQ);
+	return 1;
+}
+
+void keyboard_install(void) {
+	keyboard_pipe = make_pipe(128);
+	keyboard_pipe->flags = FS_CHARDEVICE;
+	vfs_mount("/dev/kbd", keyboard_pipe);
+}
+
+extern void task_exit(int);
+
 struct regs * isr_handler(struct regs * r) {
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
@@ -263,6 +293,16 @@ struct regs * isr_handler(struct regs * r) {
 			cmos_time_stuff();
 			irq_ack(0);
 			break;
+		case 33: {
+			keyboard_handler(r);
+			break;
+		}
+		case 44: {
+			extern int mouse_handler(struct regs *r);
+			mouse_handler(r);
+			irq_ack(12);
+			break;
+		}
 		default: {
 			if (r->int_no < 32) {
 				printf("Unhandled exception: %s\n", exception_messages[r->int_no]);

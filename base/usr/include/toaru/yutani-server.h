@@ -128,7 +128,7 @@ typedef struct YutaniServerWindow {
 
 	/* Window animations */
 	int anim_mode;
-	uint32_t anim_start;
+	uint64_t anim_start;
 
 	/* Alpha shaping threshold */
 	int alpha_threshold;
@@ -311,7 +311,7 @@ struct key_bind {
 /* Exported functions for plugins */
 extern int yutani_window_is_top(yutani_globals_t * yg, yutani_server_window_t * window);
 extern int yutani_window_is_bottom(yutani_globals_t * yg, yutani_server_window_t * window);
-extern uint32_t yutani_time_since(yutani_globals_t * yg, uint32_t start_time);
+extern uint64_t yutani_time_since(yutani_globals_t * yg, uint64_t start_time);
 extern void yutani_window_to_device(yutani_server_window_t * window, int32_t x, int32_t y, int32_t * out_x, int32_t * out_y);
 extern void yutani_device_to_window(yutani_server_window_t * window, int32_t x, int32_t y, int32_t * out_x, int32_t * out_y);
 extern uint32_t yutani_color_for_wid(yutani_wid_t wid);

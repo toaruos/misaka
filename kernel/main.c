@@ -282,6 +282,8 @@ extern void portio_initialize(void);
 extern void zero_initialize(void);
 extern void procfs_initialize(void);
 extern void shm_install(void);
+extern void keyboard_install(void);
+extern void mouse_install(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_processMultiboot(mboot);
@@ -334,6 +336,8 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	tasking_start();
 	pit_initialize();
+	keyboard_install();
+	mouse_install();
 
 	//vfs_mount("/dev/null", &_early_log);
 
