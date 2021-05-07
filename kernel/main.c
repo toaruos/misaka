@@ -126,6 +126,7 @@ static fs_node_t _early_log = {
 	.write = &_early_log_write_fs,
 	.read = &_early_log_read_fs,
 	.ioctl = &_early_log_ioctl,
+	.mask = 0777,
 };
 
 static void setup_serial(void) {

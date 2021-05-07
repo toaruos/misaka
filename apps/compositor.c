@@ -717,12 +717,6 @@ static int yutani_blit_window(yutani_globals_t * yg, yutani_server_window_t * wi
 	_win_sprite.alpha = ALPHA_EMBEDDED;
 
 	if (window->anim_mode) {
-		if (window->anim_mode > 6) {
-			FILE * f = fopen("/dev/fblog","w");
-			fprintf(f, "compositor: anim_mode is %lx, which sounds very wrong!\n", window->anim_mode);
-			fclose(f);
-			window->anim_mode = 0;
-		}
 		int frame = yutani_time_since(yg, window->anim_start);
 		if (frame >= yutani_animation_lengths[window->anim_mode]) {
 			/* XXX handle animation-end things like cleanup of closing windows */
@@ -1325,7 +1319,7 @@ static uint32_t ad_flags(yutani_globals_t * yg, yutani_server_window_t * win) {
 /**
  * Send a result for a window query.
  */
-static void yutani_query_result(yutani_globals_t * yg, uint32_t dest, yutani_server_window_t * win) {
+static void yutani_query_result(yutani_globals_t * yg, uintptr_t dest, yutani_server_window_t * win) {
 	if (win && win->client_length) {
 		yutani_msg_buildx_window_advertise_alloc(response, win->client_length);
 		yutani_msg_buildx_window_advertise(response, win->wid, ad_flags(yg, win), win->client_offsets, win->client_length, win->client_strings);
@@ -1342,7 +1336,7 @@ static void notify_subscribers(yutani_globals_t * yg) {
 	list_t * remove = NULL;
 	foreach(node, yg->window_subscribers) {
 		uintptr_t subscriber = (uintptr_t)node->value;
-		if (!hashmap_has(yg->clients_to_windows, (void *)(uintptr_t)subscriber)) {
+		if (!hashmap_has(yg->clients_to_windows, (void *)subscriber)) {
 			if (!remove) {
 				remove = list_create();
 			}

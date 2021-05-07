@@ -4,7 +4,5 @@ if stat -Lq /usr/share/fonts/DejaVuSansMono.ttf then export FREETYPE_PROPERTIES=
 cd ~/Desktop
 file-browser --wallpaper &
 cd ~
-#tutorial &
-terminal /bin/sh -c "sysinfo; sh" &
-sh -c "sleep 5; about" &
+tutorial &
 exec panel --really
