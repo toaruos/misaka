@@ -280,6 +280,7 @@ extern void tasking_start(void);
 extern void packetfs_initialize(void);
 extern void portio_initialize(void);
 extern void zero_initialize(void);
+extern void procfs_initialize(void);
 extern void shm_install(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
@@ -329,6 +330,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	packetfs_initialize();
 	portio_initialize();
 	zero_initialize();
+	procfs_initialize();
 
 	tasking_start();
 	pit_initialize();

@@ -393,18 +393,14 @@ static int yutani_pick_animation(uint32_t flags, int direction) {
 static yutani_server_window_t * server_window_create(yutani_globals_t * yg, int width, int height, uintptr_t owner, uint32_t flags) {
 	yutani_server_window_t * win = malloc(sizeof(yutani_server_window_t));
 
-	TRACE("window = %p", win);
 	win->wid = next_wid();
 	win->owner = owner;
 	list_insert(yg->windows, win);
 	hashmap_set(yg->wids_to_windows, (void*)(uintptr_t)win->wid, win);
 
-	TRACE("client list?");
 	list_t * client_list = hashmap_get(yg->clients_to_windows, (void *)owner);
-	TRACE("client_list = %p", client_list);
 	list_insert(client_list, win);
 
-	TRACE("Setting up window...");
 	win->x = 0;
 	win->y = 0;
 	win->z = 1;
@@ -432,17 +428,14 @@ static yutani_server_window_t * server_window_create(yutani_globals_t * yg, int 
 	win->server_flags = flags;
 	win->opacity = 255;
 
-	TRACE("shm key...");
 	char key[1024];
 	YUTANI_SHMKEY(yg->server_ident, key, 1024, win);
 
 	size_t size = (width * height * 4);
 
-	TRACE("buffer...");
 	win->buffer = shm_obtain(key, &size);
 	memset(win->buffer, 0, size);
 
-	TRACE("zs...");
 	list_insert(yg->mid_zs, win);
 
 	return win;
