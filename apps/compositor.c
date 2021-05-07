@@ -2221,6 +2221,23 @@ int main(int argc, char * argv[]) {
 		}
 	}
 
+	/* FIXME fake root window */
+	{
+		list_t * client_list = list_create();
+		hashmap_set(yg->clients_to_windows, (void *)0, client_list);
+		yutani_server_window_t * w = server_window_create(yg, 1400, 800, 0, 0);
+		w->anim_mode = 0;
+		w->x = 20;
+		w->y = 50;
+		for (uint32_t * x = (uint32_t*)w->buffer; x < (uint32_t*)w->buffer + 1400 * 800; ++x) {
+			*x = rgb(255,255,0);
+		}
+		reorder_window(yg, w, 2);
+		set_focused_window(yg, w);
+		mark_window(yg, w);
+	}
+
+
 	int fds[4];
 	int mfd = -1;
 	int kfd = -1;
