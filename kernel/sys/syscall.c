@@ -753,6 +753,13 @@ static long sys_fork(void) {
 	return fork();
 }
 
+extern pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg);
+static long sys_clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
+	if (!new_stack || !PTR_INRANGE(new_stack)) return -EINVAL;
+	if (!thread_func || !PTR_INRANGE(thread_func)) return -EINVAL;
+	return (int)clone(new_stack, thread_func, arg);
+}
+
 extern int waitpid(int pid, int * status, int options);
 static long sys_waitpid(int pid, int * status, int options) {
 	if (status && !PTR_INRANGE(status)) return -EINVAL;
@@ -821,6 +828,85 @@ static long sys_signal(long signum, uintptr_t handler) {
 #endif
 }
 
+static long sys_fswait(int c, int fds[]) {
+	PTR_VALIDATE(fds);
+	for (int i = 0; i < c; ++i) {
+		if (!FD_CHECK(fds[i])) return -EBADF;
+	}
+	fs_node_t ** nodes = malloc(sizeof(fs_node_t *)*(c+1));
+	for (int i = 0; i < c; ++i) {
+		nodes[i] = FD_ENTRY(fds[i]);
+	}
+	nodes[c] = NULL;
+
+	int result = process_wait_nodes((process_t *)current_process, nodes, -1);
+	free(nodes);
+	return result;
+}
+
+static long sys_fswait_timeout(int c, int fds[], int timeout) {
+	PTR_VALIDATE(fds);
+	for (int i = 0; i < c; ++i) {
+		if (!FD_CHECK(fds[i])) return -EBADF;
+	}
+	fs_node_t ** nodes = malloc(sizeof(fs_node_t *)*(c+1));
+	for (int i = 0; i < c; ++i) {
+		nodes[i] = FD_ENTRY(fds[i]);
+	}
+	nodes[c] = NULL;
+
+	int result = process_wait_nodes((process_t *)current_process, nodes, timeout);
+	free(nodes);
+	return result;
+}
+
+static long sys_fswait_multi(int c, int fds[], int timeout, int out[]) {
+	PTR_VALIDATE(fds);
+	PTR_VALIDATE(out);
+	int has_match = -1;
+	for (int i = 0; i < c; ++i) {
+		if (!FD_CHECK(fds[i])) {
+			return -EBADF;
+		}
+		if (selectcheck_fs(FD_ENTRY(fds[i])) == 0) {
+			out[i] = 1;
+			has_match = (has_match == -1) ? i : has_match;
+		} else {
+			out[i] = 0;
+		}
+	}
+
+	/* Already found a match, return immediately with the first match */
+	if (has_match != -1) return has_match;
+
+	int result = sys_fswait_timeout(c, fds, timeout);
+	if (result != -1) out[result] = 1;
+	if (result == -1) {
+		printf("negative result from fswait3\n");
+	}
+	return result;
+}
+
+static long sys_shm_obtain(char * path, size_t * size) {
+	PTR_VALIDATE(path);
+	PTR_VALIDATE(size);
+
+	printf("Want to obtain '%s' and put size in %p (currently has %ld)\n",
+		path, size, *size);
+
+	uintptr_t out = current_process->image.shm_heap;
+	if (out == 0) out = 0x200000000;
+	uintptr_t i;
+	for (i = out; i < out + *size; i += 0x1000) {
+		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
+		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
+	}
+	current_process->image.shm_heap = i;
+
+	return out; //(int)shm_obtain(path, size);
+}
+
+
 static long (*syscalls[])() = {
 	/* System Call Table */
 	[SYS_EXT]          = sys_exit,
@@ -867,19 +953,19 @@ static long (*syscalls[])() = {
 	[SYS_SLEEPABS]     = sys_sleepabs,
 	[SYS_SLEEP]        = sys_sleep,
 	[SYS_PIPE]         = sys_pipe,
+	[SYS_FSWAIT]       = sys_fswait,
+	[SYS_FSWAIT2]      = sys_fswait_timeout,
+	[SYS_FSWAIT3]      = sys_fswait_multi,
+	[SYS_CLONE]        = sys_clone,
 
+	[SYS_SHM_OBTAIN]   = sys_shm_obtain,
 	[SYS_SIGNAL]       = sys_signal,
 
-	[SYS_OPENPTY]      = unimplemented,
-	[SYS_MKPIPE]       = unimplemented,
-	[SYS_REBOOT]       = unimplemented,
-	[SYS_CLONE]        = unimplemented,
-	[SYS_SHM_OBTAIN]   = unimplemented,
-	[SYS_SHM_RELEASE]  = unimplemented,
-	[SYS_KILL]         = unimplemented,
-	[SYS_FSWAIT]       = unimplemented,
-	[SYS_FSWAIT2]      = unimplemented,
-	[SYS_FSWAIT3]      = unimplemented,
+	[SYS_OPENPTY]      = unimplemented, /* needs TTY layer */
+	[SYS_MKPIPE]       = unimplemented, /* Legacy pipe, unused by userspace. */
+	[SYS_REBOOT]       = unimplemented, /* Toaru32 just did a triple fault... */
+	[SYS_SHM_RELEASE]  = unimplemented, /* needs SHM subsystem */
+	[SYS_KILL]         = unimplemented, /* needs signals */
 };
 
 static size_t num_syscalls = sizeof(syscalls) / sizeof(*syscalls);

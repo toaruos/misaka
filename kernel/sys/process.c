@@ -849,3 +849,41 @@ pid_t fork(void) {
 	make_process_ready(new_proc);
 	return new_proc->id;
 }
+
+pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
+	uintptr_t sp, bp;
+	process_t * parent = (process_t *)current_process;
+	process_t * new_proc = spawn_process(current_process, 1);
+	new_proc->thread.directory = current_process->thread.directory;
+	/* FIXME: Uh, refcounts? */
+
+	struct regs r;
+	memcpy(&r, current_process->syscall_registers, sizeof(struct regs));
+	new_proc->syscall_registers = &r;
+	sp = new_proc->image.stack;
+	bp = sp;
+
+	/* Set the gid */
+	if (current_process->group) {
+		new_proc->group = current_process->group;
+	} else {
+		/* We are the session leader */
+		new_proc->group = current_process->id;
+	}
+
+
+	/* different calling convention */
+	r.rdi = arg;
+	PUSH(new_stack, uintptr_t, (uintptr_t)0xFFFFB00F);
+	new_proc->syscall_registers->rsp = new_stack;
+	new_proc->syscall_registers->rbp = new_stack;
+	new_proc->syscall_registers->rip = thread_func;
+	PUSH(sp, struct regs, r);
+	new_proc->thread.sp = sp;
+	new_proc->thread.bp = bp;
+	//new_proc->thread.gsbase = current_process->thread.gsbase;
+	new_proc->thread.ip = (uintptr_t)&arch_resume_user;
+	if (parent->flags & PROC_FLAG_IS_TASKLET) new_proc->flags |= PROC_FLAG_IS_TASKLET;
+	make_process_ready(new_proc);
+	return new_proc->id;
+}

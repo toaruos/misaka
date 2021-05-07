@@ -112,5 +112,6 @@ extern int sleep_on(list_t * queue);
 extern int process_alert_node(process_t * process, void * value);
 extern void sleep_until(process_t * process, unsigned long seconds, unsigned long subseconds);
 extern void switch_task(uint8_t reschedule);
+extern int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout);
 
 #define USER_ROOT_UID 0
