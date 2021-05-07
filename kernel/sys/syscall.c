@@ -251,8 +251,10 @@ static long sys_write(int fd, char * ptr, unsigned long len) {
 		PTR_VALIDATE(ptr);
 		fs_node_t * node = FD_ENTRY(fd);
 		if (!(FD_MODE(fd) & 2)) return -EACCES;
-		uint64_t out = write_fs(node, FD_OFFSET(fd), len, (uint8_t*)ptr);
-		FD_OFFSET(fd) += out;
+		int64_t out = write_fs(node, FD_OFFSET(fd), len, (uint8_t*)ptr);
+		if (out > 0) {
+			FD_OFFSET(fd) += out;
+		}
 		return out;
 	}
 	return -EBADF;

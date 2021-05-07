@@ -157,7 +157,7 @@ static uint64_t write_server(fs_node_t * node, uint64_t offset, uint64_t size, u
 		return -1;
 	}
 
-	return send_to_client(p, head->target, size - sizeof(header_t), head->data);
+	return send_to_client(p, head->target, size - sizeof(header_t), head->data) + sizeof(header_t);
 }
 
 static int ioctl_server(fs_node_t * node, int request, void * argp) {

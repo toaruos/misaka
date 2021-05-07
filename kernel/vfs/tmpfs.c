@@ -165,7 +165,7 @@ static char * tmpfs_file_getset_block(struct tmpfs_file * t, size_t blockid, int
 	page->bits.user = 0;
 	page->bits.page = (uintptr_t)t->blocks[blockid];
 	page->bits.present = 1;
-	//invalidate_tables_at((uintptr_t)buf_space);
+	mmu_invalidate((uintptr_t)buf_space);
 
 	return (char *)buf_space;
 }
