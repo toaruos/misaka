@@ -6,7 +6,7 @@ void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[
 	ret.cs = 0x18 | 0x03;
 	ret.ss = 0x20 | 0x03;
 	ret.rip = entrypoint;
-	ret.rflags = (1 << 21);
+	ret.rflags = (1 << 21) | (1 << 9);
 	ret.rsp = stack;
 
 	asm volatile (
