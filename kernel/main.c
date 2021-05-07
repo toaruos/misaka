@@ -269,6 +269,8 @@ extern void pit_initialize(void);
 extern fs_node_t * lfb_device;
 extern void acpi_initialize(void);
 extern void tasking_start(void);
+extern void packetfs_initialize(void);
+extern void portio_initialize(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_processMultiboot(mboot);
@@ -301,8 +303,10 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	ramdisk_mount(mods[0].mod_start, mods[0].mod_end - mods[0].mod_start);
 
 	vfs_mount_type("tar","/dev/ram0","/");
-	vfs_mount_type("tmpfs","tmp,777","/tmp");
-	vfs_mount_type("tmpfs","var,555","/var");
+	//vfs_mount_type("tmpfs","tmp,777","/tmp");
+	//vfs_mount_type("tmpfs","var,555","/var");
+	packetfs_initialize();
+	portio_initialize();
 
 	tasking_start();
 	pit_initialize();

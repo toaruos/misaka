@@ -588,7 +588,7 @@ void tasking_start(void) {
 	kernel_idle_task = spawn_kidle();
 }
 
-static int wait_candidate(process_t * parent, int pid, int options, process_t * proc) {
+static int wait_candidate(volatile process_t * parent, int pid, int options, volatile process_t * proc) {
 	if (!proc) return 0;
 
 	if (options & WNOKERN) {
@@ -616,13 +616,13 @@ void reap_process(process_t * proc) {
 }
 
 int waitpid(int pid, int * status, int options) {
-	process_t * volatile proc = (process_t*)current_process;
+	volatile process_t * volatile proc = (process_t*)current_process;
 	if (proc->group) {
 		proc = process_from_pid(proc->group);
 	}
 
 	do {
-		process_t * candidate = NULL;
+		volatile process_t * candidate = NULL;
 		int has_children = 0;
 
 		/* First, find out if there is anyone to reap */
@@ -630,7 +630,7 @@ int waitpid(int pid, int * status, int options) {
 			if (!node->value) {
 				continue;
 			}
-			process_t * child = ((tree_node_t *)node->value)->value;
+			volatile process_t * volatile child = ((tree_node_t *)node->value)->value;
 
 			if (wait_candidate(proc, pid, options, child)) {
 				has_children = 1;
@@ -656,7 +656,7 @@ int waitpid(int pid, int * status, int options) {
 			}
 			int pid = candidate->id;
 			if (candidate->flags & PROC_FLAG_FINISHED) {
-				reap_process(candidate);
+				reap_process((process_t*)candidate);
 			}
 			return pid;
 		} else {
@@ -799,7 +799,20 @@ void task_exit(int retval) {
 	/* TODO free queues */
 	/* TODO free shm */
 	/* TODO release directory */
-	/* TODO release fds */
+	current_process->fds->refs--;
+	if (current_process->fds->refs == 0) {
+		for (uint32_t i = 0; i < current_process->fds->length; ++i) {
+			if (current_process->fds->entries[i]) {
+				close_fs(current_process->fds->entries[i]);
+				current_process->fds->entries[i] = NULL;
+			}
+		}
+		free(current_process->fds->entries);
+		free(current_process->fds->offsets);
+		free(current_process->fds->modes);
+		free(current_process->fds);
+		free((void *)(current_process->image.stack - KERNEL_STACK_SIZE));
+	}
 
 	process_t * parent = process_get_parent((process_t *)current_process);
 	if (parent && !(parent->flags & PROC_FLAG_FINISHED)) {

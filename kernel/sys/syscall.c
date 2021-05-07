@@ -215,9 +215,9 @@ extern void task_exit(int retval);
 __attribute__((noreturn))
 static long sys_exit(long exitcode) {
 	/* TODO remove print */
-	printf("(process %d exited with %ld)\n", current_process->id, exitcode);
+	//printf("(process %d [%s] exited with %ld)\n", current_process->id, current_process->name, exitcode);
 
-	task_exit(exitcode);
+	task_exit((exitcode & 0xFF) << 8);
 	__builtin_unreachable();
 }
 
@@ -754,7 +754,7 @@ static long sys_fork(void) {
 }
 
 extern int waitpid(int pid, int * status, int options);
-static long sys_waitpid(pid_t pid, int * status, int options) {
+static long sys_waitpid(int pid, int * status, int options) {
 	if (status && !PTR_INRANGE(status)) return -EINVAL;
 	return waitpid(pid, status, options);
 }
@@ -809,6 +809,17 @@ static long sys_pipe(int pipes[2]) {
 	return 0;
 }
 
+static long sys_signal(long signum, uintptr_t handler) {
+	return (long)NULL;
+#if 0
+	if (signum > NUMSIGNALS) {
+		return -EINVAL;
+	}
+	uintptr_t old = current_process->signals.functions[signum];
+	current_process->signals.functions[signum] = handler;
+	return (int)old;
+#endif
+}
 
 static long (*syscalls[])() = {
 	/* System Call Table */
@@ -857,6 +868,8 @@ static long (*syscalls[])() = {
 	[SYS_SLEEP]        = sys_sleep,
 	[SYS_PIPE]         = sys_pipe,
 
+	[SYS_SIGNAL]       = sys_signal,
+
 	[SYS_OPENPTY]      = unimplemented,
 	[SYS_MKPIPE]       = unimplemented,
 	[SYS_REBOOT]       = unimplemented,
@@ -864,7 +877,6 @@ static long (*syscalls[])() = {
 	[SYS_SHM_OBTAIN]   = unimplemented,
 	[SYS_SHM_RELEASE]  = unimplemented,
 	[SYS_KILL]         = unimplemented,
-	[SYS_SIGNAL]       = unimplemented,
 	[SYS_FSWAIT]       = unimplemented,
 	[SYS_FSWAIT2]      = unimplemented,
 	[SYS_FSWAIT3]      = unimplemented,
