@@ -127,7 +127,7 @@ typedef struct YutaniServerWindow {
 	char *   client_strings;
 
 	/* Window animations */
-	int anim_mode;
+	uint64_t anim_mode;
 	uint64_t anim_start;
 
 	/* Alpha shaping threshold */

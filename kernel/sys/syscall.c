@@ -13,6 +13,7 @@
 #include <kernel/shm.h>
 #include <kernel/mmu.h>
 #include <kernel/pty.h>
+#include <kernel/spinlock.h>
 
 #include <kernel/arch/x86_64/regs.h>
 
@@ -126,12 +127,21 @@ static long unimplemented(void) {
 
 static long sys_sbrk(ssize_t size) {
 	if (size & 0xFFF) return -EINVAL;
-	uintptr_t out = current_process->image.heap;
+	volatile process_t * volatile proc = current_process;
+	if (proc->group != 0) {
+		proc = process_from_pid(proc->group);
+	}
+	spin_lock(proc->image.lock);
+	uintptr_t out = proc->image.heap;
 	for (uintptr_t i = out; i < out + size; i += 0x1000) {
 		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
+		if (page->bits.page != 0) {
+			printf("odd, %p is already allocated?\n", i);
+		}
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
 	}
-	current_process->image.heap += size;
+	proc->image.heap += size;
+	spin_unlock(proc->image.lock);
 	return (long)out;
 }
 

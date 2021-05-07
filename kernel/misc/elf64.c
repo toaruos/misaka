@@ -118,6 +118,11 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	uintptr_t execBase = -1;
 	uintptr_t heapBase = 0;
 
+	union PML * old_directory = current_process->thread.directory;
+	mmu_set_directory(NULL);
+	current_process->thread.directory = mmu_clone(NULL);
+	mmu_set_directory(current_process->thread.directory);
+
 	for (int i = 0; i < header.e_phnum; ++i) {
 		Elf64_Phdr phdr;
 		read_fs(file, header.e_phoff + header.e_phentsize * i, sizeof(Elf64_Phdr), (uint8_t*)&phdr);

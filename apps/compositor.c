@@ -717,6 +717,12 @@ static int yutani_blit_window(yutani_globals_t * yg, yutani_server_window_t * wi
 	_win_sprite.alpha = ALPHA_EMBEDDED;
 
 	if (window->anim_mode) {
+		if (window->anim_mode > 6) {
+			FILE * f = fopen("/dev/fblog","w");
+			fprintf(f, "compositor: anim_mode is %lx, which sounds very wrong!\n", window->anim_mode);
+			fclose(f);
+			window->anim_mode = 0;
+		}
 		int frame = yutani_time_since(yg, window->anim_start);
 		if (frame >= yutani_animation_lengths[window->anim_mode]) {
 			/* XXX handle animation-end things like cleanup of closing windows */

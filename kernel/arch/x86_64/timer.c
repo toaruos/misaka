@@ -47,9 +47,15 @@ void arch_enter_critical(void) {
 	}
 }
 
+void arch_enable_interrupts(void) {
+	SYNC_STI();
+}
+
 void arch_exit_critical(void) {
-	if (sync_depth == 1) {
+	if (sync_depth <= 1) {
 		SYNC_STI();
+		sync_depth = 0;
+		return;
 	}
 	sync_depth--;
 }

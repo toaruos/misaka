@@ -269,6 +269,8 @@ void * shm_obtain (char * path, size_t * size) {
 }
 
 int shm_release (char * path) {
+	return 0; /* TODO, remove this early return */
+
 	spin_lock(bsl);
 	process_t * proc = (process_t *)current_process;
 

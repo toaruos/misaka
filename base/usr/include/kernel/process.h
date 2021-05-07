@@ -115,5 +115,6 @@ extern void switch_task(uint8_t reschedule);
 extern int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout);
 extern process_t * process_get_parent(process_t * process);
 extern int process_is_ready(process_t * proc);
+extern void wakeup_sleepers(unsigned long seconds, unsigned long subseconds);
 
 #define USER_ROOT_UID 0

@@ -339,7 +339,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	keyboard_install();
 	mouse_install();
 
-	//vfs_mount("/dev/null", &_early_log);
+	vfs_mount("/dev/fblog", &_early_log);
 
 	/* XXX Set actual process file descriptors (this is temporary; init should do this) */
 	#if 0
