@@ -6,7 +6,7 @@ This repository contains both Misaka as well as a modified ToaruOS userspace and
 
 As Misaka is still _experimental_, it is missing many critical features and is not intended to used quite yet.
 
-![screenshot](https://klange.dev/s/Screenshot%20from%202021-05-07%2014-10-28.png)
+![screenshot](https://klange.dev/s/Screenshot%20from%202021-05-07%2015-48-45.png)
 
 _Misaka can launch the graphical environment, but is missing important drivers and subsystems to make the OS usable._
 
