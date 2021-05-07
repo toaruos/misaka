@@ -12,6 +12,7 @@
 #include <kernel/pipe.h>
 #include <kernel/shm.h>
 #include <kernel/mmu.h>
+#include <kernel/pty.h>
 
 #include <kernel/arch/x86_64/regs.h>
 
@@ -891,12 +892,40 @@ static long sys_fswait_multi(int c, int fds[], int timeout, int out[]) {
 static long sys_shm_obtain(char * path, size_t * size) {
 	PTR_VALIDATE(path);
 	PTR_VALIDATE(size);
-
-	printf("Want to obtain '%s' and put size in %p (currently has %ld)\n",
-		path, size, *size);
 	return (long)shm_obtain(path, size);
 }
 
+static long sys_shm_release(char * path) {
+	PTR_VALIDATE(path);
+	return shm_release(path);
+}
+
+static long sys_openpty(int * master, int * slave, char * name, void * _ign0, void * size) {
+	/* We require a place to put these when we are done. */
+	if (!master || !slave) return -EINVAL;
+	if (master && !PTR_INRANGE(master)) return -EINVAL;
+	if (slave && !PTR_INRANGE(slave)) return -EINVAL;
+	if (size && !PTR_INRANGE(size)) return -EINVAL;
+
+	/* Create a new pseudo terminal */
+	fs_node_t * fs_master;
+	fs_node_t * fs_slave;
+
+	pty_create(size, &fs_master, &fs_slave);
+
+	/* Append the master and slave to the calling process */
+	*master = process_append_fd((process_t *)current_process, fs_master);
+	*slave  = process_append_fd((process_t *)current_process, fs_slave);
+
+	FD_MODE(*master) = 03;
+	FD_MODE(*slave) = 03;
+
+	open_fs(fs_master, 0);
+	open_fs(fs_slave, 0);
+
+	/* Return success */
+	return 0;
+}
 
 static long (*syscalls[])() = {
 	/* System Call Table */
@@ -948,14 +977,14 @@ static long (*syscalls[])() = {
 	[SYS_FSWAIT2]      = sys_fswait_timeout,
 	[SYS_FSWAIT3]      = sys_fswait_multi,
 	[SYS_CLONE]        = sys_clone,
-
+	[SYS_OPENPTY]      = sys_openpty,
 	[SYS_SHM_OBTAIN]   = sys_shm_obtain,
+	[SYS_SHM_RELEASE]  = sys_shm_release,
+
 	[SYS_SIGNAL]       = sys_signal,
 
-	[SYS_OPENPTY]      = unimplemented, /* needs TTY layer */
 	[SYS_MKPIPE]       = unimplemented, /* Legacy pipe, unused by userspace. */
 	[SYS_REBOOT]       = unimplemented, /* Toaru32 just did a triple fault... */
-	[SYS_SHM_RELEASE]  = unimplemented, /* needs SHM subsystem */
 	[SYS_KILL]         = unimplemented, /* needs signals */
 };
 

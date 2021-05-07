@@ -279,6 +279,7 @@ extern void acpi_initialize(void);
 extern void tasking_start(void);
 extern void packetfs_initialize(void);
 extern void portio_initialize(void);
+extern void zero_initialize(void);
 extern void shm_install(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
@@ -327,14 +328,15 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	//vfs_mount_type("tmpfs","var,555","/var");
 	packetfs_initialize();
 	portio_initialize();
+	zero_initialize();
 
 	tasking_start();
 	pit_initialize();
 
-	vfs_mount("/dev/null", &_early_log);
+	//vfs_mount("/dev/null", &_early_log);
 
 	/* XXX Set actual process file descriptors (this is temporary; init should do this) */
-	#if 1
+	#if 0
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 1;
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;

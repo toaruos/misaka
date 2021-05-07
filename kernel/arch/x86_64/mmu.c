@@ -361,8 +361,8 @@ void mmu_init(void) {
 	/* Now map our new low base */
 	init_page_region[0][0].raw = (uintptr_t)&low_base_pmls[0] | 0x07;
 
-	/* Set up page allocation bitmap for 1GiB of pages FIXME use actual memory amount */
-	nframes = (1024 * 256); /* XXX this is 1GiB */
+	/* Set up page allocation bitmap for 3GiB of pages FIXME use actual memory amount */
+	nframes = (3 * 1024 * 256); /* XXX this is 3GiB */
 	frames = malloc(INDEX_FROM_BIT(nframes * 8));
 	memset(frames, 0, INDEX_FROM_BIT(nframes * 8));
 

@@ -2402,10 +2402,8 @@ int main(int argc, char * argv[]) {
 						client_list = list_create();
 						hashmap_set(yg->clients_to_windows, (void *)p->source, client_list);
 					}
-					TRACE("Sending hello response to client...");
 					yutani_msg_buildx_welcome_alloc(response);
 					yutani_msg_buildx_welcome(response,yg->width, yg->height);
-					TRACE("Size is %p, destination is %p...", response->size, p->source);
 					pex_send(server, p->source, response->size, (char *)response);
 				}
 				break;
@@ -2415,18 +2413,15 @@ int main(int argc, char * argv[]) {
 					struct yutani_msg_window_new_flags * wn = (void *)m->data;
 					TRACE("Client %p requested a new window (%dx%d).", p->source, wn->width, wn->height);
 					yutani_server_window_t * w = server_window_create(yg, wn->width, wn->height, p->source, m->type != YUTANI_MSG_WINDOW_NEW ? wn->flags : 0);
-					TRACE("... made it.");
 					yutani_msg_buildx_window_init_alloc(response);
 					yutani_msg_buildx_window_init(response,w->wid, w->width, w->height, w->bufid);
 					pex_send(server, p->source, response->size, (char *)response);
-					TRACE("... sent it.");
 
 					if (!(w->server_flags & YUTANI_WINDOW_FLAG_NO_STEAL_FOCUS)) {
 						set_focused_window(yg, w);
 					}
 
 					notify_subscribers(yg);
-					TRACE("... notified it.");
 				}
 				break;
 			case YUTANI_MSG_FLIP:
