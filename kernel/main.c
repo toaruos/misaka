@@ -8,6 +8,7 @@
 #include <kernel/hashmap.h>
 #include <kernel/vfs.h>
 #include <kernel/process.h>
+#include <kernel/mmu.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/idt.h>
@@ -27,6 +28,13 @@ void * sbrk(size_t bytes) {
 	}
 
 	void * out = heapStart;
+	if (heapStart >= 0x800000000) {
+		for (uintptr_t p = (uintptr_t)out; p < (uintptr_t)out + bytes; p += 0x1000) {
+			union PML * page = mmu_get_page(p, MMU_GET_MAKE);
+			mmu_frame_allocate(page, MMU_FLAG_WRITABLE | MMU_FLAG_KERNEL);
+		}
+	}
+
 	heapStart += bytes;
 	return out;
 }
@@ -271,16 +279,27 @@ extern void acpi_initialize(void);
 extern void tasking_start(void);
 extern void packetfs_initialize(void);
 extern void portio_initialize(void);
+extern void shm_install(void);
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_processMultiboot(mboot);
 	mmu_init();
 
-	startup_initializeFramebuffer(); /* TODO: lfbvideo module */
-	startup_printVersion();          /* TODO: move to generic kernel/misc/version.c? */
-	startup_processSymbols();        /* TODO: move to generic kernel/misc/symbols.c and/or ditch when we switch to an ELF with a DYN table? */
-	startup_initializePat();         /* TODO: arch/x86-64/mem.c? */
+	/* Set up PAT entries */
+	startup_initializePat();
 
+	/* Start the kernel heap from a special high memory region. */
+	heapStart = (char*)0xffffff0000000000;
+
+	/* Initialize lfbvideo core and set up a quick-and-dirty terminal emulatory. */
+	startup_initializeFramebuffer();
+
+	startup_printVersion();
+
+	/* Process the symbol table. */
+	startup_processSymbols();
+
+	/* Turn on the clock timers */
 	arch_clock_initialize();
 
 	//startup_printSymbols();
@@ -291,6 +310,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	idt_install();
 	enable_fpu();
 	initialize_process_tree();
+	shm_install();
 
 	vfs_install();
 	tarfs_register_init();
@@ -314,7 +334,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	vfs_mount("/dev/null", &_early_log);
 
 	/* XXX Set actual process file descriptors (this is temporary; init should do this) */
-	#if 0
+	#if 1
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 1;
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
 	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
@@ -330,10 +350,8 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 #if 1
 	/* Load elf from file */
 	const char * boot_app = "/bin/init";
-	const char * boot_arg = NULL;
 	const char * argv[] = {
 		boot_app,
-		boot_arg,
 		NULL
 	};
 	int argc = 0;

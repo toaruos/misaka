@@ -115,7 +115,7 @@ typedef struct YutaniServerWindow {
 	uint8_t * newbuffer;
 
 	/* Connection that owns this window */
-	uint32_t owner;
+	uintptr_t owner;
 
 	/* Rotation of windows XXX */
 	int16_t  rotation;

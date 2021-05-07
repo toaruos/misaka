@@ -28,11 +28,11 @@ void * hashmap_string_dupe(void * key) {
 }
 
 unsigned int hashmap_int_hash(void * key) {
-	return (unsigned int)(uintptr_t)key;
+	return (uintptr_t)key;
 }
 
 int hashmap_int_comp(void * a, void * b) {
-	return (int)(uintptr_t)a == (int)(uintptr_t)b;
+	return (uintptr_t)a == (uintptr_t)b;
 }
 
 void * hashmap_int_dupe(void * key) {

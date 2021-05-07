@@ -108,6 +108,7 @@ void mmu_frame_map_address(union PML * page, unsigned int flags, uintptr_t physA
 union PML init_page_region[2][512] __attribute__((aligned(0x1000))) = {0};
 
 union PML high_base_pml[512] __attribute__((aligned(0x1000))) = {0};
+union PML heap_base_pml[512] __attribute__((aligned(0x1000))) = {0};
 
 /* Direct mapping of low memory */
 union PML low_base_pmls[20][512] __attribute__((aligned(0x1000)))  = {0};
@@ -250,6 +251,8 @@ union PML * mmu_clone(union PML * from) {
 
 							/* Now, finally, copy pages */
 							for (size_t l = 0; l < 512; ++l) {
+								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
+								if (address >= 0x200000000 && address <= 0x400000000) continue;
 								if (pt_in[l].bits.present) {
 									if (pt_in[l].bits.user) {
 										char * page_in = (char*)(0xFFFFffff00000000UL | (pt_in[l].bits.page << 12));
@@ -333,6 +336,7 @@ void mmu_init(void) {
 
 	/* Map the high base PDP */
 	init_page_region[0][511].raw = (uintptr_t)&high_base_pml | 0x03;
+	init_page_region[0][510].raw = (uintptr_t)&heap_base_pml | 0x03;
 
 	/* Identity map -4GB in the boot PML using 1GB pages */
 	high_base_pml[508].raw = (uintptr_t)0x00000000 | 0x83;

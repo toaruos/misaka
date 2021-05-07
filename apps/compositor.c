@@ -390,17 +390,21 @@ static int yutani_pick_animation(uint32_t flags, int direction) {
  *
  * Initializes a window of the particular size for a given client.
  */
-static yutani_server_window_t * server_window_create(yutani_globals_t * yg, int width, int height, uint32_t owner, uint32_t flags) {
+static yutani_server_window_t * server_window_create(yutani_globals_t * yg, int width, int height, uintptr_t owner, uint32_t flags) {
 	yutani_server_window_t * win = malloc(sizeof(yutani_server_window_t));
 
+	TRACE("window = %p", win);
 	win->wid = next_wid();
 	win->owner = owner;
 	list_insert(yg->windows, win);
 	hashmap_set(yg->wids_to_windows, (void*)(uintptr_t)win->wid, win);
 
-	list_t * client_list = hashmap_get(yg->clients_to_windows, (void *)(uintptr_t)owner);
+	TRACE("client list?");
+	list_t * client_list = hashmap_get(yg->clients_to_windows, (void *)owner);
+	TRACE("client_list = %p", client_list);
 	list_insert(client_list, win);
 
+	TRACE("Setting up window...");
 	win->x = 0;
 	win->y = 0;
 	win->z = 1;
@@ -428,14 +432,17 @@ static yutani_server_window_t * server_window_create(yutani_globals_t * yg, int 
 	win->server_flags = flags;
 	win->opacity = 255;
 
+	TRACE("shm key...");
 	char key[1024];
 	YUTANI_SHMKEY(yg->server_ident, key, 1024, win);
 
 	size_t size = (width * height * 4);
 
+	TRACE("buffer...");
 	win->buffer = shm_obtain(key, &size);
 	memset(win->buffer, 0, size);
 
+	TRACE("zs...");
 	list_insert(yg->mid_zs, win);
 
 	return win;
@@ -2221,23 +2228,6 @@ int main(int argc, char * argv[]) {
 		}
 	}
 
-	/* FIXME fake root window */
-	{
-		list_t * client_list = list_create();
-		hashmap_set(yg->clients_to_windows, (void *)0, client_list);
-		yutani_server_window_t * w = server_window_create(yg, 1400, 800, 0, 0);
-		w->anim_mode = 0;
-		w->x = 20;
-		w->y = 50;
-		for (uint32_t * x = (uint32_t*)w->buffer; x < (uint32_t*)w->buffer + 1400 * 800; ++x) {
-			*x = rgb(255,255,0);
-		}
-		reorder_window(yg, w, 2);
-		set_focused_window(yg, w);
-		mark_window(yg, w);
-	}
-
-
 	int fds[4];
 	int mfd = -1;
 	int kfd = -1;
@@ -2405,15 +2395,17 @@ int main(int argc, char * argv[]) {
 		switch(m->type) {
 			case YUTANI_MSG_HELLO:
 				{
-					TRACE("And hello to you, %08x!", p->source);
+					TRACE("And hello to you, %p!", p->source);
 					list_t * client_list = hashmap_get(yg->clients_to_windows, (void *)p->source);
 					if (!client_list) {
-						TRACE("Client is new: %x", p->source);
+						TRACE("Client is new: %p", p->source);
 						client_list = list_create();
 						hashmap_set(yg->clients_to_windows, (void *)p->source, client_list);
 					}
+					TRACE("Sending hello response to client...");
 					yutani_msg_buildx_welcome_alloc(response);
 					yutani_msg_buildx_welcome(response,yg->width, yg->height);
+					TRACE("Size is %p, destination is %p...", response->size, p->source);
 					pex_send(server, p->source, response->size, (char *)response);
 				}
 				break;
@@ -2421,17 +2413,20 @@ int main(int argc, char * argv[]) {
 			case YUTANI_MSG_WINDOW_NEW_FLAGS:
 				{
 					struct yutani_msg_window_new_flags * wn = (void *)m->data;
-					TRACE("Client %08x requested a new window (%dx%d).", p->source, wn->width, wn->height);
+					TRACE("Client %p requested a new window (%dx%d).", p->source, wn->width, wn->height);
 					yutani_server_window_t * w = server_window_create(yg, wn->width, wn->height, p->source, m->type != YUTANI_MSG_WINDOW_NEW ? wn->flags : 0);
+					TRACE("... made it.");
 					yutani_msg_buildx_window_init_alloc(response);
 					yutani_msg_buildx_window_init(response,w->wid, w->width, w->height, w->bufid);
 					pex_send(server, p->source, response->size, (char *)response);
+					TRACE("... sent it.");
 
 					if (!(w->server_flags & YUTANI_WINDOW_FLAG_NO_STEAL_FOCUS)) {
 						set_focused_window(yg, w);
 					}
 
 					notify_subscribers(yg);
+					TRACE("... notified it.");
 				}
 				break;
 			case YUTANI_MSG_FLIP:

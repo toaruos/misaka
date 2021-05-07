@@ -10,9 +10,10 @@
 #include <kernel/string.h>
 #include <kernel/version.h>
 #include <kernel/pipe.h>
+#include <kernel/shm.h>
+#include <kernel/mmu.h>
 
 #include <kernel/arch/x86_64/regs.h>
-#include <kernel/arch/x86_64/mmu.h>
 
 /* TODO: kernel/arch/x86_64/syscall.c/h ? */
 static unsigned long arch_syscall_number(struct regs * r) {
@@ -893,17 +894,7 @@ static long sys_shm_obtain(char * path, size_t * size) {
 
 	printf("Want to obtain '%s' and put size in %p (currently has %ld)\n",
 		path, size, *size);
-
-	uintptr_t out = current_process->image.shm_heap;
-	if (out == 0) out = 0x200000000;
-	uintptr_t i;
-	for (i = out; i < out + *size; i += 0x1000) {
-		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
-		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
-	}
-	current_process->image.shm_heap = i;
-
-	return out; //(int)shm_obtain(path, size);
+	return (long)shm_obtain(path, size);
 }
 
 

@@ -345,7 +345,7 @@ process_t * spawn_process(volatile process_t * parent, int flags) {
 	proc->image.size        = parent->image.size; /* XXX same ^^ */
 	proc->image.stack       = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
 	proc->image.user_stack  = parent->image.user_stack;
-	proc->image.shm_heap    = 0;
+	proc->image.shm_heap    = 0x200000000;
 
 	if (flags & PROC_REUSE_FDS) {
 		proc->fds = parent->fds;
