@@ -69,7 +69,7 @@ void save_fpu(process_t * proc) {
 	memcpy((uint8_t *)&proc->thread.fp_regs,&saves,512);
 }
 
-
+__attribute__((noreturn))
 void switch_next(void) {
 	uintptr_t sp, bp, ip;
 	current_process = next_ready_process();
@@ -82,10 +82,12 @@ void switch_next(void) {
 	if (ip < 0x100000 || ip > 0x100000000) {
 		printf("This process looks bad, skipping it.\n");
 		switch_next();
+		__builtin_unreachable();
 	}
 
 	if (current_process->flags & PROC_FLAG_FINISHED) {
 		switch_next();
+		__builtin_unreachable();
 	}
 
 	mmu_set_directory(current_process->thread.directory);
@@ -109,6 +111,7 @@ void switch_next(void) {
 		"jmpq *%%rbx\n"
 		: : "r"(ip), "r"(sp), "r"(bp)
 		: "rbx","rsp","rax");
+	__builtin_unreachable();
 }
 
 extern uintptr_t read_ip(void);

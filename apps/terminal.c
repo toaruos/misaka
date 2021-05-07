@@ -2465,8 +2465,8 @@ int main(int argc, char ** argv) {
 
 			if (res[1]) {
 				/* Read from PTY */
-				int r = read(fd_master, buf, 4096);
-				for (int i = 0; i < r; ++i) {
+				ssize_t r = read(fd_master, buf, 4096);
+				for (ssize_t i = 0; i < r; ++i) {
 					ansi_put(ansi_state, buf[i]);
 				}
 				display_flip();

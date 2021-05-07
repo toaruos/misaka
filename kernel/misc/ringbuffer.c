@@ -11,6 +11,7 @@
 #include <kernel/spinlock.h>
 #include <kernel/string.h>
 #include <kernel/vfs.h>
+#include <kernel/printf.h>
 
 size_t ring_buffer_unread(ring_buffer_t * ring_buffer) {
 	if (ring_buffer->read_ptr == ring_buffer->write_ptr) {
@@ -99,7 +100,7 @@ size_t ring_buffer_read(ring_buffer_t * ring_buffer, size_t size, uint8_t * buff
 }
 
 size_t ring_buffer_write(ring_buffer_t * ring_buffer, size_t size, uint8_t * buffer) {
-	size_t written = 0;
+	volatile size_t written = 0;
 	while (written < size) {
 		spin_lock(ring_buffer->lock);
 
