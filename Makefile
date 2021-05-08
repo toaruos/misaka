@@ -62,6 +62,10 @@ LIBS=$(patsubst lib/%.c,%,$(wildcard lib/*.c))
 LIBS_X=$(foreach lib,$(LIBS),$(BASE)/lib/libtoaru_$(lib).so)
 LIBS_Y=$(foreach lib,$(LIBS),.make/$(lib).lmak)
 
+KRK_MODS = $(patsubst kuroko/src/modules/module_%.c,$(BASE)/lib/kuroko/%.so,$(wildcard kuroko/src/modules/module_*.c))
+KRK_MODS_X = $(patsubst lib/kuroko/%.c,$(BASE)/lib/kuroko/%.so,$(wildcard lib/kuroko/*.c))
+KRK_MODS_Y = $(patsubst lib/kuroko/%.c,.make/%.kmak,$(wildcard lib/kuroko/*.c))
+
 CFLAGS= -O2 -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-parameter
 
 LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
@@ -82,12 +86,15 @@ system: misaka-kernel $(MODULES) ramdisk.tar
 %.ko: %.c
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
-ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(BASE)/bin/kuroko $(BASE)/lib/ld.so $(APPS_KRK_X)
+ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(KRK_MODS_X) $(BASE)/bin/kuroko $(BASE)/lib/ld.so $(APPS_KRK_X) $(KRK_MODS)
 	cd base; tar -cf ../ramdisk.tar *
 
 KRK_SRC = $(sort $(wildcard kuroko/src/*.c))
 $(BASE)/bin/kuroko: $(KRK_SRC) $(CRTS) | $(LC)
 	$(CC) -O2 -g -o $@ -Wl,--export-dynamic -Ikuroko/src $(KRK_SRC) kuroko/src/vendor/rline.c
+
+$(BASE)/lib/kuroko/%.so: kuroko/src/modules/module_%.c | dirs
+	$(CC) -O2 -shared -fPIC -Ikuroko/src -o $@ $<
 
 $(BASE)/lib/libkuroko.so: $(KRK_SRC) | $(LC)
 	$(CC) -O2 -shared -fPIC -Ikuroko/src -DKRK_DISABLE_THREADS -o $@ $(filter-out kuroko/src/kuroko.c,$(KRK_SRC))
@@ -182,10 +189,8 @@ dirs: $(BASE)/dev $(BASE)/tmp $(BASE)/proc $(BASE)/bin $(BASE)/lib $(BASE)/cdrom
 
 ifeq (,$(findstring clean,$(MAKECMDGOALS)))
 -include ${APPS_Y}
-endif
-
-ifeq (,$(findstring clean,$(MAKECMDGOALS)))
 -include ${LIBS_Y}
+-include ${KRK_MODS_Y}
 endif
 
 .make/%.lmak: lib/%.c util/auto-dep.krk | dirs $(CRTS)
@@ -196,6 +201,9 @@ endif
 
 .make/%.mak: apps/%.c++ util/auto-dep.krk | dirs $(CRTS)
 	kuroko util/auto-dep.krk --make $< > $@
+
+.make/%.kmak: lib/kuroko/%.c util/auto-dep.krk | dirs
+	kuroko util/auto-dep.krk --makekurokomod $< > $@
 
 $(BASE)/bin/%.sh: apps/%.sh
 	cp $< $@
