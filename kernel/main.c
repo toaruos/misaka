@@ -288,6 +288,7 @@ extern void shm_install(void);
 extern void keyboard_install(void);
 extern void mouse_install(void);
 extern void random_initialize(void);
+extern void vmware_initialize(void);
 
 static struct multiboot * mboot_struct = NULL;
 
@@ -351,14 +352,15 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	procfs_initialize();
 	random_initialize();
 
+	args_parse(arch_get_cmdline());
+
 	tasking_start();
 	pit_initialize();
 	keyboard_install();
 	mouse_install();
+	vmware_initialize();
 
 	vfs_mount("/dev/fblog", &_early_log);
-
-	args_parse(arch_get_cmdline());
 
 	if (args_present("root")) {
 		const char * root_type = "tar";
