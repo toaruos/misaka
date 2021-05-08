@@ -416,10 +416,10 @@ static uint64_t uptime_func(fs_node_t *node, uint64_t offset, uint64_t size, uin
 	return size;
 }
 
+extern const char * arch_get_cmdline(void);
 static uint64_t cmdline_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
-#if 0
 	char buf[1024];
-	extern char * cmdline;
+	const char * cmdline = arch_get_cmdline();
 	snprintf(buf, 1000, "%s\n", cmdline ? cmdline : "");
 
 	size_t _bsize = strlen(buf);
@@ -428,7 +428,6 @@ static uint64_t cmdline_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 
 	memcpy(buffer, buf + offset, size);
 	return size;
-#endif
 	return 0;
 }
 
@@ -586,16 +585,11 @@ static uint64_t filesystems_func(fs_node_t *node, uint64_t offset, uint64_t size
 	return size;
 }
 
+extern const char * arch_get_loader(void);
 static uint64_t loader_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
-#if 0
 	char * buf = malloc(512);
 
-	if (mboot_ptr->flags & MULTIBOOT_FLAG_LOADER) {
-		sprintf(buf, "%s\n", mboot_ptr->boot_loader_name);
-	} else {
-		buf[0] = '\n';
-		buf[1] = '\0';
-	}
+	snprintf(buf, 511, "%s\n", arch_get_loader());
 
 	size_t _bsize = strlen(buf);
 	if (offset > _bsize) {
@@ -607,8 +601,6 @@ static uint64_t loader_func(fs_node_t *node, uint64_t offset, uint64_t size, uin
 	memcpy(buffer, buf + offset, size);
 	free(buf);
 	return size;
-#endif
-	return 0;
 }
 
 static uint64_t irq_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {

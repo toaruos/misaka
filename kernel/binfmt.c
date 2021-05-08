@@ -109,6 +109,5 @@ int system(const char * path, int argc, char *const argv[], char *const envin[])
 	mmu_set_directory(current_process->thread.directory);
 	current_process->cmdline = (char**)argv_;
 	exec(path,argc,argv_,envin ? envin : env,0);
-	printf("Uh oh?");
 	return -EINVAL;
 }

@@ -96,7 +96,7 @@ $(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs
 	$(CC) -g -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<
 
 run: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "foo bar baz" -initrd ramdisk.tar
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "root=/dev/ram0 start=live-session migrate" -initrd ramdisk.tar
 
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 	${CC} -g -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc

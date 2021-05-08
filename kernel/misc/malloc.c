@@ -186,7 +186,7 @@ void * __attribute__ ((malloc)) valloc(uintptr_t size) {
 void free(void * ptr) {
 	spin_lock(mem_lock);
 	if (ptr < (void*)0xffffff0000000000) {
-		printf("Invalid free detected.\n");
+		printf("Invalid free detected (%p)\n", ptr);
 		while (1) {};
 	}
 	klfree(ptr);

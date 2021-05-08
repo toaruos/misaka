@@ -52,7 +52,7 @@ static struct tmpfs_file * tmpfs_file_new(char * name) {
 	t->ctime = t->atime;
 	t->blocks = malloc(t->pointers * sizeof(char *));
 	for (size_t i = 0; i < t->pointers; ++i) {
-		t->blocks[i] = NULL;
+		t->blocks[i] = 0;
 	}
 
 	spin_unlock(tmpfs_lock);
@@ -61,7 +61,6 @@ static struct tmpfs_file * tmpfs_file_new(char * name) {
 
 static int symlink_tmpfs(fs_node_t * parent, char * target, char * name) {
 	struct tmpfs_dir * d = (struct tmpfs_dir *)parent->device;
-	printf("Creating tmpfs file (symlink) %s in %s\n", name, d->name);
 
 	spin_lock(tmpfs_lock);
 	foreach(f, d->files) {
@@ -148,7 +147,7 @@ static char * tmpfs_file_getset_block(struct tmpfs_file * t, size_t blockid, int
 		}
 		while (blockid >= t->block_count) {
 			uintptr_t index = mmu_allocate_a_frame();
-			t->blocks[t->block_count] = (char*)index;
+			t->blocks[t->block_count] = index;
 			t->block_count += 1;
 		}
 		spin_unlock(tmpfs_lock);
@@ -165,6 +164,7 @@ static char * tmpfs_file_getset_block(struct tmpfs_file * t, size_t blockid, int
 	page->bits.user = 0;
 	page->bits.page = (uintptr_t)t->blocks[blockid];
 	page->bits.present = 1;
+	page->bits.size = 0;
 	mmu_invalidate((uintptr_t)buf_space);
 
 	return (char *)buf_space;
@@ -540,7 +540,7 @@ fs_node_t * tmpfs_mount(const char * device, const char * mount_path) {
 		}
 	}
 
-	free(arg);
+	//free(arg);
 	return fs;
 }
 

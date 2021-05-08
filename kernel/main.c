@@ -9,6 +9,7 @@
 #include <kernel/vfs.h>
 #include <kernel/process.h>
 #include <kernel/mmu.h>
+#include <kernel/args.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/idt.h>
@@ -28,7 +29,7 @@ void * sbrk(size_t bytes) {
 	}
 
 	void * out = heapStart;
-	if (heapStart >= 0x800000000) {
+	if ((uintptr_t)heapStart >= 0x800000000) {
 		for (uintptr_t p = (uintptr_t)out; p < (uintptr_t)out + bytes; p += 0x1000) {
 			union PML * page = mmu_get_page(p, MMU_GET_MAKE);
 			mmu_frame_allocate(page, MMU_FLAG_WRITABLE | MMU_FLAG_KERNEL);
@@ -47,7 +48,7 @@ extern size_t fbterm_initialize(void);
 #define EARLY_LOG_DEVICE 0x3F8
 size_t _early_log_write(size_t size, uint8_t *buffer) {
 	if (!buffer) return 0;
-	fbterm_write(size,buffer);
+	//fbterm_write(size,buffer);
 	for (unsigned int i = 0; i < size; ++i) {
 		outportb(EARLY_LOG_DEVICE, buffer[i]);
 	}
@@ -287,7 +288,22 @@ extern void shm_install(void);
 extern void keyboard_install(void);
 extern void mouse_install(void);
 
+static struct multiboot * mboot_struct = NULL;
+
+const char * arch_get_cmdline(void) {
+	return (char*)((0xFFFFFFFF00000000UL) | mboot_struct->cmdline);
+}
+
+const char * arch_get_loader(void) {
+	if (mboot_struct->flags & MULTIBOOT_FLAG_LOADER) {
+		return (char*)((0xFFFFFFFF00000000UL) | mboot_struct->boot_loader_name);
+	} else {
+		return "(unknown)";
+	}
+}
+
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
+	mboot_struct = mboot;
 	startup_processMultiboot(mboot);
 	mmu_init();
 
@@ -328,9 +344,6 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 	ramdisk_mount(mods[0].mod_start, mods[0].mod_end - mods[0].mod_start);
 
-	vfs_mount_type("tar","/dev/ram0","/");
-	//vfs_mount_type("tmpfs","tmp,777","/tmp");
-	//vfs_mount_type("tmpfs","var,555","/var");
 	packetfs_initialize();
 	portio_initialize();
 	zero_initialize();
@@ -343,33 +356,37 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	vfs_mount("/dev/fblog", &_early_log);
 
-	/* XXX Set actual process file descriptors (this is temporary; init should do this) */
-	#if 0
-	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 1;
-	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
-	current_process->fds->modes[process_append_fd((process_t*)current_process, &_early_log)] = 2;
-	#endif
+	args_parse(arch_get_cmdline());
 
+	if (args_present("root")) {
+		const char * root_type = "tar";
+		if (args_present("root_type")) {
+			root_type = args_value("root_type");
+		}
+		vfs_mount_type(root_type,args_value("root"),"/");
+	}
 
-#if 0
-	/* Let's take an aside here to look at a module */
-	printf("Parsing %s (starts at 0x%08x)\n", mods[1].cmdline, mods[1].mod_start);
-	elf_parseFromMemory((void*)(uintptr_t)mods[1].mod_start);
-#endif
+	const char * boot_arg = NULL;
 
-#if 1
-	/* Load elf from file */
+	if (args_present("args")) {
+		boot_arg = strdup(args_value("args"));
+	}
+
 	const char * boot_app = "/bin/init";
+	if (args_present("init")) {
+		boot_app = args_value("init");
+	}
+
 	const char * argv[] = {
 		boot_app,
+		boot_arg,
 		NULL
 	};
 	int argc = 0;
 	while (argv[argc]) argc++;
 	system(argv[0], argc, argv, NULL);
-#endif
 
-	while (1);
-
-	return 42;
+	printf("Failed to execute %s.\n", boot_app);
+	switch_task(0);
+	return 0;
 }

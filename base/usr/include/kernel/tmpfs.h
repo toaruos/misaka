@@ -17,7 +17,7 @@ struct tmpfs_file {
 	size_t length;
 	size_t block_count;
 	size_t pointers;
-	char ** blocks;
+	uintptr_t * blocks;
 	char * target;
 };
 

@@ -335,8 +335,8 @@ int create_file_fs(char *name, uint16_t permission) {
 	char *cwd = (char *)(current_process->wd_name);
 	char *path = canonicalize_path(cwd, name);
 
-	char * parent_path = malloc(strlen(path) + 4);
-	snprintf(parent_path, strlen(path) + 5, "%s/..", path);
+	char * parent_path = malloc(strlen(path) + 5);
+	snprintf(parent_path, strlen(path) + 4, "%s/..", path);
 
 	char * f_path = path + strlen(path) - 1;
 	while (f_path > path) {
@@ -385,8 +385,8 @@ int unlink_fs(char * name) {
 	char *cwd = (char *)(current_process->wd_name);
 	char *path = canonicalize_path(cwd, name);
 
-	char * parent_path = malloc(strlen(path) + 4);
-	snprintf(parent_path, strlen(path) + 5, "%s/..", path);
+	char * parent_path = malloc(strlen(path) + 5);
+	snprintf(parent_path, strlen(path) + 4, "%s/..", path);
 
 	char * f_path = path + strlen(path) - 1;
 	while (f_path > path) {
@@ -438,8 +438,8 @@ int mkdir_fs(char *name, uint16_t permission) {
 		return -EINVAL;
 	}
 
-	char * parent_path = malloc(strlen(path) + 4);
-	snprintf(parent_path, strlen(path) + 5, "%s/..", path);
+	char * parent_path = malloc(strlen(path) + 5);
+	snprintf(parent_path, strlen(path) + 4, "%s/..", path);
 
 	char * f_path = path + strlen(path) - 1;
 	while (f_path > path) {
@@ -512,8 +512,8 @@ int symlink_fs(char * target, char * name) {
 	char *cwd = (char *)(current_process->wd_name);
 	char *path = canonicalize_path(cwd, name);
 
-	char * parent_path = malloc(strlen(path) + 4);
-	snprintf(parent_path, strlen(path) + 5, "%s/..", path);
+	char * parent_path = malloc(strlen(path) + 5);
+	snprintf(parent_path, strlen(path) + 4, "%s/..", path);
 
 	char * f_path = path + strlen(path) - 1;
 	while (f_path > path) {
