@@ -14,6 +14,7 @@
 #include <kernel/mmu.h>
 #include <kernel/pty.h>
 #include <kernel/spinlock.h>
+#include <kernel/signal.h>
 
 #include <kernel/arch/x86_64/regs.h>
 
@@ -844,15 +845,12 @@ static long sys_pipe(int pipes[2]) {
 }
 
 static long sys_signal(long signum, uintptr_t handler) {
-	return (long)NULL;
-#if 0
 	if (signum > NUMSIGNALS) {
 		return -EINVAL;
 	}
-	uintptr_t old = current_process->signals.functions[signum];
-	current_process->signals.functions[signum] = handler;
-	return (int)old;
-#endif
+	uintptr_t old = current_process->signals[signum];
+	current_process->signals[signum] = handler;
+	return old;
 }
 
 static long sys_fswait(int c, int fds[]) {
@@ -908,9 +906,6 @@ static long sys_fswait_multi(int c, int fds[], int timeout, int out[]) {
 
 	int result = sys_fswait_timeout(c, fds, timeout);
 	if (result != -1) out[result] = 1;
-	if (result == -1) {
-		printf("negative result from fswait3\n");
-	}
 	return result;
 }
 
@@ -950,6 +945,16 @@ static long sys_openpty(int * master, int * slave, char * name, void * _ign0, vo
 
 	/* Return success */
 	return 0;
+}
+
+static long sys_kill(pid_t process, int signal) {
+	if (process < -1) {
+		return group_send_signal(-process, signal, 0);
+	} else if (process == 0) {
+		return group_send_signal(current_process->job, signal, 0);
+	} else {
+		return send_signal(process, signal, 0);
+	}
 }
 
 static long (*syscalls[])() = {
@@ -1005,12 +1010,11 @@ static long (*syscalls[])() = {
 	[SYS_OPENPTY]      = sys_openpty,
 	[SYS_SHM_OBTAIN]   = sys_shm_obtain,
 	[SYS_SHM_RELEASE]  = sys_shm_release,
-
 	[SYS_SIGNAL]       = sys_signal,
+	[SYS_KILL]         = sys_kill,
 
 	[SYS_MKPIPE]       = unimplemented, /* Legacy pipe, unused by userspace. */
 	[SYS_REBOOT]       = unimplemented, /* Toaru32 just did a triple fault... */
-	[SYS_KILL]         = unimplemented, /* needs signals */
 };
 
 static size_t num_syscalls = sizeof(syscalls) / sizeof(*syscalls);

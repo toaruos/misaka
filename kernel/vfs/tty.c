@@ -13,8 +13,10 @@
 #include <kernel/pty.h>
 #include <kernel/hashmap.h>
 #include <kernel/process.h>
+#include <kernel/signal.h>
 #include <sys/ioctl.h>
 #include <sys/termios.h>
+#include <sys/signal_defs.h>
 
 #define TTY_BUFFER_SIZE 4096
 
@@ -126,8 +128,6 @@ void tty_input_process(pty_t * pty, uint8_t c) {
 		}
 		return;
 	}
-	/* FIXME */
-	#if 0
 	if (pty->tios.c_lflag & ISIG) {
 		int sig = -1;
 		if (c == pty->tios.c_cc[VINTR]) {
@@ -151,7 +151,6 @@ void tty_input_process(pty_t * pty, uint8_t c) {
 			return;
 		}
 	}
-	#endif
 #if 0
 	if (pty->tios.c_lflag & IXON ) {
 		/* VSTOP, VSTART */
@@ -286,7 +285,7 @@ int pty_ioctl(pty_t * pty, int request, void * argp) {
 			validate(argp);
 			memcpy(&pty->size, argp, sizeof(struct winsize));
 			if (pty->fg_proc) {
-				// FIXME group_send_signal(pty->fg_proc, SIGWINCH, 1);
+				group_send_signal(pty->fg_proc, SIGWINCH, 1);
 			}
 			return 0;
 		case TIOCGWINSZ:

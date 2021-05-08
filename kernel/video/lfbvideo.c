@@ -6,8 +6,10 @@
 #include <kernel/video.h>
 #include <kernel/process.h>
 #include <kernel/string.h>
+#include <kernel/signal.h>
 #include <kernel/tokenize.h>
 #include <kernel/multiboot.h>
+#include <kernel/procfs.h>
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/mmu.h>
 
@@ -36,15 +38,12 @@ static void (*lfb_resolution_impl)(uint16_t,uint16_t) = NULL;
 
 /* Called by ioctl on /dev/fb0 */
 void lfb_set_resolution(uint16_t x, uint16_t y) {
-#if 0
 	if (lfb_resolution_impl) {
 		lfb_resolution_impl(x,y);
 		if (display_change_recipient) {
 			send_signal(display_change_recipient, SIGWINEVENT, 1);
-			debug_print(WARNING, "Telling %d to SIGWINEVENT", display_change_recipient);
 		}
 	}
-#endif
 }
 
 extern void ptr_validate(void * ptr, const char * syscall);
@@ -133,12 +132,11 @@ static fs_node_t * lfb_video_device_create(void /* TODO */) {
 	return fnode;
 }
 
-#if 0
-static uint32_t framebuffer_func(fs_node_t * node, uint64_t offset, uint32_t size, uint8_t * buffer) {
+static uint64_t framebuffer_func(fs_node_t * node, uint64_t offset, uint64_t size, uint8_t * buffer) {
 	char * buf = malloc(4096);
 
 	if (lfb_driver_name) {
-		sprintf(buf,
+		snprintf(buf, 4095,
 			"Driver:\t%s\n"
 			"XRes:\t%d\n"
 			"YRes:\t%d\n"
@@ -152,7 +150,7 @@ static uint32_t framebuffer_func(fs_node_t * node, uint64_t offset, uint32_t siz
 			lfb_resolution_s,
 			lfb_vid_memory);
 	} else {
-		sprintf(buf, "Driver:\tnone\n");
+		snprintf(buf, 20, "Driver:\tnone\n");
 	}
 
 	size_t _bsize = strlen(buf);
@@ -172,7 +170,6 @@ static struct procfs_entry framebuffer_entry = {
 	"framebuffer",
 	framebuffer_func,
 };
-#endif
 
 /* Install framebuffer device */
 static void finalize_graphics(const char * driver) {
@@ -180,13 +177,9 @@ static void finalize_graphics(const char * driver) {
 	lfb_device->length  = lfb_resolution_s * lfb_resolution_y; /* Size is framebuffer size in bytes */
 #if 0
 	debug_video_crash = lfb_video_panic;
-
-	int (*procfs_install)(struct procfs_entry *) = (int (*)(struct procfs_entry *))(uintptr_t)hashmap_get(modules_get_symbols(),"procfs_install");
-
-	if (procfs_install) {
-		procfs_install(&framebuffer_entry);
-	}
 #endif
+
+	procfs_install(&framebuffer_entry);
 }
 
 /* Bochs support {{{ */

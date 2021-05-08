@@ -1,14 +1,23 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file kernel/vfs/unixpipe.c
+ * @brief Implementation of Unix pipes.
+ *
+ * Provides for unidirectional communication between processes.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2014-2018 K. Lange
+ * Copyright (C) 2014-2021 K. Lange
  */
 #include <kernel/types.h>
 #include <kernel/printf.h>
 #include <kernel/pipe.h>
 #include <kernel/string.h>
 #include <kernel/ringbuffer.h>
+#include <kernel/process.h>
+#include <kernel/signal.h>
 
+#include <sys/signal_defs.h>
 #include <sys/ioctl.h>
 
 #define UNIX_PIPE_BUFFER 512
@@ -52,8 +61,7 @@ static uint64_t write_unixpipe(fs_node_t * node, uint64_t offset, uint64_t size,
 	while (written < size) {
 		if (self->read_closed) {
 			/* SIGPIPE to current process */
-			// FIXME send_signal(getpid(), SIGPIPE, 1);
-			printf("read end closed, must send SIGPIPE\n");
+			send_signal(current_process->id, SIGPIPE, 1);
 
 			return written;
 		}

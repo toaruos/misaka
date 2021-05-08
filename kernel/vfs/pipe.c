@@ -1,10 +1,19 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file kernel/vfs/pipe.c
+ * @brief Legacy buffered pipe, used for char devices.
+ *
+ * This is the legacy pipe implementation. If you are looking for
+ * the userspace pipes, @ref read_unixpipe.
+ *
+ * This implements a simple one-direction buffer suitable for use
+ * by, eg., device drivers that want to offer a character-driven
+ * interface to userspace without having to worry too much about
+ * timing or getting blocked.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2012-2018 K. Lange
- *
- * Buffered Pipe
- *
+ * Copyright (C) 2012-2021 K. Lange
  */
 
 #include <errno.h>
@@ -16,6 +25,9 @@
 #include <kernel/process.h>
 #include <kernel/string.h>
 #include <kernel/spinlock.h>
+#include <kernel/signal.h>
+
+#include <sys/signal_defs.h>
 
 extern uint64_t now(void);
 
@@ -88,7 +100,7 @@ uint64_t read_pipe(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buf
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
 
 	if (pipe->dead) {
-		// FIXME send_signal(getpid(), SIGPIPE, 1);
+		send_signal(current_process->id, SIGPIPE, 1);
 		return 0;
 	}
 
@@ -116,7 +128,7 @@ uint64_t write_pipe(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *bu
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
 
 	if (pipe->dead) {
-		// FIXME send_signal(getpid(), SIGPIPE, 1);
+		send_signal(current_process->id, SIGPIPE, 1);
 		return 0;
 	}
 

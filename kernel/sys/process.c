@@ -60,6 +60,7 @@ struct arch_thread_state {
 
 extern void arch_set_kernel_stack(uintptr_t stack);
 
+/* TODO: this should be part of arch_(restore/save)_context... */
 static uint8_t saves[512] __attribute__((aligned(16)));
 void restore_fpu(process_t * proc) {
 	memcpy(&saves,(uint8_t *)&proc->thread.fp_regs,512);

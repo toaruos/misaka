@@ -5,6 +5,7 @@
 #include <kernel/pipe.h>
 #include <kernel/version.h>
 #include <kernel/process.h>
+#include <kernel/signal.h>
 
 #include <sys/time.h>
 #include <sys/utsname.h>
@@ -258,8 +259,12 @@ struct regs * isr_handler(struct regs * r) {
 			uintptr_t faulting_address;
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
 			if (faulting_address == 0xFFFFB00F) {
-				printf("Thread exit.\n");
+				/* Thread exit */
 				task_exit(0);
+				break;
+			}
+			if (faulting_address == 0x8DEADBEEF) {
+				return_from_signal_handler();
 				break;
 			}
 			printf("Page fault in %p\n", current_process); //pid=%d (%s)\n", (int)current_process->id, current_process->name);
