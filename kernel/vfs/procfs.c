@@ -350,8 +350,9 @@ static uint64_t meminfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 static uint64_t pat_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
 
-	uint64_t pat_values;
-	asm volatile ( "rdmsr" : "=A" (pat_values) : "c" (0x277) );
+	uint32_t pat_value_low, pat_value_high;
+	asm volatile ( "rdmsr" : "=a" (pat_value_low), "=d" (pat_value_high): "c" (0x277) );
+	uint64_t pat_values = ((uint64_t)pat_value_high << 32) | (pat_value_low);
 
 	const char * pat_names[] = {
 		"uncacheable (UC)",
@@ -661,7 +662,7 @@ static void scan_hit_list(uint32_t device, uint16_t vendorid, uint16_t deviceid,
 
 	struct _pci_buf * b = extra;
 
-	b->offset += snprintf(b->buffer + b->offset, 100, "%2x:%2x.%d (%4x, %4x:%4x)\n",
+	b->offset += snprintf(b->buffer + b->offset, 100, "%02x:%02x.%d (%04x, %04x:%04x)\n",
 			(int)pci_extract_bus(device),
 			(int)pci_extract_slot(device),
 			(int)pci_extract_func(device),
@@ -669,17 +670,17 @@ static void scan_hit_list(uint32_t device, uint16_t vendorid, uint16_t deviceid,
 			vendorid,
 			deviceid);
 
-	b->offset += snprintf(b->buffer + b->offset, 100, " BAR0: 0x%8x", pci_read_field(device, PCI_BAR0, 4));
-	b->offset += snprintf(b->buffer + b->offset, 100, " BAR1: 0x%8x", pci_read_field(device, PCI_BAR1, 4));
-	b->offset += snprintf(b->buffer + b->offset, 100, " BAR2: 0x%8x", pci_read_field(device, PCI_BAR2, 4));
-	b->offset += snprintf(b->buffer + b->offset, 100, " BAR3: 0x%8x", pci_read_field(device, PCI_BAR3, 4));
-	b->offset += snprintf(b->buffer + b->offset, 100, " BAR4: 0x%8x", pci_read_field(device, PCI_BAR4, 4));
-	b->offset += snprintf(b->buffer + b->offset, 100, " BAR5: 0x%8x\n", pci_read_field(device, PCI_BAR5, 4));
+	b->offset += snprintf(b->buffer + b->offset, 100, " BAR0: 0x%08x", pci_read_field(device, PCI_BAR0, 4));
+	b->offset += snprintf(b->buffer + b->offset, 100, " BAR1: 0x%08x", pci_read_field(device, PCI_BAR1, 4));
+	b->offset += snprintf(b->buffer + b->offset, 100, " BAR2: 0x%08x", pci_read_field(device, PCI_BAR2, 4));
+	b->offset += snprintf(b->buffer + b->offset, 100, " BAR3: 0x%08x", pci_read_field(device, PCI_BAR3, 4));
+	b->offset += snprintf(b->buffer + b->offset, 100, " BAR4: 0x%08x", pci_read_field(device, PCI_BAR4, 4));
+	b->offset += snprintf(b->buffer + b->offset, 100, " BAR5: 0x%08x\n", pci_read_field(device, PCI_BAR5, 4));
 
 	b->offset += snprintf(b->buffer + b->offset, 100, " IRQ Line: %d", pci_read_field(device, 0x3C, 1));
 	b->offset += snprintf(b->buffer + b->offset, 100, " IRQ Pin: %d", pci_read_field(device, 0x3D, 1));
 	b->offset += snprintf(b->buffer + b->offset, 100, " Interrupt: %d", pci_get_interrupt(device));
-	b->offset += snprintf(b->buffer + b->offset, 100, " Status: 0x%4x\n", pci_read_field(device, PCI_STATUS, 2));
+	b->offset += snprintf(b->buffer + b->offset, 100, " Status: 0x%04x\n", pci_read_field(device, PCI_STATUS, 2));
 }
 
 static void scan_count(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
