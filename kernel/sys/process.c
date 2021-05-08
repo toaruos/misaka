@@ -82,7 +82,7 @@ void switch_next(void) {
 		switch_next();
 		__builtin_unreachable();
 	}
-	mmu_set_directory(current_process->thread.directory);
+	mmu_set_directory(current_process->thread.page_directory->directory);
 
 	//printf("setting kernel stack to %p\n", current_process->image.stack);
 	arch_set_kernel_stack(current_process->image.stack);
@@ -230,6 +230,13 @@ static void _kidle(void) {
 	}
 }
 
+void process_release_directory(page_directory_t * dir) {
+	dir->refcount--;
+	if (dir->refcount < 1) {
+		mmu_free(dir->directory);
+		free(dir);
+	}
+}
 
 process_t * spawn_kidle(void) {
 	process_t * idle = calloc(1,sizeof(process_t));
@@ -244,7 +251,9 @@ process_t * spawn_kidle(void) {
 	idle->shm_mappings = list_create();
 	idle->signal_queue = list_create();
 	gettimeofday(&idle->start, NULL);
-	idle->thread.directory = current_pml;
+	idle->thread.page_directory = malloc(sizeof(page_directory_t));
+	idle->thread.page_directory->refcount = 1;
+	idle->thread.page_directory->directory = mmu_clone(current_pml);
 	return idle;
 }
 
@@ -300,7 +309,9 @@ process_t * spawn_init(void) {
 
 	init->timed_sleep_node = NULL;
 
-	init->thread.directory = current_pml;
+	init->thread.page_directory = malloc(sizeof(page_directory_t));
+	init->thread.page_directory->refcount = 1;
+	init->thread.page_directory->directory = current_pml;
 	init->description = strdup("[init]");
 	list_insert(process_list, (void*)init);
 
@@ -401,7 +412,7 @@ void process_delete(process_t * proc) {
 	}
 	// FIXME bitset_clear(&pid_set, proc->id);
 	proc->tree_entry = NULL;
-	//free(proc);
+	free(proc);
 }
 
 void make_process_ready(volatile process_t * proc) {
@@ -617,7 +628,7 @@ static int wait_candidate(volatile process_t * parent, int pid, int options, vol
 
 void reap_process(process_t * proc) {
 	//printf("reaping %p\n", proc);
-	//free(proc->name);
+	free(proc->name);
 	process_delete(proc);
 }
 
@@ -800,13 +811,29 @@ process_t * process_get_parent(process_t * process) {
 	return result;
 }
 
+extern void shm_release_all (process_t * proc);
 void task_exit(int retval) {
-	//cleanup_process((process_t *)current_process, retval);
 	current_process->status = retval;
 	current_process->flags |= PROC_FLAG_FINISHED;
-	/* TODO free queues */
-	/* TODO free shm */
-	/* TODO release directory */
+	list_free(current_process->wait_queue);
+	free(current_process->wait_queue);
+	list_free(current_process->signal_queue);
+	free(current_process->signal_queue);
+	free(current_process->wd_name);
+	if (current_process->node_waits) {
+		list_free(current_process->node_waits);
+		free(current_process->node_waits);
+		current_process->node_waits = NULL;
+	}
+	shm_release_all(current_process);
+	free(current_process->shm_mappings);
+
+	if (current_process->signal_kstack) {
+		free(current_process->signal_kstack);
+	}
+
+	process_release_directory(current_process->thread.page_directory);
+
 	if (current_process->fds) {
 		current_process->fds->refs--;
 		if (current_process->fds->refs == 0) {
@@ -840,9 +867,11 @@ pid_t fork(void) {
 	arch_enter_critical();
 	uintptr_t sp, bp;
 	process_t * parent = (process_t*)current_process;
-	union PML * directory = mmu_clone(parent->thread.directory);
+	union PML * directory = mmu_clone(parent->thread.page_directory->directory);
 	process_t * new_proc = spawn_process(parent, 0);
-	new_proc->thread.directory = directory;
+	new_proc->thread.page_directory = malloc(sizeof(page_directory_t));
+	new_proc->thread.page_directory->refcount = 1;
+	new_proc->thread.page_directory->directory = directory;
 
 	struct regs r;
 	memcpy(&r, parent->syscall_registers, sizeof(struct regs));
@@ -868,8 +897,8 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	uintptr_t sp, bp;
 	process_t * parent = (process_t *)current_process;
 	process_t * new_proc = spawn_process(current_process, 1);
-	new_proc->thread.directory = current_process->thread.directory;
-	/* FIXME: Uh, refcounts? */
+	new_proc->thread.page_directory = current_process->thread.page_directory;
+	new_proc->thread.page_directory->refcount++;
 
 	struct regs r;
 	memcpy(&r, current_process->syscall_registers, sizeof(struct regs));

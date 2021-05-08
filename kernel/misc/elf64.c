@@ -121,10 +121,12 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	uintptr_t execBase = -1;
 	uintptr_t heapBase = 0;
 
-	union PML * old_directory = current_process->thread.directory;
 	mmu_set_directory(NULL);
-	current_process->thread.directory = mmu_clone(NULL);
-	mmu_set_directory(current_process->thread.directory);
+	process_release_directory(current_process->thread.page_directory);
+	current_process->thread.page_directory = malloc(sizeof(page_directory_t));
+	current_process->thread.page_directory->refcount = 1;
+	current_process->thread.page_directory->directory = mmu_clone(NULL);
+	mmu_set_directory(current_process->thread.page_directory->directory);
 
 	for (int i = 0; i < header.e_phnum; ++i) {
 		Elf64_Phdr phdr;

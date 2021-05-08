@@ -105,8 +105,10 @@ int system(const char * path, int argc, char *const argv[], char *const envin[])
 	}
 	argv_[argc] = NULL;
 	char * env[] = {NULL};
-	current_process->thread.directory = mmu_clone(NULL); /* base PML? for exec? */
-	mmu_set_directory(current_process->thread.directory);
+	current_process->thread.page_directory = malloc(sizeof(page_directory_t));
+	current_process->thread.page_directory->directory = mmu_clone(NULL); /* base PML? for exec? */
+	current_process->thread.page_directory->refcount = 1;
+	mmu_set_directory(current_process->thread.page_directory->directory);
 	current_process->cmdline = (char**)argv_;
 	exec(path,argc,argv_,envin ? envin : env,0);
 	return -EINVAL;

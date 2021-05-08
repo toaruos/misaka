@@ -271,8 +271,6 @@ void * shm_obtain (char * path, size_t * size) {
 }
 
 int shm_release (char * path) {
-	return 0; /* TODO, remove this early return */
-
 	spin_lock(bsl);
 	process_t * proc = (process_t *)current_process;
 
@@ -307,7 +305,7 @@ int shm_release (char * path) {
 	/* Clear the mappings from the process's address space */
 	for (uint32_t i = 0; i < mapping->num_vaddrs; i++) {
 		union PML * page = mmu_get_page(mapping->vaddrs[i], 0);
-		memset(page, 0, 0x1000);
+		page->bits.present = 0;
 	}
 
 	/* Clean up */

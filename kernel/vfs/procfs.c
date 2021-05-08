@@ -117,8 +117,8 @@ static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size
 	}
 
 	/* Calculate process memory usage */
-	long mem_usage = mmu_count_user(proc->thread.directory) * 4;
-	long shm_usage = mmu_count_shm(proc->thread.directory) * 4;
+	long mem_usage = mmu_count_user(proc->thread.page_directory->directory) * 4;
+	long shm_usage = mmu_count_shm(proc->thread.page_directory->directory) * 4;
 	long mem_permille = 1000 * (mem_usage + shm_usage) / mmu_total_memory();
 
 	snprintf(buf, 1000,

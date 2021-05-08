@@ -413,6 +413,8 @@ void mmu_free(union PML * from) {
 						if (pd_in[k].bits.present) {
 							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
 							for (size_t l = 0; l < 512; ++l) {
+								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
+								if (address >= 0x200000000 && address <= 0x400000000) continue;
 								if (pt_in[l].bits.present) {
 									if (pt_in[l].bits.user) {
 										mmu_frame_clear(pt_in[l].bits.page << 12);

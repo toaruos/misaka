@@ -14,6 +14,11 @@
 #define KERNEL_STACK_SIZE 0x9000
 #define USER_ROOT_UID 0
 
+typedef struct {
+	intptr_t refcount;
+	union PML * directory;
+} page_directory_t;
+
 typedef struct thread {
 	uintptr_t sp;        /* 0 */
 	uintptr_t bp;        /* 8 */
@@ -29,7 +34,7 @@ typedef struct thread {
 		 */
 	uint8_t fp_regs[512];
 	uint64_t  flags;
-	union PML * directory;
+	page_directory_t * page_directory;
 } thread_t;
 
 typedef struct image {
@@ -135,6 +140,7 @@ extern void wakeup_sleepers(unsigned long seconds, unsigned long subseconds);
 extern void task_exit(int retval);
 extern __attribute__((noreturn)) void switch_next(void);
 extern int process_awaken_from_fswait(process_t * process, int index);
+extern void process_release_directory(page_directory_t * dir);
 
 extern tree_t * process_tree;  /* Parent->Children tree */
 extern list_t * process_list;  /* Flat storage */
