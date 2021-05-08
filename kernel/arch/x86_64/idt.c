@@ -267,21 +267,19 @@ struct regs * isr_handler(struct regs * r) {
 				return_from_signal_handler();
 				break;
 			}
+			send_signal(current_process->id, SIGSEGV, 1);
+			#if 0
 			printf("Page fault in %p\n", current_process); //pid=%d (%s)\n", (int)current_process->id, current_process->name);
 			printf("cr2: 0x%016lx\n", faulting_address);
 			dump_regs(r);
 			printf("Stack is at ~%p\n", r);
 			arch_enter_critical();
 			while (1) { asm volatile ("hlt"); }
-			//task_exit(1);
+			#endif
 			break;
 		}
 		case 13: /* GPF */ {
-			printf("General Protection Fault in pid=%d (%s)\n", (int)current_process->id, current_process->name);
-			dump_regs(r);
-			arch_enter_critical();
-			while (1) { asm volatile ("hlt"); }
-			//task_exit(1);
+			send_signal(current_process->id, SIGSEGV, 1);
 			break;
 		}
 		case 8: /* Double fault */ {
@@ -293,9 +291,7 @@ struct regs * isr_handler(struct regs * r) {
 			break;
 		}
 		case 6: /* Invalid opcode */ {
-			printf("Invalid opcode\n");
-			dump_regs(r);
-			while (1) {};
+			send_signal(current_process->id, SIGILL, 1);
 			break;
 		}
 		case 127: /* syscall */ {
@@ -322,14 +318,14 @@ struct regs * isr_handler(struct regs * r) {
 			break;
 		}
 		default: {
-			printf("In pid=%d (%s):\n", current_process->id, current_process->name);
 			if (r->int_no < 32) {
-				printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
+				//printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
+				send_signal(current_process->id, SIGILL, 1);
 			} else {
 				printf("Unhandled interrupt: %d\n", r->int_no - 32);
 				irq_ack(r->int_no - 32);
+				dump_regs(r);
 			}
-			dump_regs(r);
 		}
 	}
 
