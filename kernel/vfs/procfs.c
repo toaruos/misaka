@@ -87,54 +87,10 @@ static uint64_t proc_cmdline_func(fs_node_t *node, uint64_t offset, uint64_t siz
 	return size;
 }
 
-#if 0
-static size_t calculate_memory_usage(page_directory_t * src) {
-	size_t pages = 0;
-	for (uintptr_t i = 0; i < 1024; ++i) {
-		if (!src->tables[i] || (uintptr_t)src->tables[i] == (uintptr_t)0xFFFFFFFF) {
-			continue;
-		}
-		if (kernel_directory->tables[i] == src->tables[i]) {
-			continue;
-		}
-		/* For each table */
-		if (i * 0x1000 * 1024 < SHM_START) {
-			/* Ignore shared memory for now */
-			for (int j = 0; j < 1024; ++j) {
-				/* For each frame in the table... */
-				if (!src->tables[i]->pages[j].frame) {
-					continue;
-				}
-				pages++;
-			}
-		}
-	}
-	return pages;
-}
-
-static size_t calculate_shm_resident(page_directory_t * src) {
-	size_t pages = 0;
-	for (uintptr_t i = 0; i < 1024; ++i) {
-		if (!src->tables[i] || (uintptr_t)src->tables[i] == (uintptr_t)0xFFFFFFFF) {
-			continue;
-		}
-		if (kernel_directory->tables[i] == src->tables[i]) {
-			continue;
-		}
-		if (i * 0x1000 * 1024 < SHM_START) {
-			continue;
-		}
-		for (int j = 0; j < 1024; ++j) {
-			/* For each frame in the table... */
-			if (!src->tables[i]->pages[j].frame) {
-				continue;
-			}
-			pages++;
-		}
-	}
-	return pages;
-}
-#endif
+extern size_t mmu_count_user(union PML * from);
+extern size_t mmu_count_shm(union PML * from);
+extern size_t mmu_total_memory(void);
+extern size_t mmu_used_memory(void);
 
 static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[2048];
@@ -161,9 +117,9 @@ static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size
 	}
 
 	/* Calculate process memory usage */
-	int mem_usage = 0; //calculate_memory_usage(proc->thread.page_directory) * 4;
-	int shm_usage = 0; //calculate_shm_resident(proc->thread.page_directory) * 4;
-	int mem_permille = 0; //1000 * (mem_usage + shm_usage) / memory_total();
+	long mem_usage = mmu_count_user(proc->thread.directory) * 4;
+	long shm_usage = mmu_count_shm(proc->thread.directory) * 4;
+	long mem_permille = 1000 * (mem_usage + shm_usage) / mmu_total_memory();
 
 	snprintf(buf, 1000,
 			"Name:\t%s\n" /* name */
@@ -183,9 +139,9 @@ static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size
 			"SC4:\t0x%x\n"
 			"UserStack:\t0x%x\n"
 			"Path:\t%s\n"
-			"VmSize:\t %d kB\n"
-			"RssShmem:\t %d kB\n"
-			"MemPermille:\t %d\n"
+			"VmSize:\t %ld kB\n"
+			"RssShmem:\t %ld kB\n"
+			"MemPermille:\t %ld\n"
 			,
 			name,
 			state,
@@ -324,19 +280,18 @@ static uint64_t cpuinfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 	return size;
 }
 
-extern uintptr_t heap_end;
-extern uintptr_t kernel_heap_alloc_point;
+extern void * sbrk(size_t);
 
 static uint64_t meminfo_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
-	unsigned int total = 0; //memory_total();
-	unsigned int free  = 0; //total - memory_use();
-	unsigned int kheap = 0; //(heap_end - kernel_heap_alloc_point) / 1024;
+	size_t total = mmu_total_memory();
+	size_t free  = total - mmu_used_memory();
+	size_t kheap = ((uintptr_t)sbrk(0) - 0xffffff0000000000UL) / 1024;
 
 	snprintf(buf, 1000,
-		"MemTotal: %d kB\n"
-		"MemFree: %d kB\n"
-		"KHeapUse: %d kB\n"
+		"MemTotal: %zu kB\n"
+		"MemFree: %zu kB\n"
+		"KHeapUse: %zu kB\n"
 		, total, free, kheap);
 
 	size_t _bsize = strlen(buf);

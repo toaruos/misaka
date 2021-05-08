@@ -313,6 +313,90 @@ uintptr_t mmu_allocate_a_frame(void) {
 	return index;
 }
 
+/**
+ * TODO:
+ * Both of these can check _just_ the right ranges...
+ */
+size_t mmu_count_user(union PML * from) {
+	size_t out = 0;
+
+	for (size_t i = 0; i < 256; ++i) {
+		if (from[i].bits.present) {
+			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			for (size_t j = 0; j < 512; ++j) {
+				if (pdp_in[j].bits.present) {
+					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					for (size_t k = 0; k < 512; ++k) {
+						if (pd_in[k].bits.present) {
+							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							for (size_t l = 0; l < 512; ++l) {
+								/* Calculate final address to skip SHM */
+								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
+								if (address >= 0x200000000 && address <= 0x400000000) continue;
+								if (pt_in[l].bits.present) {
+									if (pt_in[l].bits.user) {
+										out++;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return out;
+}
+
+size_t mmu_count_shm(union PML * from) {
+	size_t out = 0;
+
+	for (size_t i = 0; i < 256; ++i) {
+		if (from[i].bits.present) {
+			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			for (size_t j = 0; j < 512; ++j) {
+				if (pdp_in[j].bits.present) {
+					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					for (size_t k = 0; k < 512; ++k) {
+						if (pd_in[k].bits.present) {
+							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							for (size_t l = 0; l < 512; ++l) {
+								/* Calculate final address to skip SHM */
+								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
+								if (address < 0x200000000 || address > 0x400000000) continue;
+								if (pt_in[l].bits.present) {
+									if (pt_in[l].bits.user) {
+										out++;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return out;
+}
+
+size_t mmu_total_memory(void) {
+	return nframes * 4;
+}
+
+size_t mmu_used_memory(void) {
+	size_t ret = 0;
+	size_t i, j;
+	for (i = 0; i < INDEX_FROM_BIT(nframes); ++i) {
+		for (j = 0; j < 32; ++j) {
+			uint32_t testFrame = (uint32_t)0x1 << j;
+			if (frames[i] & testFrame) {
+				ret++;
+			}
+		}
+	}
+	return ret * 4;
+}
+
 void mmu_free(union PML * from) {
 	if (!from) {
 		printf("can't clear NULL directory\n");

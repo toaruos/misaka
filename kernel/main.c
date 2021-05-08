@@ -28,6 +28,8 @@ void * sbrk(size_t bytes) {
 		return NULL;
 	}
 
+	if (!bytes) return heapStart;
+
 	void * out = heapStart;
 	if ((uintptr_t)heapStart >= 0x800000000) {
 		for (uintptr_t p = (uintptr_t)out; p < (uintptr_t)out + bytes; p += 0x1000) {
@@ -40,6 +42,8 @@ void * sbrk(size_t bytes) {
 	heapStart += bytes;
 	return out;
 }
+
+
 
 extern size_t fbterm_width, fbterm_height;
 extern size_t fbterm_write(size_t,uint8_t*);
