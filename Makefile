@@ -93,13 +93,13 @@ KRK_SRC = $(sort $(wildcard kuroko/src/*.c))
 $(BASE)/bin/kuroko: $(KRK_SRC) $(CRTS) | $(LC)
 	$(CC) -O2 -g -o $@ -Wl,--export-dynamic -Ikuroko/src $(KRK_SRC) kuroko/src/vendor/rline.c
 
-$(BASE)/lib/kuroko/%.so: kuroko/src/modules/module_%.c | dirs
+$(BASE)/lib/kuroko/%.so: kuroko/src/modules/module_%.c| dirs $(LC)
 	$(CC) -O2 -shared -fPIC -Ikuroko/src -o $@ $<
 
 $(BASE)/lib/libkuroko.so: $(KRK_SRC) | $(LC)
 	$(CC) -O2 -shared -fPIC -Ikuroko/src -DKRK_DISABLE_THREADS -o $@ $(filter-out kuroko/src/kuroko.c,$(KRK_SRC))
 
-$(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs
+$(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs $(LC)
 	$(CC) -g -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<
 
 run: system
@@ -132,7 +132,7 @@ clean:
 	-rm -f kernel/symbols.o
 	-rm -f misaka-kernel
 	-rm -f misaka-kernel.64
-	-rm -f $(APPS_Y) $(LIBS_Y)
+	-rm -f $(APPS_Y) $(LIBS_Y) $(KRK_MODS_Y) $(KRK_MODS_X) $(KRK_MODS)
 	-rm -f $(APPS_X) $(LIBS_X) $(BASE)/bin/demo ramdisk.tar $(APPS_KRK_X) $(APPS_SH_X)
 	-rm -f $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 	-rm -f $(BASE)/lib/libc.so $(BASE)/lib/libc.a
