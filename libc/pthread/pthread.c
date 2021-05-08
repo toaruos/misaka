@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <errno.h>
+#include <string.h>
 
 #include <sys/wait.h>
 #include <sys/sysfunc.h>
@@ -35,7 +36,8 @@ void * __tls_get_addr(void* input) {
 }
 
 void __make_tls(void) {
-	char * tlsSpace = calloc(1,4096);
+	char * tlsSpace = valloc(4096);
+	memset(tlsSpace, 0x0, 4096);
 	char ** tlsSelf  = (char **)(tlsSpace + 4096 - sizeof(char *));
 	*tlsSelf = (char*)tlsSelf;
 	sysfunc(TOARU_SYS_FUNC_SETGSBASE, (char*[]){(char*)tlsSelf});

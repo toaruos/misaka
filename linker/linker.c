@@ -76,7 +76,7 @@ static hashmap_t * dumb_symbol_table;
 static hashmap_t * glob_dat;
 static hashmap_t * objects_map;
 static hashmap_t * tls_map;
-//static size_t current_tls_offset = 0;
+static size_t current_tls_offset = 0;
 
 /* Used for dlerror */
 static char * last_error = NULL;
@@ -391,6 +391,7 @@ static int need_symbol_for_type(unsigned char type) {
 		case 6:
 		case 7:
 		case 14:
+		case R_X86_64_TPOFF64:
 			return 1;
 		default:
 			return 0;
@@ -471,6 +472,20 @@ static int object_relocate(elf_t * object) {
 						break;
 					case R_X86_64_COPY: /* 5 */
 						memcpy((void *)(table->r_offset + object->base), (void *)x, sym->st_size);
+						break;
+					case R_X86_64_TPOFF64:
+						x = *((ssize_t *)(table->r_offset + object->base));
+						if (!hashmap_has(tls_map, symname)) {
+							if (!sym->st_size) {
+								fprintf(stderr, "Haven't placed %s in static TLS yet but don't know its size?\n", symname);
+							}
+							current_tls_offset += sym->st_size; /* TODO alignment restrictions */
+							hashmap_set(tls_map, symname, (void*)(current_tls_offset));
+							x -= current_tls_offset;
+						} else {
+							x -= (size_t)hashmap_get(tls_map, symname);
+						}
+						memcpy((void *)(table->r_offset + object->base), &x, sizeof(uintptr_t));
 						break;
 #if 0
 					case 6: /* GLOB_DAT */

@@ -141,7 +141,10 @@ arch_save_context:
     movq %rbp, 8(%rdi)
     movq (%rsp), %rax
     movq %rax, 16(%rdi)
-    /* TODO tls_base (fsbase msr) */
+    movq $0xc0000100, %rcx
+    rdmsr
+    movl %eax, 24(%rdi)
+    movl %edx, 28(%rdi)
     movq %rbx, 32(%rdi)
     movq %r12, 40(%rdi)
     movq %r13, 48(%rdi)
@@ -155,7 +158,10 @@ arch_save_context:
 arch_restore_context:
     movq 0(%rdi), %rsp
     movq 8(%rdi), %rbp
-    /* TODO tls_base (fsbase msr) */
+    movl 24(%rdi), %eax
+    movl 28(%rdi), %edx
+    movq $0xc0000100, %rcx
+    wrmsr
     movq 32(%rdi), %rbx
     movq 40(%rdi), %r12
     movq 48(%rdi), %r13
