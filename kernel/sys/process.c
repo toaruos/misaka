@@ -7,8 +7,10 @@
 #include <kernel/tree.h>
 #include <kernel/list.h>
 #include <kernel/mmu.h>
+#include <kernel/signal.h>
 #include <kernel/arch/x86_64/regs.h>
 #include <sys/wait.h>
+#include <sys/signal_defs.h>
 
 extern void arch_enter_critical(void);
 extern void arch_exit_critical(void);
@@ -41,7 +43,7 @@ tree_t * process_tree;  /* Parent->Children tree */
 list_t * process_list;  /* Flat storage */
 list_t * process_queue; /* Ready queue */
 list_t * sleep_queue;
-volatile process_t * volatile current_process = &_fake_process;
+volatile process_t * current_process = &_fake_process;
 static process_t * kernel_idle_task = NULL;
 static spin_lock_t tree_lock = { 0 };
 static spin_lock_t process_queue_lock = { 0 };
@@ -69,58 +71,38 @@ void save_fpu(process_t * proc) {
 	memcpy((uint8_t *)&proc->thread.fp_regs,&saves,512);
 }
 
-__attribute__((noreturn))
+extern __attribute__((noreturn)) void arch_restore_context(volatile thread_t * buf);
+extern __attribute__((returns_twice)) int arch_save_context(volatile thread_t * buf);
+
 void switch_next(void) {
-	uintptr_t sp, bp, ip;
 	current_process = next_ready_process();
-	ip = current_process->thread.ip;
-	sp = current_process->thread.sp;
-	bp = current_process->thread.bp;
-	//FIXME set tls base
 	restore_fpu((process_t*)current_process);
-
-	if (ip < 0x100000 || ip > 0x100000000) {
-		printf("This process looks bad, skipping it.\n");
-		switch_next();
-		__builtin_unreachable();
-	}
-
 	if (current_process->flags & PROC_FLAG_FINISHED) {
 		switch_next();
 		__builtin_unreachable();
 	}
-
 	mmu_set_directory(current_process->thread.directory);
 
 	//printf("setting kernel stack to %p\n", current_process->image.stack);
 	arch_set_kernel_stack(current_process->image.stack);
 
 	if (current_process->flags & PROC_FLAG_STARTED) {
-		/* TODO signal stacks */
+		if (!current_process->signal_kstack) {
+			if (current_process->signal_queue->length > 0) {
+				current_process->signal_kstack = malloc(KERNEL_STACK_SIZE);
+				current_process->signal_state.sp = current_process->thread.sp;
+				current_process->signal_state.bp = current_process->thread.bp;
+				current_process->signal_state.ip = current_process->thread.ip;
+				memcpy(current_process->signal_kstack, (void*)(current_process->image.stack - KERNEL_STACK_SIZE), KERNEL_STACK_SIZE);
+			}
+		}
 	} else {
 		current_process->flags |= PROC_FLAG_STARTED;
 	}
 	current_process->flags |= PROC_FLAG_RUNNING;
 
-	//printf("Switching to %p in %p (pid=%d)\n", ip, current_process, current_process->id);
-	asm volatile(
-		"movq %0, %%rbx\n"
-		"movq %1, %%rsp\n"
-		"movq %2, %%rbp\n"
-		"movq $0x10000, %%rax\n"
-		"jmpq *%%rbx\n"
-		: : "r"(ip), "r"(sp), "r"(bp)
-		: "rbx","rsp","rax");
+	arch_restore_context(&current_process->thread);
 	__builtin_unreachable();
-}
-
-extern uintptr_t read_ip(void);
-
-void arch_collect_state(struct arch_thread_state *ts) {
-	asm volatile(
-		"movq %%rsp, %0\n"
-		"movq %%rbp, %1\n"
-		: "=r"(ts->sp), "=r"(ts->bp));
 }
 
 __attribute__((noreturn))
@@ -148,29 +130,26 @@ void arch_resume_user(void) {
 	__builtin_unreachable();
 }
 
+
 void switch_task(uint8_t reschedule) {
 	if (!current_process) return;
 	if (!(current_process->flags & PROC_FLAG_RUNNING)) {
 		switch_next();
 	}
 
-	struct arch_thread_state ts;
-	arch_collect_state(&ts);
-	ts.ip = read_ip();
-	if (ts.ip == 0x10000) {
-		/* TODO signals */
-		#if 0
+	if (arch_save_context(&current_process->thread) == 1) {
+		fix_signal_stacks();
 		if (!(current_process->flags & PROC_FLAG_FINISHED)) {
-			node_t * node = list_dequeue(current_process->signal_queue);
+			if (current_process->signal_queue->length > 0) {
+				node_t * node = list_dequeue(current_process->signal_queue);
+				signal_t * sig = node->value;
+				free(node);
+				handle_signal((process_t*)current_process,sig);
+			}
 		}
-		#endif
 		return;
 	}
 
-	current_process->thread.ip = ts.ip;
-	current_process->thread.sp = ts.sp;
-	current_process->thread.bp = ts.bp;
-	//current_process->thread.tls_base = FIXME
 	current_process->flags &= ~(PROC_FLAG_RUNNING);
 	save_fpu((process_t*)current_process);
 
@@ -238,9 +217,6 @@ pid_t get_next_pid(void) {
 	return _next_pid++;
 }
 
-#define PROC_REUSE_FDS 0x0001
-#define KERNEL_STACK_SIZE 0x9000
-
 extern union PML * current_pml;
 
 static void _kidle(void) {
@@ -260,11 +236,6 @@ process_t * spawn_kidle(void) {
 	idle->name = strdup("[kidle]");
 	idle->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
 	idle->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
-
-	union PML * stack_protector = mmu_get_page(idle->image.stack - KERNEL_STACK_SIZE, 0);
-	stack_protector->bits.writable = 0;
-	mmu_invalidate(idle->image.stack - KERNEL_STACK_SIZE);
-
 	idle->thread.ip = (uintptr_t)&_kidle;
 	idle->thread.sp = idle->image.stack;
 	idle->thread.bp = idle->image.stack;
@@ -308,9 +279,6 @@ process_t * spawn_init(void) {
 	init->image.heap_actual = 0;
 	//init->image.stack       = (uintptr_t)&stack_top;
 	init->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
-	union PML * stack_protector = mmu_get_page(init->image.stack - KERNEL_STACK_SIZE, 0);
-	stack_protector->bits.writable = 0;
-	mmu_invalidate(init->image.stack - KERNEL_STACK_SIZE);
 	init->image.user_stack  = 0;
 	init->image.size        = 0;
 	init->image.shm_heap    = 0x200000000; /* That's 8GiB? That should work fine... */
@@ -363,13 +331,7 @@ process_t * spawn_process(volatile process_t * parent, int flags) {
 	proc->image.heap        = parent->image.heap;
 	proc->image.heap_actual = parent->image.heap_actual; /* XXX is this used? */
 	proc->image.size        = parent->image.size; /* XXX same ^^ */
-	proc->image.stack       = (uintptr_t)valloc(KERNEL_STACK_SIZE + 0x1000) + KERNEL_STACK_SIZE;
-	union PML * stack_protector = mmu_get_page(proc->image.stack - KERNEL_STACK_SIZE, 0);
-	stack_protector->bits.writable = 0;
-	mmu_invalidate(proc->image.stack - KERNEL_STACK_SIZE);
-	stack_protector = mmu_get_page(proc->image.stack, 0);
-	stack_protector->bits.writable = 0;
-	mmu_invalidate(proc->image.stack);
+	proc->image.stack       = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
 	proc->image.user_stack  = parent->image.user_stack;
 	proc->image.shm_heap    = 0x200000000;
 
@@ -864,7 +826,7 @@ void task_exit(int retval) {
 
 	process_t * parent = process_get_parent((process_t *)current_process);
 	if (parent && !(parent->flags & PROC_FLAG_FINISHED)) {
-		//send_signal(parent->group, SIGCHLD, 1);
+		send_signal(parent->group, SIGCHLD, 1);
 		wakeup_queue(parent->wait_queue);
 	}
 	switch_next();

@@ -4,17 +4,31 @@
 #include <kernel/types.h>
 #include <kernel/vfs.h>
 #include <kernel/tree.h>
+#include <kernel/list.h>
 #include <kernel/arch/x86_64/pml.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/signal_defs.h>
+
+#define PROC_REUSE_FDS 0x0001
+#define KERNEL_STACK_SIZE 0x9000
+#define USER_ROOT_UID 0
 
 typedef struct thread {
-	uintptr_t sp;
-	uintptr_t bp;
-	uintptr_t ip;
-	uintptr_t tls_base;
-	unsigned int flags;
+	uintptr_t sp;        /* 0 */
+	uintptr_t bp;        /* 8 */
+	uintptr_t ip;        /* 16 */
+	uintptr_t tls_base;  /* 24 */
+	uintptr_t saved[5]; /* XXX Arch dependent */
+		/**
+		 * 32: rbx
+		 * 40: r12
+		 * 48: r13
+		 * 56: r14
+		 * 64: r15
+		 */
 	uint8_t fp_regs[512];
+	uint64_t  flags;
 	union PML * directory;
 } thread_t;
 
@@ -68,6 +82,7 @@ typedef struct process {
 
 	tree_node_t * tree_entry;
 	struct regs * syscall_registers;
+	struct regs * interrupt_registers;
 	list_t * wait_queue;
 	list_t * shm_mappings;
 	list_t * node_waits;
@@ -83,8 +98,10 @@ typedef struct process {
 	int awoken_index;
 
 	thread_t thread;
-	//thread_t signal_state;
+	thread_t signal_state;
 	image_t image;
+
+	uintptr_t signals[NUMSIGNALS+1];
 } process_t;
 
 typedef struct {
@@ -94,7 +111,7 @@ typedef struct {
 	int is_fswait;
 } sleeper_t;
 
-extern volatile process_t * volatile current_process;
+extern volatile process_t * current_process;
 extern unsigned long process_append_fd(process_t * proc, fs_node_t * node);
 extern long process_move_fd(process_t * proc, long src, long dest);
 extern void initialize_process_tree(void);
@@ -115,5 +132,11 @@ extern int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeo
 extern process_t * process_get_parent(process_t * process);
 extern int process_is_ready(process_t * proc);
 extern void wakeup_sleepers(unsigned long seconds, unsigned long subseconds);
+extern void task_exit(int retval);
+extern __attribute__((noreturn)) void switch_next(void);
+extern int process_awaken_from_fswait(process_t * process, int index);
 
-#define USER_ROOT_UID 0
+extern tree_t * process_tree;  /* Parent->Children tree */
+extern list_t * process_list;  /* Flat storage */
+extern list_t * process_queue; /* Ready queue */
+extern list_t * sleep_queue;

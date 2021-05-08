@@ -252,6 +252,7 @@ void keyboard_install(void) {
 extern void task_exit(int);
 
 struct regs * isr_handler(struct regs * r) {
+	current_process->interrupt_registers = r;
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
 			uintptr_t faulting_address;
@@ -261,7 +262,7 @@ struct regs * isr_handler(struct regs * r) {
 				task_exit(0);
 				break;
 			}
-			printf("Page fault in pid=%d (%s)\n", (int)current_process->id, current_process->name);
+			printf("Page fault in %p\n", current_process); //pid=%d (%s)\n", (int)current_process->id, current_process->name);
 			printf("cr2: 0x%016lx\n", faulting_address);
 			dump_regs(r);
 			printf("Stack is at ~%p\n", r);
