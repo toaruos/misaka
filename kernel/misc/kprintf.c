@@ -136,7 +136,6 @@ static size_t print_hex(unsigned long long value, unsigned int width, int (*call
  */
 size_t xvasprintf(int (*callback)(void *, char), void * userData, const char * fmt, va_list args) {
 	const char * s;
-	int precision = -1;
 	size_t written = 0;
 	for (const char *f = fmt; *f; f++) {
 		if (*f != '%') {
@@ -150,6 +149,7 @@ size_t xvasprintf(int (*callback)(void *, char), void * userData, const char * f
 		int big = 0;
 		int alt = 0;
 		int always_sign = 0;
+		int precision = -1;
 		while (1) {
 			if (*f == '-') {
 				align = 0;
