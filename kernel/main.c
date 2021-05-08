@@ -287,6 +287,7 @@ extern void procfs_initialize(void);
 extern void shm_install(void);
 extern void keyboard_install(void);
 extern void mouse_install(void);
+extern void random_initialize(void);
 
 static struct multiboot * mboot_struct = NULL;
 
@@ -348,6 +349,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	portio_initialize();
 	zero_initialize();
 	procfs_initialize();
+	random_initialize();
 
 	tasking_start();
 	pit_initialize();
