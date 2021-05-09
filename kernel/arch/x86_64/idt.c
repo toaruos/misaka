@@ -322,6 +322,10 @@ struct regs * isr_handler(struct regs * r) {
 			serial_handler_ac(r);
 			break;
 		}
+		case 39: {
+			/* Spurious interrupt */
+			break;
+		}
 		case 44: {
 			extern int mouse_handler(struct regs *r);
 			mouse_handler(r);

@@ -279,12 +279,16 @@ static uint64_t cpuinfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 		memcpy(model_name, brand, 48);
 	}
 
+	extern size_t arch_cpu_mhz(void);
+	size_t _mhz = arch_cpu_mhz();
+
 	size_t _bsize = snprintf(buf, 1000,
 		"Manufacturer: %s\n"
+		"MHz: %zd\n"
 		"Family: %d\n"
 		"Model: %d\n"
 		"Model name: %s\n"
-		, _manu, _family, _model, model_name);
+		, _manu, _mhz, _family, _model, model_name);
 
 	if (offset > _bsize) return 0;
 	if (size > _bsize - offset) size = _bsize - offset;
