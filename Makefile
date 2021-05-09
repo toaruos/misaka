@@ -87,7 +87,7 @@ system: misaka-kernel $(MODULES) ramdisk.tar
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
 ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(KRK_MODS_X) $(BASE)/bin/kuroko $(BASE)/lib/ld.so $(APPS_KRK_X) $(KRK_MODS)
-	cd base; tar -cf ../ramdisk.tar *
+	python3 util/createramdisk.py
 
 KRK_SRC = $(sort $(wildcard kuroko/src/*.c))
 $(BASE)/bin/kuroko: $(KRK_SRC) $(CRTS) | $(LC)

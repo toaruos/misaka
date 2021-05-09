@@ -487,8 +487,8 @@ void mmu_init(void) {
 	frames = malloc(INDEX_FROM_BIT(nframes * 8));
 	memset(frames, 0, INDEX_FROM_BIT(nframes * 8));
 
-	/* Mark 32MiB of low memory as unavailable */
-	for (unsigned int i = 0; i < 256; ++i) {
+	/* Mark 64MiB of low memory as unavailable */
+	for (unsigned int i = 0; i < 512; ++i) {
 		frames[i] = (uint32_t)-1;
 	}
 
