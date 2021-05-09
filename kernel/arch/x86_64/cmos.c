@@ -137,7 +137,7 @@ void arch_clock_initialize(void) {
 	boot_time = read_cmos();
 
 	/* FIXME: This is a terrible fallback tsc calculator, it takes at least two seconds */
-#if 0
+#if 1
 	uint32_t a_cmos, b_cmos;
 	while ((a_cmos = read_cmos()) == boot_time);
 	uint64_t a_tsc  = read_tsc();
