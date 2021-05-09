@@ -159,6 +159,7 @@ const char * arch_get_loader(void) {
 }
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
+	arch_clock_initialize();
 	mboot_struct = mboot;
 	startup_initializeLog();
 	startup_processMultiboot(mboot);
@@ -166,7 +167,6 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	startup_initializePat();
 	framebuffer_initialize();
 	startup_processSymbols();
-	arch_clock_initialize();
 
 	//acpi_initialize();
 
