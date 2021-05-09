@@ -266,13 +266,26 @@ static uint64_t cpuinfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 		_family = (a >> 8) & 0x0F;
 	}
 
-	snprintf(buf, 1000,
+	char model_name[48] = "(unknown)";
+
+	/* See if we can get a long manufacturer strings */
+	cpuid(0x80000000, a, unused, unused, unused);
+	if (a >= 0x80000004) {
+		uint32_t brand[12];
+		cpuid(0x80000002, brand[0], brand[1], brand[2], brand[3]);
+		cpuid(0x80000003, brand[4], brand[5], brand[6], brand[7]);
+		cpuid(0x80000004, brand[8], brand[9], brand[10], brand[11]);
+
+		memcpy(model_name, brand, 48);
+	}
+
+	size_t _bsize = snprintf(buf, 1000,
 		"Manufacturer: %s\n"
 		"Family: %d\n"
 		"Model: %d\n"
-		, _manu, _family, _model);
+		"Model name: %s\n"
+		, _manu, _family, _model, model_name);
 
-	size_t _bsize = strlen(buf);
 	if (offset > _bsize) return 0;
 	if (size > _bsize - offset) size = _bsize - offset;
 
