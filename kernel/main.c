@@ -159,9 +159,9 @@ const char * arch_get_loader(void) {
 }
 
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
+	startup_initializeLog();
 	arch_clock_initialize();
 	mboot_struct = mboot;
-	startup_initializeLog();
 	startup_processMultiboot(mboot);
 	mmu_init(memCount);
 	startup_initializePat();
