@@ -7,6 +7,7 @@
 #include <kernel/tree.h>
 #include <kernel/list.h>
 #include <kernel/mmu.h>
+#include <kernel/shm.h>
 #include <kernel/signal.h>
 #include <kernel/arch/x86_64/regs.h>
 #include <sys/wait.h>
@@ -14,37 +15,23 @@
 
 extern void arch_enter_critical(void);
 extern void arch_exit_critical(void);
-
-static fs_node_t * _entries[24] = {
-	(fs_node_t *)1, (fs_node_t *)1, (fs_node_t *)1,
-	NULL,
-};
-
-static uint64_t _offsets[24] = {0};
-static int _modes[24] = {1, 2, 2, 0};
-
-static fd_table_t _fake_fds = {
-	_entries,
-	_offsets,
-	_modes,
-	3,
-	24,
-	1,
-};
-
-static process_t _fake_process = {
-	.user = 0,
-	.real_user = 0,
-	.wd_name = "/",
-	.fds = &_fake_fds,
-};
+extern __attribute__((noreturn)) void arch_resume_user(void);
+extern __attribute__((noreturn)) void arch_restore_context(volatile thread_t * buf);
+extern __attribute__((returns_twice)) int arch_save_context(volatile thread_t * buf);
+extern void arch_set_kernel_stack(uintptr_t stack);
+extern void arch_restore_floating(process_t * proc);
+extern void arch_save_floating(process_t * proc);
+extern void arch_pause(void);
 
 tree_t * process_tree;  /* Parent->Children tree */
 list_t * process_list;  /* Flat storage */
 list_t * process_queue; /* Ready queue */
 list_t * sleep_queue;
-volatile process_t * current_process = &_fake_process;
+
+volatile process_t * current_process = NULL;
+
 static process_t * kernel_idle_task = NULL;
+
 static spin_lock_t tree_lock = { 0 };
 static spin_lock_t process_queue_lock = { 0 };
 static spin_lock_t wait_lock_tmp = { 0 };
@@ -52,32 +39,8 @@ static spin_lock_t sleep_lock = { 0 };
 
 /* Tasking stuff here */
 
-struct arch_thread_state {
-	uintptr_t sp;
-	uintptr_t bp;
-	uintptr_t ip;
-};
-
-extern void arch_set_kernel_stack(uintptr_t stack);
-
-/* TODO: this should be part of arch_(restore/save)_context... */
-static uint8_t saves[512] __attribute__((aligned(16)));
-void restore_fpu(process_t * proc) {
-	memcpy(&saves,(uint8_t *)&proc->thread.fp_regs,512);
-	asm volatile ("fxrstor (%0)" :: "r"(saves));
-}
-
-void save_fpu(process_t * proc) {
-	asm volatile ("fxsave (%0)" :: "r"(saves));
-	memcpy((uint8_t *)&proc->thread.fp_regs,&saves,512);
-}
-
-extern __attribute__((noreturn)) void arch_restore_context(volatile thread_t * buf);
-extern __attribute__((returns_twice)) int arch_save_context(volatile thread_t * buf);
-
 void switch_next(void) {
 	current_process = next_ready_process();
-	restore_fpu((process_t*)current_process);
 	if (current_process->flags & PROC_FLAG_FINISHED) {
 		switch_next();
 		__builtin_unreachable();
@@ -102,35 +65,11 @@ void switch_next(void) {
 	}
 	current_process->flags |= PROC_FLAG_RUNNING;
 
+	arch_restore_floating((process_t*)current_process);
 	arch_restore_context(&current_process->thread);
+
 	__builtin_unreachable();
 }
-
-__attribute__((noreturn))
-__attribute__((naked))
-void arch_resume_user(void) {
-	asm volatile (
-		"pop %r15\n"
-		"pop %r14\n"
-		"pop %r13\n"
-		"pop %r12\n"
-		"pop %r11\n"
-		"pop %r10\n"
-		"pop %r9\n"
-		"pop %r8\n"
-		"pop %rbp\n"
-		"pop %rdi\n"
-		"pop %rsi\n"
-		"pop %rdx\n"
-		"pop %rcx\n"
-		"pop %rbx\n"
-		"pop %rax\n"
-		"add $16, %rsp\n"
-		"iretq\n"
-	);
-	__builtin_unreachable();
-}
-
 
 void switch_task(uint8_t reschedule) {
 	if (!current_process) return;
@@ -152,7 +91,7 @@ void switch_task(uint8_t reschedule) {
 	}
 
 	current_process->flags &= ~(PROC_FLAG_RUNNING);
-	save_fpu((process_t*)current_process);
+	arch_save_floating((process_t*)current_process);
 
 	if (reschedule && current_process != kernel_idle_task) {
 		make_process_ready((process_t*)current_process);
@@ -222,11 +161,7 @@ extern union PML * current_pml;
 
 static void _kidle(void) {
 	while (1) {
-		/* FIXME: arch_pause()? */
-		asm volatile (
-			"sti\n"
-			"hlt\n"
-		);
+		arch_pause();
 	}
 }
 
@@ -244,6 +179,7 @@ process_t * spawn_kidle(void) {
 	idle->name = strdup("[kidle]");
 	idle->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
 	idle->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+	/* arch_initialize_context(uintptr_t) ? */
 	idle->thread.ip = (uintptr_t)&_kidle;
 	idle->thread.sp = idle->image.stack;
 	idle->thread.bp = idle->image.stack;
@@ -287,7 +223,6 @@ process_t * spawn_init(void) {
 	init->image.entry       = 0;
 	init->image.heap        = 0;
 	init->image.heap_actual = 0;
-	//init->image.stack       = (uintptr_t)&stack_top;
 	init->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
 	init->image.user_stack  = 0;
 	init->image.size        = 0;
@@ -811,7 +746,6 @@ process_t * process_get_parent(process_t * process) {
 	return result;
 }
 
-extern void shm_release_all (process_t * proc);
 void task_exit(int retval) {
 	current_process->status = retval;
 	current_process->flags |= PROC_FLAG_FINISHED;
@@ -825,7 +759,7 @@ void task_exit(int retval) {
 		free(current_process->node_waits);
 		current_process->node_waits = NULL;
 	}
-	shm_release_all(current_process);
+	shm_release_all((process_t*)current_process);
 	free(current_process->shm_mappings);
 
 	if (current_process->signal_kstack) {
@@ -880,6 +814,7 @@ pid_t fork(void) {
 	bp = sp;
 
 	/* This is all very arch specific... */
+	/* arch_setup_fork_return? */
 	r.rax = 0; /* make fork return 0 */
 	PUSH(sp, struct regs, r);
 	new_proc->thread.sp = sp;
@@ -924,7 +859,7 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	PUSH(sp, struct regs, r);
 	new_proc->thread.sp = sp;
 	new_proc->thread.bp = bp;
-	//new_proc->thread.gsbase = current_process->thread.gsbase;
+	new_proc->thread.tls_base = current_process->thread.tls_base;
 	new_proc->thread.ip = (uintptr_t)&arch_resume_user;
 	if (parent->flags & PROC_FLAG_IS_TASKLET) new_proc->flags |= PROC_FLAG_IS_TASKLET;
 	make_process_ready(new_proc);

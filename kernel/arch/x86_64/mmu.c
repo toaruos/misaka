@@ -494,3 +494,33 @@ void mmu_init(void) {
 
 	current_pml = (union PML*)((uintptr_t)current_pml | 0xFFFFffff00000000UL);
 }
+
+static char * heapStart = NULL;
+
+void * sbrk(size_t bytes) {
+	if (!heapStart) {
+		printf("Heap is not yet available, but sbrk() was called.\n");
+		return NULL;
+	}
+
+	if (!bytes) return heapStart;
+
+	void * out = heapStart;
+	if ((uintptr_t)heapStart >= 0x800000000) {
+		for (uintptr_t p = (uintptr_t)out; p < (uintptr_t)out + bytes; p += 0x1000) {
+			union PML * page = mmu_get_page(p, MMU_GET_MAKE);
+			mmu_frame_allocate(page, MMU_FLAG_WRITABLE | MMU_FLAG_KERNEL);
+			mmu_invalidate(p);
+		}
+	}
+
+	heapStart += bytes;
+	return out;
+}
+
+void mmu_set_kernel_heap(uintptr_t heap_start) {
+	if (heap_start & 0xFFF) {
+		heap_start += 0x1000 - (heap_start & 0xFFF);
+	}
+	heapStart = (char*)heap_start;
+}

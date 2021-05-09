@@ -229,9 +229,7 @@ size_t fbterm_write(size_t size, uint8_t *buffer) {
 	return size;
 }
 
-extern int framebuffer_initialize(void);
 void fbterm_initialize(void) {
-	framebuffer_initialize();
 	memset(lfb_vid_memory, 0x05, lfb_resolution_x * lfb_resolution_y * 4);
 
 	fbterm_width = (lfb_resolution_x - LEFT_PAD) / char_width;

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <kernel/process.h>
+#include <kernel/string.h>
 #include <kernel/arch/x86_64/regs.h>
 
 void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[], uintptr_t stack) {
@@ -39,4 +40,46 @@ void arch_enter_signal_handler(uintptr_t entrypoint, int signum) {
 		"iretq"
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
 	    "D"(signum));
+}
+
+__attribute__((naked))
+void arch_resume_user(void) {
+	asm volatile (
+		"pop %r15\n"
+		"pop %r14\n"
+		"pop %r13\n"
+		"pop %r12\n"
+		"pop %r11\n"
+		"pop %r10\n"
+		"pop %r9\n"
+		"pop %r8\n"
+		"pop %rbp\n"
+		"pop %rdi\n"
+		"pop %rsi\n"
+		"pop %rdx\n"
+		"pop %rcx\n"
+		"pop %rbx\n"
+		"pop %rax\n"
+		"add $16, %rsp\n"
+		"iretq\n"
+	);
+	__builtin_unreachable();
+}
+
+static uint8_t saves[512] __attribute__((aligned(16)));
+void arch_restore_floating(process_t * proc) {
+	memcpy(&saves,(uint8_t *)&proc->thread.fp_regs,512);
+	asm volatile ("fxrstor (%0)" :: "r"(saves));
+}
+
+void arch_save_floating(process_t * proc) {
+	asm volatile ("fxsave (%0)" :: "r"(saves));
+	memcpy((uint8_t *)&proc->thread.fp_regs,&saves,512);
+}
+
+void arch_pause(void) {
+	asm volatile (
+		"sti\n"
+		"hlt\n"
+	);
 }
