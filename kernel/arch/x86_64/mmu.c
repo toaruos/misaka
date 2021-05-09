@@ -449,11 +449,12 @@ void mmu_invalidate(uintptr_t addr) {
 		: : "r"(addr));
 }
 
+static char * heapStart = NULL;
 
 /**
  * @brief Switch from the boot-time 1GiB-page identity map to 4KiB pages.
  */
-void mmu_init(void) {
+void mmu_init(size_t memsize) {
 
 	/* Map the high base PDP */
 	init_page_region[0][511].raw = (uintptr_t)&high_base_pml | 0x03;
@@ -482,20 +483,26 @@ void mmu_init(void) {
 	/* Now map our new low base */
 	init_page_region[0][0].raw = (uintptr_t)&low_base_pmls[0] | 0x07;
 
-	/* Set up page allocation bitmap for 3GiB of pages FIXME use actual memory amount */
-	nframes = (3 * 1024 * 256); /* XXX this is 3GiB */
+	/* Use input from bootloader to initialize physical page frame allocator */
+	nframes = (memsize / 0x1000);
 	frames = malloc(INDEX_FROM_BIT(nframes * 8));
 	memset(frames, 0, INDEX_FROM_BIT(nframes * 8));
 
-	/* Mark 64MiB of low memory as unavailable */
-	for (unsigned int i = 0; i < 512; ++i) {
+	/* Mark the currently-in-use low memory pages as allocated, based on the current heap. */
+	unsigned int i = 0;
+	for (; i < ((uintptr_t)heapStart / 0x1000) / 32; i++) {
 		frames[i] = (uint32_t)-1;
 	}
+	for (size_t j = i * 32 * 0x1000; j < (uintptr_t)heapStart; j++) {
+		mmu_frame_set(j);
+	}
 
+	/* From here on out, kernel heap allocations are in high memory. */
+	mmu_set_kernel_heap(0xFFFFff0000000000);
+
+	/* And physical memory references, like page tables, are through the 4GiB window. */
 	current_pml = (union PML*)((uintptr_t)current_pml | 0xFFFFffff00000000UL);
 }
-
-static char * heapStart = NULL;
 
 void * sbrk(size_t bytes) {
 	if (!heapStart) {

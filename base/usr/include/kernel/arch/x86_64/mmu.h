@@ -20,7 +20,7 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags);
 void mmu_set_directory(union PML * new_pml);
 void mmu_free(union PML * from);
 union PML * mmu_clone(union PML * from);
-void mmu_init(void);
+void mmu_init(size_t memsize);
 void mmu_invalidate(uintptr_t addr);
 uintptr_t mmu_allocate_a_frame(void);
 void mmu_set_kernel_heap(uintptr_t heap_start);
