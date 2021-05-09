@@ -86,7 +86,6 @@ extern void idt_install(void);
 extern fs_node_t * ramdisk_mount(uintptr_t, size_t);
 extern void tarfs_register_init(void);
 extern void tmpfs_register_init(void);
-extern void elf_parseFromMemory(void * atAddress);
 extern int system(const char * path, int argc, const char ** argv, const char ** envin);
 extern void mmu_init(void);
 extern void arch_clock_initialize(void);
@@ -103,6 +102,7 @@ extern void keyboard_install(void);
 extern void mouse_install(void);
 extern void random_initialize(void);
 extern void vmware_initialize(void);
+extern void serial_initialize(void);
 
 static struct multiboot * mboot_struct = NULL;
 
@@ -161,6 +161,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	keyboard_install();
 	mouse_install();
 	vmware_initialize();
+	serial_initialize();
 
 	if (args_present("root")) {
 		const char * root_type = "tar";

@@ -252,6 +252,9 @@ void keyboard_install(void) {
 
 extern void task_exit(int);
 
+extern int serial_handler_ac(struct regs *r);
+extern int serial_handler_bd(struct regs *r);
+
 struct regs * isr_handler(struct regs * r) {
 	current_process->interrupt_registers = r;
 	switch (r->int_no) {
@@ -309,6 +312,14 @@ struct regs * isr_handler(struct regs * r) {
 			break;
 		case 33: {
 			keyboard_handler(r);
+			break;
+		}
+		case 35: {
+			serial_handler_bd(r);
+			break;
+		}
+		case 36: {
+			serial_handler_ac(r);
 			break;
 		}
 		case 44: {
