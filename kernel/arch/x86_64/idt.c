@@ -261,6 +261,11 @@ struct regs * isr_handler(struct regs * r) {
 		case 14: /* Page fault */ {
 			uintptr_t faulting_address;
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
+			if (!current_process) {
+				printf("Page fault in early startup at %#zx\n", faulting_address);
+				dump_regs(r);
+				break;
+			}
 			if (faulting_address == 0xFFFFB00F) {
 				/* Thread exit */
 				task_exit(0);
@@ -270,18 +275,17 @@ struct regs * isr_handler(struct regs * r) {
 				return_from_signal_handler();
 				break;
 			}
-			send_signal(current_process->id, SIGSEGV, 1);
-			#if 0
-			printf("Page fault in %p\n", current_process); //pid=%d (%s)\n", (int)current_process->id, current_process->name);
-			printf("cr2: 0x%016lx\n", faulting_address);
+			printf("Page fault in pid=%d (%s) at %#zx\n", (int)current_process->id, current_process->name, faulting_address);
 			dump_regs(r);
-			printf("Stack is at ~%p\n", r);
-			arch_enter_critical();
-			while (1) { asm volatile ("hlt"); }
-			#endif
+			send_signal(current_process->id, SIGSEGV, 1);
 			break;
 		}
 		case 13: /* GPF */ {
+			if (!current_process) {
+				printf("GPF in early startup\n");
+				dump_regs(r);
+				break;
+			}
 			send_signal(current_process->id, SIGSEGV, 1);
 			break;
 		}
@@ -308,6 +312,7 @@ struct regs * isr_handler(struct regs * r) {
 			 *    for quite a lot of our hardware to work
 			 **/
 			irq_ack(0);
+			if (!current_process) break;
 			cmos_time_stuff();
 			break;
 		case 33: {
@@ -334,7 +339,10 @@ struct regs * isr_handler(struct regs * r) {
 		}
 		default: {
 			if (r->int_no < 32) {
-				//printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
+				if (!current_process) {
+					printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
+					break;
+				}
 				send_signal(current_process->id, SIGILL, 1);
 			} else {
 				printf("Unhandled interrupt: %d\n", r->int_no - 32);
