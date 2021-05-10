@@ -905,7 +905,7 @@ static long sys_fswait_multi(int c, int fds[], int timeout, int out[]) {
 	if (has_match != -1) return has_match;
 
 	int result = sys_fswait_timeout(c, fds, timeout);
-	if (result != -1) out[result] = 1;
+	if (result >= 0) out[result] = 1;
 	return result;
 }
 
