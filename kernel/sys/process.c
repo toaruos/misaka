@@ -73,8 +73,12 @@ void switch_next(void) {
 
 void switch_task(uint8_t reschedule) {
 	if (!current_process) return;
+
+	arch_enter_critical();
+
 	if (!(current_process->flags & PROC_FLAG_RUNNING)) {
 		switch_next();
+		return;
 	}
 
 	if (arch_save_context(&current_process->thread) == 1) {
