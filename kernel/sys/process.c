@@ -54,10 +54,8 @@ void switch_next(void) {
 		if (!current_process->signal_kstack) {
 			if (current_process->signal_queue->length > 0) {
 				current_process->signal_kstack = malloc(KERNEL_STACK_SIZE);
-				current_process->signal_state.sp = current_process->thread.sp;
-				current_process->signal_state.bp = current_process->thread.bp;
-				current_process->signal_state.ip = current_process->thread.ip;
 				memcpy(current_process->signal_kstack, (void*)(current_process->image.stack - KERNEL_STACK_SIZE), KERNEL_STACK_SIZE);
+				memcpy((thread_t*)&current_process->signal_state, (thread_t*)&current_process->thread, sizeof(thread_t));
 			}
 		}
 	} else {

@@ -138,10 +138,7 @@ void fix_signal_stacks(void) {
 				redo_me = 1;
 				continue;
 			}
-			/* TODO arch_copy_context? */
-			p->thread.sp = p->signal_state.sp;
-			p->thread.ip = p->signal_state.ip;
-			p->thread.bp = p->signal_state.bp;
+			memcpy(&p->thread, &p->signal_state, sizeof(thread_t));
 			if (!p->signal_kstack) {
 				printf("Cannot restore signal stack for pid=%d - unset?\n", p->id);
 			} else {
