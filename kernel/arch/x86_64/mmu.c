@@ -47,6 +47,7 @@ int mmu_frame_test(uintptr_t frame_addr) {
 }
 
 static spin_lock_t frame_alloc_lock = { 0 };
+static spin_lock_t kheap_lock = { 0 };
 
 uintptr_t mmu_first_n_frames(int n) {
 	for (uint64_t i = 0; i < nframes * 0x1000; i += 0x1000) {
@@ -510,8 +511,16 @@ void * sbrk(size_t bytes) {
 		return NULL;
 	}
 
-	if (!bytes) return heapStart;
+	if (bytes & 0xFFF) {
+		printf("Invalid sbrk() call detected.\n");
+		while (1) {};
+	}
 
+	if (!bytes) {
+		return heapStart;
+	}
+
+	spin_lock(kheap_lock);
 	void * out = heapStart;
 	if ((uintptr_t)heapStart >= 0x800000000) {
 		for (uintptr_t p = (uintptr_t)out; p < (uintptr_t)out + bytes; p += 0x1000) {
@@ -522,6 +531,7 @@ void * sbrk(size_t bytes) {
 	}
 
 	heapStart += bytes;
+	spin_unlock(kheap_lock);
 	return out;
 }
 
