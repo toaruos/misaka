@@ -227,8 +227,8 @@ static long sys_sysfunc(long fn, char ** args) {
 			return -EINVAL;
 		case TOARU_SYS_FUNC_SETGSBASE:
 			PTR_VALIDATE(args);
-			current_process->thread.tls_base = (uintptr_t)args[0];
-			arch_set_tls_base(current_process->thread.tls_base);
+			current_process->thread.context.tls_base = (uintptr_t)args[0];
+			arch_set_tls_base(current_process->thread.context.tls_base);
 			return 0;
 		default:
 			printf("Bad system function: %ld\n", fn);

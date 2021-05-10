@@ -19,19 +19,23 @@ typedef struct {
 	union PML * directory;
 } page_directory_t;
 
-typedef struct thread {
+typedef struct {
 	uintptr_t sp;        /* 0 */
 	uintptr_t bp;        /* 8 */
 	uintptr_t ip;        /* 16 */
 	uintptr_t tls_base;  /* 24 */
 	uintptr_t saved[5]; /* XXX Arch dependent */
-		/**
-		 * 32: rbx
-		 * 40: r12
-		 * 48: r13
-		 * 56: r14
-		 * 64: r15
-		 */
+	/**
+	 * 32: rbx
+	 * 40: r12
+	 * 48: r13
+	 * 56: r14
+	 * 64: r15
+	 */
+} kthread_context_t;
+
+typedef struct thread {
+	kthread_context_t context;
 	uint8_t fp_regs[512];
 	uint64_t  flags;
 	page_directory_t * page_directory;
@@ -43,7 +47,7 @@ typedef struct image {
 	uintptr_t heap;
 	uintptr_t heap_actual;
 	uintptr_t stack;
-	uintptr_t user_stack;
+	uintptr_t stack_bottom;
 	uintptr_t start;
 	uintptr_t shm_heap;
 	volatile int lock[2];
@@ -105,6 +109,7 @@ typedef struct process {
 	thread_t thread;
 	thread_t signal_state;
 	image_t image;
+	intptr_t depth;
 
 	uintptr_t signals[NUMSIGNALS+1];
 } process_t;
@@ -122,10 +127,8 @@ extern long process_move_fd(process_t * proc, long src, long dest);
 extern void initialize_process_tree(void);
 extern process_t * process_from_pid(pid_t pid);
 
-extern void process_disown(process_t * proc);
 extern void process_delete(process_t * proc);
 extern void make_process_ready(volatile process_t * proc);
-extern int process_available(void);
 extern process_t * next_ready_process(void);
 extern int wakeup_queue(list_t * queue);
 extern int wakeup_queue_interrupted(list_t * queue);
