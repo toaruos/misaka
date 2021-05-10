@@ -36,19 +36,15 @@ void arch_enter_critical(void) {
 	asm volatile (
 		"pushfq\n"
 		"popq %0\n"
+		"cli\n"
 		: "=A"(rflags)
 	);
-	SYNC_CLI();
 	if (rflags & (1 << 9)) {
 		/* FIXME: This needs to be per-cpu, so it should ref %gs? */
 		sync_depth = 1;
 	} else {
 		sync_depth++;
 	}
-}
-
-void arch_enable_interrupts(void) {
-	SYNC_STI();
 }
 
 void arch_exit_critical(void) {
@@ -59,7 +55,6 @@ void arch_exit_critical(void) {
 	}
 	sync_depth--;
 }
-
 
 static void irq_remap(void) {
 	/* Cascade initialization */
@@ -117,6 +112,4 @@ void pit_initialize(void) {
 
 	/* Enable PIT */
 	pit_set_timer_phase(100); /* 1000 Hz */
-
-	SYNC_STI();
 }
