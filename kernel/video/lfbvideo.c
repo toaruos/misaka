@@ -88,7 +88,7 @@ static int ioctl_vid(fs_node_t * node, int request, void * argp) {
 					validate((void*)(*(uintptr_t*)argp));
 					lfb_user_offset = *(uintptr_t*)argp;
 				}
-				for (uintptr_t i = 0; i < 0xFF0000; i += 0x1000) {
+				for (uintptr_t i = 0; i < lfb_memsize; i += 0x1000) {
 					union PML * page = mmu_get_page(lfb_user_offset + i, MMU_GET_MAKE);
 					mmu_frame_map_address(page,MMU_FLAG_WRITABLE,((uintptr_t)(lfb_vid_memory) & 0xFFFFFFFF) + i);
 				}
