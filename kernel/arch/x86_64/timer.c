@@ -116,7 +116,7 @@ void pit_initialize(void) {
 	outportb(0x4D1, val | (1 << (10-8)) | (1 << (11-8)));
 
 	/* Enable PIT */
-	pit_set_timer_phase(1000); /* 1000 Hz */
+	pit_set_timer_phase(100); /* 1000 Hz */
 
 	SYNC_STI();
 }
