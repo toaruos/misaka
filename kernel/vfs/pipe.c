@@ -135,13 +135,14 @@ uint64_t write_pipe(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *bu
 	size_t written = 0;
 	while (written < size) {
 		spin_lock(pipe->lock_write);
-
-		while (pipe_available(pipe) > 0 && written < size) {
-			pipe->buffer[pipe->write_ptr] = buffer[written];
-			pipe_increment_write(pipe);
-			written++;
+		/* These pipes enforce atomic writes, poorly. */
+		if (pipe_available(pipe) > size) {
+			while (pipe_available(pipe) > 0 && written < size) {
+				pipe->buffer[pipe->write_ptr] = buffer[written];
+				pipe_increment_write(pipe);
+				written++;
+			}
 		}
-
 		spin_unlock(pipe->lock_write);
 		wakeup_queue(pipe->wait_queue_readers);
 		pipe_alert_waiters(pipe);
