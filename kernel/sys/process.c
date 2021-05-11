@@ -335,8 +335,7 @@ process_t * spawn_kidle(void) {
 	idle->id = -1;
 	idle->name = strdup("[kidle]");
 	idle->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
-	idle->image.stack_bottom = (uintptr_t)valloc(KERNEL_STACK_SIZE);
-	idle->image.stack = idle->image.stack_bottom + KERNEL_STACK_SIZE;
+	idle->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE)+ KERNEL_STACK_SIZE;
 
 	/* TODO arch_initialize_context(uintptr_t) ? */
 	idle->thread.context.ip = (uintptr_t)&_kidle;
@@ -382,13 +381,10 @@ process_t * spawn_init(void) {
 	init->wd_node = clone_fs(fs_root);
 	init->wd_name = strdup("/");
 
-	init->image.entry       = 0;
-	init->image.heap        = 0;
-	init->image.heap_actual = 0;
-	init->image.stack_bottom = (uintptr_t)valloc(KERNEL_STACK_SIZE);
-	init->image.stack = init->image.stack_bottom + KERNEL_STACK_SIZE;
-	init->image.size        = 0;
-	init->image.shm_heap    = 0x200000000; /* That's 8GiB? That should work fine... */
+	init->image.entry    = 0;
+	init->image.heap     = 0;
+	init->image.stack    = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+	init->image.shm_heap = 0x200000000; /* That's 8GiB? That should work fine... */
 
 	init->flags         = PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
 	init->wait_queue    = list_create();
@@ -433,16 +429,13 @@ process_t * spawn_process(volatile process_t * parent, int flags) {
 	proc->thread.context.sp = 0;
 	proc->thread.context.bp = 0;
 	proc->thread.context.ip = 0;
-	proc->thread.flags = 0;
 	memcpy((void*)proc->thread.fp_regs, (void*)parent->thread.fp_regs, 512);
 
+	/* Entry is only stored for reference. */
 	proc->image.entry       = parent->image.entry;
 	proc->image.heap        = parent->image.heap;
-	proc->image.heap_actual = parent->image.heap_actual; /* XXX is this used? */
-	proc->image.size        = parent->image.size; /* XXX same ^^ */
-	proc->image.stack_bottom= (uintptr_t)valloc(KERNEL_STACK_SIZE);
-	proc->image.stack       = proc->image.stack_bottom + KERNEL_STACK_SIZE;
-	proc->image.shm_heap    = 0x200000000;
+	proc->image.stack       = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+	proc->image.shm_heap    = 0x200000000; /* FIXME this should be a macro def */
 
 	if (flags & PROC_REUSE_FDS) {
 		proc->fds = parent->fds;

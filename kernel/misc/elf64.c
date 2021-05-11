@@ -155,9 +155,7 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	}
 
 	current_process->image.heap  = (heapBase + 0xFFF) & (~0xFFF);
-	current_process->image.heap_actual = current_process->image.heap;
 	current_process->image.entry = header.e_entry;
-	current_process->image.size  = heapBase - execBase;
 
 	close_fs(file);
 

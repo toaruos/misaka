@@ -37,18 +37,13 @@ typedef struct {
 typedef struct thread {
 	kthread_context_t context;
 	uint8_t fp_regs[512];
-	uint64_t  flags;
 	page_directory_t * page_directory;
 } thread_t;
 
 typedef struct image {
-	size_t    size;
 	uintptr_t entry;
 	uintptr_t heap;
-	uintptr_t heap_actual;
 	uintptr_t stack;
-	uintptr_t stack_bottom;
-	uintptr_t start;
 	uintptr_t shm_heap;
 	volatile int lock[2];
 } image_t;

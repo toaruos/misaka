@@ -181,7 +181,6 @@ static long sys_sysfunc(long fn, char ** args) {
 			if (proc->group != 0) proc = process_from_pid(proc->group);
 			spin_lock(proc->image.lock);
 			proc->image.heap = (uintptr_t)args[0];
-			proc->image.heap_actual = (uintptr_t)args[0];
 			spin_unlock(proc->image.lock);
 			return 0;
 		}
