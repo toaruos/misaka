@@ -44,6 +44,7 @@ extern void arch_set_kernel_stack(uintptr_t stack);
 extern void arch_restore_floating(process_t * proc);
 extern void arch_save_floating(process_t * proc);
 extern void arch_pause(void);
+extern void arch_fatal(void);
 
 tree_t * process_tree;  /* Stores the parent-child process relationships; the root of this graph is 'init'. */
 list_t * process_list;  /* Stores all existing processes. Mostly used for sanity checking or for places where iterating over all processes is useful. */
@@ -165,7 +166,7 @@ void switch_task(uint8_t reschedule) {
 		printf("This generally means that a driver responding to interrupts has attempted to yield in its interrupt context.\n");
 		printf("Ensure that all device drivers which respond to interrupts do so with non-blocking data structures.\n");
 		printf("   Return address of switch_task: %p\n", __builtin_return_address(0));
-		while (1) {};
+		arch_fatal();
 	}
 
 	/* If a process got to switch_task but was not marked as running, it must be exiting and we don't

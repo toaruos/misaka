@@ -83,3 +83,12 @@ void arch_pause(void) {
 		"hlt\n"
 	);
 }
+
+void arch_fatal(void) {
+	while (1) {
+		asm volatile (
+			"cli\n"
+			"hlt\n"
+		);
+	}
+}

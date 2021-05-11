@@ -352,6 +352,13 @@ struct regs * isr_handler(struct regs * r) {
 		}
 	}
 
+	if (current_process == kernel_idle_task && process_queue->head) {
+		/* If this is kidle and we got here, instead of finishing the interrupt
+		 * we can just switch task and there will probably be something else
+		 * to run that was awoken by the interrupt. */
+		switch_next();
+	}
+
 	asm volatile("sti");
 	return r;
 }
