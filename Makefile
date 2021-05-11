@@ -136,7 +136,7 @@ clean:
 	-rm -f $(APPS_X) $(LIBS_X) $(BASE)/bin/demo ramdisk.tar $(APPS_KRK_X) $(APPS_SH_X)
 	-rm -f $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 	-rm -f $(BASE)/lib/libc.so $(BASE)/lib/libc.a
-	-rm -f $(LIBC_OBJS)
+	-rm -f $(LIBC_OBJS) $(BASE)/lib/ld.so $(BASE)/lib/libkuroko.so $(BASE)/lib/libm.so
 	-rm -f $(BASE)/bin/kuroko
 
 libc/%.o: libc/%.c base/usr/include/syscall.h 
@@ -158,7 +158,7 @@ $(BASE)/usr/lib/%: util/local/x86_64-pc-toaru/lib/% | dirs
 	cp -a $< $@
 	strip $@
 
-$(BASE)/lib/libm.so: util/libm.c
+$(BASE)/lib/libm.so: util/libm.c | $(LC)
 	$(CC) -shared -fPIC -o $@ $<
 
 $(BASE)/dev:
