@@ -224,3 +224,10 @@ libstdcxx: $(LIBSTDCXX)
 
 util/local/x86_64-pc-toaru/lib/libstdc++.so.6.0.28: | $(BASE)/lib/libm.so
 	cd util/build/gcc && make all-target-libstdc++-v3 && make install-target-libstdc++-v3
+
+SOURCE_FILES  = $(wildcard kernel/*.c kernel/*/*.c kernel/*/*/*.c kernel/*/*/*/*.c)
+SOURCE_FILES += $(wildcard apps/*.c linker/*.c libc/*.c libc/*/*.c lib/*.c lib/kuroko/*.c)
+SOURCE_FILES += $(wildcard kuroko/src/*.c kuroko/src/*.h kuroko/src/*/*.c kuroko/src/*/*.h)
+SOURCE_FILES += $(wildcard $(BASE)/usr/include/*.h $(BASE)/usr/include/*/*.h $(BASE)/usr/include/*/*/*.h)
+tags: $(SOURCE_FILES)
+	ctags -f tags $(SOURCE_FILES)
