@@ -235,7 +235,7 @@ void close_fs(fs_node_t *node) {
 	spin_lock(tmp_refcount_lock);
 	node->refcount--;
 	if (node->refcount == 0) {
-		debug_print(NOTICE, "Node refcount [%s] is now 0: %d", node->name, node->refcount);
+		debug_print(NOTICE, "Node refcount [%s] is now 0: %ld", node->name, node->refcount);
 
 		if (node->close) {
 			node->close(node);
@@ -299,7 +299,7 @@ fs_node_t *finddir_fs(fs_node_t *node, char *name) {
 		return ret;
 	} else {
 		debug_print(WARNING, "Node passed to finddir_fs isn't a directory!");
-		debug_print(WARNING, "node = 0x%x, name = %s", node, name);
+		debug_print(WARNING, "node = %p, name = %s", (void*)node, name);
 		return (fs_node_t *)NULL;
 	}
 }
@@ -716,7 +716,7 @@ int vfs_mount_type(const char * type, const char * arg, const char * mountpoint)
 		ent->device  = strdup(arg);
 	}
 
-	debug_print(NOTICE, "Mounted %s[%s] to %s: 0x%x", type, arg, mountpoint, n);
+	debug_print(NOTICE, "Mounted %s[%s] to %s: %p", type, arg, mountpoint, (void*)n);
 	debug_print_vfs_tree();
 
 	return 0;
@@ -848,7 +848,7 @@ void debug_print_vfs_tree_node(tree_node_t * node, size_t height) {
 	struct vfs_entry * fnode = (struct vfs_entry *)node->value;
 	/* Print the process name */
 	if (fnode->file) {
-		c += snprintf(c, 100, "%s → %s 0x%x (%s, %s)", fnode->name, fnode->device, fnode->file, fnode->fs_type, fnode->file->name);
+		c += snprintf(c, 100, "%s → %s %p (%s, %s)", fnode->name, fnode->device, (void*)fnode->file, fnode->fs_type, fnode->file->name);
 	} else {
 		c += snprintf(c, 100, "%s → (empty)", fnode->name);
 	}

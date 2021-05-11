@@ -556,7 +556,7 @@ void make_process_ready(volatile process_t * proc) {
 		 * is indicative of a bug somewhere as we shouldn't be added processes to the ready
 		 * queue multiple times. */
 		printf("Can't make process ready without removing it from owner list: %d\n", proc->id);
-		printf("  (This is a bug) Current owner list is %p (ready queue is %p)\n", proc->sched_node.owner, process_queue);
+		printf("  (This is a bug) Current owner list is %p (ready queue is %p)\n", proc->sched_node.owner, (void*)process_queue);
 		return;
 	}
 

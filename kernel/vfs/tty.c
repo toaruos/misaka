@@ -254,7 +254,7 @@ void tty_input_process(pty_t * pty, uint8_t c) {
 
 static void tty_fill_name(pty_t * pty, char * out) {
 	((char*)out)[0] = '\0';
-	snprintf((char*)out, 100, "/dev/pts/%d", pty->name);
+	snprintf((char*)out, 100, "/dev/pts/%zd", pty->name);
 }
 
 int pty_ioctl(pty_t * pty, int request, void * argp) {
@@ -583,7 +583,7 @@ static struct dirent * readdir_pty(fs_node_t *node, uint64_t index) {
 		memset(out, 0x00, sizeof(struct dirent));
 		out->ino = out_pty->name;
 		out->name[0] = '\0';
-		snprintf(out->name, 100, "%d", out_pty->name);
+		snprintf(out->name, 100, "%zd", out_pty->name);
 		return out;
 	} else {
 		return NULL;

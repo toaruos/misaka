@@ -142,7 +142,7 @@ static uint64_t framebuffer_func(fs_node_t * node, uint64_t offset, uint64_t siz
 			"YRes:\t%d\n"
 			"BitsPerPixel:\t%d\n"
 			"Stride:\t%d\n"
-			"Address:\t0x%x\n",
+			"Address:\t%p\n",
 			lfb_driver_name,
 			lfb_resolution_x,
 			lfb_resolution_y,

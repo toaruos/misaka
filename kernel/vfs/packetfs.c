@@ -65,7 +65,7 @@ static void send_to_server(pex_ex_t * p, pex_client_t * c, size_t size, void * d
 	size_t p_size = size + sizeof(struct packet);
 	packet_t * packet = malloc(p_size);
 	if ((uintptr_t)c < 0x800000000) {
-		printf("suspicious pex client received: %p\n", c);
+		printf("suspicious pex client received: %p\n", (void*)c);
 	}
 
 	packet->source = c;
@@ -89,7 +89,7 @@ static int send_to_client(pex_ex_t * p, pex_client_t * c, size_t size, void * da
 	}
 
 	if ((uintptr_t)c < 0x800000000) {
-		printf("suspicious pex client received: %p\n", c);
+		printf("suspicious pex client received: %p\n", (void*)c);
 	}
 
 	packet_t * packet = malloc(p_size);
@@ -119,7 +119,7 @@ static uint64_t read_server(fs_node_t * node, uint64_t offset, uint64_t size, ui
 
 	receive_packet(p->server_pipe, &packet);
 
-	debug_print(INFO, "Server recevied packet of size %d, was waiting for at most %d", packet->size, size);
+	debug_print(INFO, "Server recevied packet of size %zu, was waiting for at most %lu", packet->size, size);
 
 	if (packet->size + sizeof(packet_t) > size) {
 		return -1;
@@ -146,7 +146,7 @@ static uint64_t write_server(fs_node_t * node, uint64_t offset, uint64_t size, u
 		/* Brodcast packet */
 		spin_lock(p->lock);
 		foreach(f, p->clients) {
-			debug_print(INFO, "Sending to client 0x%x", f->value);
+			debug_print(INFO, "Sending to client %p", f->value);
 			send_to_client(p, (pex_client_t *)f->value, size - sizeof(header_t), head->data);
 		}
 		spin_unlock(p->lock);
@@ -185,14 +185,14 @@ static uint64_t read_client(fs_node_t * node, uint64_t offset, uint64_t size, ui
 	receive_packet(c->pipe, &packet);
 
 	if (packet->size > size) {
-		debug_print(WARNING, "[pex] Client is not reading enough bytes to hold packet of size %d", packet->size);
+		debug_print(WARNING, "[pex] Client is not reading enough bytes to hold packet of size %zu", packet->size);
 		return -1;
 	}
 
 	memcpy(buffer, &packet->data, packet->size);
 	uint32_t out = packet->size;
 
-	debug_print(INFO, "[pex] Client received packet of size %d", packet->size);
+	debug_print(INFO, "[pex] Client received packet of size %zu", packet->size);
 
 	free(packet);
 	return out;
@@ -208,11 +208,11 @@ static uint64_t write_client(fs_node_t * node, uint64_t offset, uint64_t size, u
 	debug_print(INFO, "[pex] client write(...)");
 
 	if (size > MAX_PACKET_SIZE) {
-		debug_print(WARNING, "Size of %d is too big.", size);
+		debug_print(WARNING, "Size of %lu is too big.", size);
 		return -1;
 	}
 
-	debug_print(INFO, "Sending packet of size %d to parent", size);
+	debug_print(INFO, "Sending packet of size %lu to parent", size);
 	send_to_server(c->parent, c, size, buffer);
 
 	return size;
@@ -233,7 +233,7 @@ static void close_client(fs_node_t * node) {
 	pex_client_t * c = (pex_client_t *)node->inode;
 	pex_ex_t * p = c->parent;
 
-	debug_print(WARNING, "Closing packetfs client: 0x%x:0x%x", p, c);
+	debug_print(WARNING, "Closing packetfs client: %p:%p", (void*)p, (void*)c);
 
 	spin_lock(p->lock);
 
@@ -285,7 +285,7 @@ static void open_pex(fs_node_t * node, unsigned int flags) {
 		node->selectcheck = check_server;
 		node->selectwait  = wait_server;
 		debug_print(INFO, "[pex] Server launched: %s", t->name);
-		debug_print(INFO, "fs_node = 0x%x", node);
+		debug_print(INFO, "fs_node = %p", (void*)node);
 	} else if (!(flags & O_CREAT)) {
 		pex_client_t * client = create_client(t);
 		node->inode = (uintptr_t)client;
@@ -301,7 +301,7 @@ static void open_pex(fs_node_t * node, unsigned int flags) {
 		list_insert(t->clients, client);
 
 		/* XXX: Send plumbing message to server for new client connection */
-		debug_print(INFO, "[pex] Client connected: %s:0%x", t->name, node->inode);
+		debug_print(INFO, "[pex] Client connected: %s:%lx", t->name, node->inode);
 	} else if (flags & O_CREAT && !t->fresh) {
 		/* XXX: You dun goofed */
 	}
@@ -313,7 +313,7 @@ static struct dirent * readdir_packetfs(fs_node_t *node, uint64_t index) {
 	pex_t * p = (pex_t *)node->device;
 	unsigned int i = 0;
 
-	debug_print(INFO, "[pex] readdir(%d)", index);
+	debug_print(INFO, "[pex] readdir(%lu)", index);
 
 	if (index == 0) {
 		struct dirent * out = malloc(sizeof(struct dirent));

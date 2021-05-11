@@ -122,22 +122,22 @@ static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size
 	long mem_permille = 1000 * (mem_usage + shm_usage) / mmu_total_memory();
 
 	snprintf(buf, 1000,
-			"Name:\t%s\n" /* name */
-			"State:\t%c\n" /* yeah, do this at some point */
-			"Tgid:\t%d\n" /* group ? group : pid */
-			"Pid:\t%d\n" /* pid */
-			"PPid:\t%d\n" /* parent pid */
-			"Pgid:\t%d\n" /* progress group id */
-			"Sid:\t%d\n" /* session id */
+			"Name:\t%s\n"  /* name */
+			"State:\t%c\n"
+			"Tgid:\t%d\n"  /* group ? group : pid */
+			"Pid:\t%d\n"   /* pid */
+			"PPid:\t%d\n"  /* parent pid */
+			"Pgid:\t%d\n"  /* progress group id (job) */
+			"Sid:\t%d\n"   /* session id */
 			"Uid:\t%d\n"
-			"Ueip:\t0x%x\n"
-			"SCid:\t%d\n"
-			"SC0:\t0x%x\n"
-			"SC1:\t0x%x\n"
-			"SC2:\t0x%x\n"
-			"SC3:\t0x%x\n"
-			"SC4:\t0x%x\n"
-			"UserStack:\t0x%x\n"
+			"Ueip:\t%#zx\n"
+			"SCid:\t%zu\n"
+			"SC0:\t%#zx\n"
+			"SC1:\t%#zx\n"
+			"SC2:\t%#zx\n"
+			"SC3:\t%#zx\n"
+			"SC4:\t%#zx\n"
+			"UserStack:\t%#zx\n"
 			"Path:\t%s\n"
 			"VmSize:\t %ld kB\n"
 			"RssShmem:\t %ld kB\n"
@@ -378,7 +378,7 @@ static uint64_t uptime_func(fs_node_t *node, uint64_t offset, uint64_t size, uin
 	char buf[1024];
 	unsigned long timer_ticks, timer_subticks;
 	relative_time(0,0,&timer_ticks,&timer_subticks);
-	snprintf(buf, 100, "%d.%06d\n", timer_ticks, timer_subticks);
+	snprintf(buf, 100, "%lu.%06lu\n", timer_ticks, timer_subticks);
 
 	size_t _bsize = strlen(buf);
 	if (offset > _bsize) return 0;
@@ -456,7 +456,7 @@ static void mount_recurse(char * buf, tree_node_t * node, size_t height) {
 	struct vfs_entry * fnode = (struct vfs_entry *)node->value;
 	/* Print the process name */
 	if (fnode->file) {
-		c += snprintf(c, 100, "%s → %s 0x%x (%s, %s)", fnode->name, fnode->device, fnode->file, fnode->fs_type, fnode->file->name);
+		c += snprintf(c, 100, "%s → %s %p (%s, %s)", fnode->name, fnode->device, (void*)fnode->file, fnode->fs_type, fnode->file->name);
 	} else {
 		c += snprintf(c, 100, "%s → (empty)", fnode->name);
 	}

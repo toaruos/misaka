@@ -345,7 +345,7 @@ struct regs * isr_handler(struct regs * r) {
 				}
 				send_signal(current_process->id, SIGILL, 1);
 			} else {
-				printf("Unhandled interrupt: %d\n", r->int_no - 32);
+				printf("Unhandled interrupt: %lu\n", r->int_no - 32);
 				irq_ack(r->int_no - 32);
 				dump_regs(r);
 			}

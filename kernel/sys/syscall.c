@@ -55,7 +55,7 @@ static size_t hostname_len = 0;
 void ptr_validate(void * ptr, const char * syscall) {
 	if (ptr && !PTR_INRANGE(ptr)) {
 		printf("invalid pointer passed to %s (%p < %p)\n",
-			syscall, ptr, current_process->image.entry);
+			syscall, ptr, (void*)current_process->image.entry);
 		while (1) {}
 	}
 }
@@ -137,7 +137,7 @@ static long sys_sbrk(ssize_t size) {
 	for (uintptr_t i = out; i < out + size; i += 0x1000) {
 		union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 		if (page->bits.page != 0) {
-			printf("odd, %p is already allocated?\n", i);
+			printf("odd, %#zx is already allocated?\n", i);
 		}
 		mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
 		mmu_invalidate(i);
