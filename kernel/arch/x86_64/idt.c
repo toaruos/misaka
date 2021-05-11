@@ -359,7 +359,6 @@ struct regs * isr_handler(struct regs * r) {
 		switch_next();
 	}
 
-	asm volatile("sti");
 	return r;
 }
 
