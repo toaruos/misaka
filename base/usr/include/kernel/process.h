@@ -109,7 +109,6 @@ typedef struct process {
 	thread_t thread;
 	thread_t signal_state;
 	image_t image;
-	intptr_t depth;
 
 	uintptr_t signals[NUMSIGNALS+1];
 } process_t;

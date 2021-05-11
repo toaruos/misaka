@@ -166,33 +166,11 @@ void switch_task(uint8_t reschedule) {
 		return;
 	}
 
-	kthread_context_t nested = {0};
-
-	if (current_process->interrupt_registers) {
-		/* TODO: arch_... */
-		if (current_process->interrupt_registers->cs != 0x1B) {
-			/* This is a nested interrupt context - we were already in the kernel from a syscall or something.
-			 * We can only do this so many times before we run out of kernel stack space storing outer contexts.
-			 * If you're building kernel stuff that relies on this... try not doing that. Sometimes we just
-			 * have to accept it - pre-emption in the kernel happens, often from hardware we need to talk to,
-			 * but in those cases it's better to not trip the scheduler. */
-			current_process->depth++;
-			memcpy(&nested, (kthread_context_t*)&current_process->thread.context, sizeof(kthread_context_t));
-		} else {
-			/* This task switch is happening directly from a system call or top-level interrupt. There's no
-			 * existing kernel context to save before we save the current context. */
-			current_process->depth = 0;
-		}
-	}
-
 	arch_save_floating((process_t*)current_process);
 
 	/* 'setjmp' - save the execution context. When this call returns '1' we are back
 	 * from a task switch and have been awoken if we were sleeping. */
 	if (arch_save_context(&current_process->thread) == 1) {
-		/* restored enclosing context if we are back from switchin in a nested context,
-		 * or generally zeros the thread context if we weren't. */
-		memcpy((kthread_context_t*)&current_process->thread.context, &nested, sizeof(kthread_context_t));
 		arch_restore_floating((process_t*)current_process);
 
 		fix_signal_stacks();
