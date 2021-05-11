@@ -220,5 +220,9 @@ void cmos_time_stuff(void) {
 	update_ticks();
 	wakeup_sleepers(timer_ticks, timer_subticks);
 	switch_task(1);
+	asm volatile (
+		".global _ret_from_preempt_source\n"
+		"_ret_from_preempt_source:"
+	);
 }
 

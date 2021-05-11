@@ -74,7 +74,7 @@ volatile process_t * current_process = NULL;
  * be added to a sleep queue, and it should be scheduled whenever
  * there is nothing else to do.
  */
-static process_t * kernel_idle_task = NULL;
+process_t * kernel_idle_task = NULL;
 
 /* The following locks protect access to the process tree, scheduler queue,
  * sleeping, and the very special wait queue... */
@@ -139,6 +139,8 @@ void switch_next(void) {
 	__builtin_unreachable();
 }
 
+extern void * _ret_from_preempt_source;
+
 /**
  * @brief Yield the processor to the next available task.
  *
@@ -157,6 +159,14 @@ void switch_task(uint8_t reschedule) {
 	/* We don't want to be interrupted in the middle of a task switch, so block interrupts
 	 * until we get back from arch_save_context the second time around. */
 	arch_enter_critical();
+
+	if (current_process == kernel_idle_task && __builtin_return_address(0) != &_ret_from_preempt_source) {
+		printf("Context switch from kernel_idle_task triggered from somewhere other than pre-emption source. Halting.\n");
+		printf("This generally means that a driver responding to interrupts has attempted to yield in its interrupt context.\n");
+		printf("Ensure that all device drivers which respond to interrupts do so with non-blocking data structures.\n");
+		printf("   Return address of switch_task: %p\n", __builtin_return_address(0));
+		while (1) {};
+	}
 
 	/* If a process got to switch_task but was not marked as running, it must be exiting and we don't
 	 * want to waste time saving context for it. Also, kidle is always resumed from the top of its
