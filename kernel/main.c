@@ -54,10 +54,11 @@ static void startup_processMultiboot(struct multiboot * mboot) {
 	 * mem_upper is probably the total available physical RAM. That's probably
 	 * good enough for 1GiB~4GiB cases...
 	 */
+	printf("mem_upper = %#zx\n", mboot->mem_upper);
 	if (mboot->flags & MULTIBOOT_FLAG_MMAP) {
 		mboot_memmap_t * mmap = (void *)(uintptr_t)mboot->mmap_addr;
 		while ((uintptr_t)mmap < mboot->mmap_addr + mboot->mmap_length) {
-			printf("  0x%016x:0x%016x %d (%s)\n", mmap->base_addr, mmap->length, mmap->type,
+			printf("  0x%016zx:0x%016zx %d (%s)\n", mmap->base_addr, mmap->length, mmap->type,
 					mmap->type == 1 ? "available" : (mmap->type == 2 ? "reserved" : "unknown")
 					);
 			mmap = (mboot_memmap_t *) ((uintptr_t)mmap + mmap->size + sizeof(uint32_t));
