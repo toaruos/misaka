@@ -297,10 +297,6 @@ struct regs * isr_handler(struct regs * r) {
 			dump_regs(r);
 			break;
 		}
-		case 6: /* Invalid opcode */ {
-			send_signal(current_process->id, SIGILL, 1);
-			break;
-		}
 		case 127: /* syscall */ {
 			syscall_handler(r);
 			asm volatile("sti");
@@ -343,6 +339,7 @@ struct regs * isr_handler(struct regs * r) {
 					printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
 					break;
 				}
+				printf("Killing %d from unhandled %s\n", current_process->id, exception_messages[r->int_no]);
 				send_signal(current_process->id, SIGILL, 1);
 			} else {
 				printf("Unhandled interrupt: %lu\n", r->int_no - 32);

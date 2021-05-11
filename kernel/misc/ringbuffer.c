@@ -68,7 +68,7 @@ void ring_buffer_alert_waiters(ring_buffer_t * ring_buffer) {
 
 void ring_buffer_select_wait(ring_buffer_t * ring_buffer, void * process) {
 	if (!ring_buffer->alert_waiters) {
-		ring_buffer->alert_waiters = list_create();
+		ring_buffer->alert_waiters = list_create("ringbuffer alerts", ring_buffer);
 	}
 
 	if (!list_find(ring_buffer->alert_waiters, process)) {
@@ -143,8 +143,8 @@ ring_buffer_t * ring_buffer_create(size_t size) {
 	out->internal_stop = 0;
 	out->discard = 0;
 
-	out->wait_queue_readers = list_create();
-	out->wait_queue_writers = list_create();
+	out->wait_queue_readers = list_create("ringbuffer readers",out);
+	out->wait_queue_writers = list_create("ringbuffer writers",out);
 
 	return out;
 }

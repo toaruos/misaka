@@ -567,7 +567,7 @@ int readlink_fs(fs_node_t *node, char * buf, uint64_t size) {
  */
 char *canonicalize_path(const char *cwd, const char *input) {
 	/* This is a stack-based canonicalizer; we use a list as a stack */
-	list_t *out = list_create();
+	list_t *out = list_create("vfs canonicalize_path working memory",input);
 
 	/*
 	 * If we have a relative path, we need to canonicalize

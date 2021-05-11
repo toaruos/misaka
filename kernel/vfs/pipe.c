@@ -201,7 +201,7 @@ static int pipe_wait(fs_node_t * node, void * process) {
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
 
 	if (!pipe->alert_waiters) {
-		pipe->alert_waiters = list_create();
+		pipe->alert_waiters = list_create("pipe alert waiters",pipe);
 	}
 
 	if (!list_find(pipe->alert_waiters, process)) {
@@ -253,8 +253,8 @@ fs_node_t * make_pipe(size_t size) {
 	spin_init(pipe->lock_read);
 	spin_init(pipe->lock_write);
 
-	pipe->wait_queue_writers = list_create();
-	pipe->wait_queue_readers = list_create();
+	pipe->wait_queue_writers = list_create("pipe writers",pipe);
+	pipe->wait_queue_readers = list_create("pip readers",pipe);
 
 	return fnode;
 }

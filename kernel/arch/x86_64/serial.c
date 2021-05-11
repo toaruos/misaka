@@ -11,6 +11,7 @@
 #include <kernel/types.h>
 #include <kernel/vfs.h>
 #include <kernel/pipe.h>
+#include <kernel/process.h>
 #include <kernel/printf.h>
 #include <kernel/args.h>
 #include <kernel/pty.h>
@@ -70,7 +71,13 @@ int serial_handler_ac(struct regs *r) {
 	}
 	serial = serial_recv(port);
 	irq_ack(SERIAL_IRQ_AC);
-	tty_input_process(*pty_for_port(port), serial);
+	pty_t * pty = *pty_for_port(port);
+	if (ring_buffer_available(pty->in) > 1) {
+		tty_input_process(pty, serial);
+	} else {
+		printf("serial port ran out of buffer space and dropped a byte\n");
+		printf("current process is %d\n", current_process->id);
+	}
 	return 1;
 }
 

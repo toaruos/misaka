@@ -223,9 +223,9 @@ void switch_task(uint8_t reschedule) {
  */
 void initialize_process_tree(void) {
 	process_tree = tree_create();
-	process_list = list_create();
-	process_queue = list_create();
-	sleep_queue = list_create();
+	process_list = list_create("global process list",NULL);
+	process_queue = list_create("global scheduler queue",NULL);
+	sleep_queue = list_create("global timed sleep queue",NULL);
 
 	/* TODO: PID bitset? */
 }
@@ -355,9 +355,9 @@ process_t * spawn_kidle(void) {
 
 	/* FIXME Why does the idle thread have wait queues and shm mappings?
 	 *       Can we make sure these are never referenced and not allocate them? */
-	idle->wait_queue = list_create();
-	idle->shm_mappings = list_create();
-	idle->signal_queue = list_create();
+	idle->wait_queue = list_create("process wait queue (kidle)",idle);
+	idle->shm_mappings = list_create("process shm mappings (kidle)",idle);
+	idle->signal_queue = list_create("process signal queue (kidle)",idle);
 	gettimeofday(&idle->start, NULL);
 	idle->thread.page_directory = malloc(sizeof(page_directory_t));
 	idle->thread.page_directory->refcount = 1;
@@ -398,9 +398,9 @@ process_t * spawn_init(void) {
 	init->image.shm_heap = 0x200000000; /* That's 8GiB? That should work fine... */
 
 	init->flags         = PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
-	init->wait_queue    = list_create();
-	init->shm_mappings  = list_create();
-	init->signal_queue  = list_create();
+	init->wait_queue    = list_create("process wait queue (init)", init);
+	init->shm_mappings  = list_create("process shm mapping (init)", init);
+	init->signal_queue  = list_create("process signal queue (init)", init);
 	init->signal_kstack = NULL; /* Initialized later */
 
 	init->sched_node.prev = NULL;
@@ -469,9 +469,9 @@ process_t * spawn_process(volatile process_t * parent, int flags) {
 	proc->wd_node = clone_fs(parent->wd_node);
 	proc->wd_name = strdup(parent->wd_name);
 
-	proc->wait_queue   = list_create();
-	proc->shm_mappings = list_create();
-	proc->signal_queue = list_create();
+	proc->wait_queue   = list_create("process wait queue",proc);
+	proc->shm_mappings = list_create("process shm mappings",proc);
+	proc->signal_queue = list_create("process signal queue",proc);
 
 	proc->sched_node.value = proc;
 	proc->sleep_node.value = proc;
@@ -556,7 +556,8 @@ void make_process_ready(volatile process_t * proc) {
 		 * is indicative of a bug somewhere as we shouldn't be added processes to the ready
 		 * queue multiple times. */
 		printf("Can't make process ready without removing it from owner list: %d\n", proc->id);
-		printf("  (This is a bug) Current owner list is %p (ready queue is %p)\n", proc->sched_node.owner, (void*)process_queue);
+		printf("  (This is a bug) Current owner list is %s@%p (ready queue is %p)\n",
+			proc->sched_node.owner->name, (void *)proc->sched_node.owner, (void*)process_queue);
 		return;
 	}
 
@@ -902,7 +903,7 @@ int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
 
 	n = nodes;
 
-	process->node_waits = list_create();
+	process->node_waits = list_create("process fswaiters",process);
 	if (*n) {
 		do {
 			if (selectwait_fs(*n, process) < 0) {

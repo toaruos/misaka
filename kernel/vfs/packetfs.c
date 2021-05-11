@@ -416,7 +416,7 @@ static int create_packetfs(fs_node_t *parent, char *name, uint16_t permission) {
 
 	new_exchange->name = strdup(name);
 	new_exchange->fresh = 1;
-	new_exchange->clients = list_create();
+	new_exchange->clients = list_create("pex clients",new_exchange);
 	new_exchange->server_pipe = make_pipe(4096);
 
 	spin_init(new_exchange->lock);
@@ -468,7 +468,7 @@ static int unlink_packetfs(fs_node_t *parent, char *name) {
 
 static fs_node_t * packetfs_manager(void) {
 	pex_t * pex = malloc(sizeof(pex_t));
-	pex->exchanges = list_create();
+	pex->exchanges = list_create("pex exchanges",pex);
 
 	spin_init(pex->lock);
 

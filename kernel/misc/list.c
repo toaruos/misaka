@@ -134,12 +134,14 @@ node_t * list_insert_before(list_t * list, node_t * after, void * item) {
 	return node;
 }
 
-list_t * list_create(void) {
+list_t * list_create(const char * name, void * metadata) {
 	/* Create a fresh list */
 	list_t * out = malloc(sizeof(list_t));
 	out->head = NULL;
 	out->tail = NULL;
 	out->length = 0;
+	out->name = name;
+	out->metadata = metadata;
 	return out;
 }
 
@@ -225,7 +227,7 @@ node_t * list_dequeue(list_t * list) {
 
 list_t * list_copy(list_t * original) {
 	/* Create a new copy of original */
-	list_t * out = list_create();
+	list_t * out = list_create(original->name, original->metadata);
 	node_t * node = original->head;
 	while (node) {
 		list_insert(out, node->value);

@@ -59,7 +59,7 @@ tree_node_t * tree_node_create(void * value) {
 	/* Create a new tree node pointing to the given value */
 	tree_node_t * out = malloc(sizeof(tree_node_t));
 	out->value = value;
-	out->children = list_create();
+	out->children = list_create("tree node children",out);
 	out->parent = NULL;
 	return out;
 }

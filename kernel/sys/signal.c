@@ -111,7 +111,7 @@ list_t * rets_from_sig;
 
 void return_from_signal_handler(void) {
 	if (__builtin_expect(!rets_from_sig, 0)) {
-		rets_from_sig = list_create();
+		rets_from_sig = list_create("global return-from-signal queue",NULL);
 	}
 
 	spin_lock(sig_lock);

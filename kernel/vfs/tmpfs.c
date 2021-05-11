@@ -116,7 +116,7 @@ static struct tmpfs_dir * tmpfs_dir_new(char * name, struct tmpfs_dir * parent) 
 	d->atime = now();
 	d->mtime = d->atime;
 	d->ctime = d->atime;
-	d->files = list_create();
+	d->files = list_create("tmpfs directory entries",d);
 
 	spin_unlock(tmpfs_lock);
 	return d;

@@ -182,7 +182,7 @@ int hashmap_has(hashmap_t * map, const void * key) {
 }
 
 list_t * hashmap_keys(hashmap_t * map) {
-	list_t * l = list_create();
+	list_t * l = list_create("hashmap keys",map);
 
 	for (unsigned int i = 0; i < map->size; ++i) {
 		hashmap_entry_t * x = map->entries[i];
@@ -196,7 +196,7 @@ list_t * hashmap_keys(hashmap_t * map) {
 }
 
 list_t * hashmap_values(hashmap_t * map) {
-	list_t * l = list_create();
+	list_t * l = list_create("hashmap values",map);
 
 	for (unsigned int i = 0; i < map->size; ++i) {
 		hashmap_entry_t * x = map->entries[i];

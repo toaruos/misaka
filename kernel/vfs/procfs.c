@@ -694,7 +694,7 @@ static long next_id = 0;
 
 int procfs_install(struct procfs_entry * entry) {
 	if (!extended_entries) {
-		extended_entries = list_create();
+		extended_entries = list_create("procfs entries",NULL);
 		next_id = -PROCFS_STANDARD_ENTRIES - 1;
 	}
 
