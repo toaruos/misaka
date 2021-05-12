@@ -74,9 +74,9 @@ LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
 GCC_SHARED = $(BASE)/usr/lib/libgcc_s.so.1 $(BASE)/usr/lib/libgcc_s.so
 LIBSTDCXX =  $(BASE)/usr/lib/libstdc++.so.6.0.28 $(BASE)/usr/lib/libstdc++.so.6 $(BASE)/usr/lib/libstdc++.so
 
-CRTS  = $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o $(GCC_SHARED)
+CRTS  = $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 
-LC = $(BASE)/lib/libc.so
+LC = $(BASE)/lib/libc.so $(GCC_SHARED) $(LIBSTDCXX)
 
 .PHONY: all system clean run
 
@@ -138,6 +138,7 @@ clean:
 	-rm -f $(BASE)/lib/libc.so $(BASE)/lib/libc.a
 	-rm -f $(LIBC_OBJS) $(BASE)/lib/ld.so $(BASE)/lib/libkuroko.so $(BASE)/lib/libm.so
 	-rm -f $(BASE)/bin/kuroko
+	-rm -f $(GCC_SHARED) $(LIBSTDCXX)
 
 libc/%.o: libc/%.c base/usr/include/syscall.h 
 	$(CC) -O2 -std=gnu11 -Wall -Wextra -Wno-unused-parameter -fPIC -c -o $@ $<
@@ -156,10 +157,10 @@ $(BASE)/lib/crt%.o: libc/crt%.S
 
 $(BASE)/usr/lib/%: util/local/x86_64-pc-toaru/lib/% | dirs
 	cp -a $< $@
-	strip $@
+	-strip $@
 
-$(BASE)/lib/libm.so: util/libm.c | $(LC)
-	$(CC) -shared -fPIC -o $@ $<
+$(BASE)/lib/libm.so: util/libm.c
+	$(CC) -shared -nostdlib -fPIC -o $@ $<
 
 $(BASE)/dev:
 	mkdir -p $@
