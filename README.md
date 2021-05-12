@@ -23,3 +23,18 @@ Note that Misaka is still considered a _work in progress_. While most of the OS 
 - aarch64 and riscv64 ports are on the long-term roadmap.
 - All of this will eventually be merged upstream.
 
+## Building
+
+```bash
+git clone https://github.com/toaruos/misaka
+cd misaka
+git submodule update --init kuroko
+docker pull toaruos/build-tools:1.99.x
+docker run -v `pwd`:/root/misaka -w /root/misaka -e LANG=C.UTF-8 -t toaruos/build-tools:1.99.x util/build-in-docker.sh
+```
+
+## Running
+
+```bash
+qemu-system-x86_64 -kernel misaka-kernel -initrd ramdisk.tar -append "root=/dev/ram0 start=live-session migrate" -enable-kvm -m 1G
+```
