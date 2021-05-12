@@ -150,7 +150,7 @@ $(BASE)/lib/libc.a: ${LIBC_OBJS} $(CRTS)
 	$(AR) cr $@ $(LIBC_OBJS)
 
 $(BASE)/lib/libc.so: ${LIBC_OBJS} | $(CRTS)
-	${CC} -nodefaultlibs -shared -fPIC -o $@ $^ -lgcc
+	${CC} -nodefaultlibs -shared -fPIC -o $@ $^
 
 $(BASE)/lib/crt%.o: libc/crt%.S
 	${AS} -o $@ $<
