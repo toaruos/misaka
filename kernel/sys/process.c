@@ -1121,3 +1121,60 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	arch_exit_critical();
 	return new_proc->id;
 }
+
+extern void arch_enter_tasklet(void);
+extern union PML * mmu_get_kernel_directory(void);
+
+process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * name, void * argp) {
+	arch_enter_critical();
+	process_t * proc = calloc(1,sizeof(process_t));
+
+	proc->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
+
+	proc->id          = get_next_pid();
+	proc->group       = proc->id;
+	proc->name        = strdup(name);
+	proc->description = NULL;
+	proc->cmdline     = NULL;
+
+	/* Are these necessary for tasklets? Should probably all be zero. */
+	proc->user        = 0;
+	proc->real_user   = 0;
+	proc->mask        = 0;
+	proc->job         = proc->id;
+	proc->session     = proc->id;
+
+	proc->thread.page_directory = malloc(sizeof(page_directory_t));
+	proc->thread.page_directory->refcount = 1;
+	proc->thread.page_directory->directory = mmu_clone(mmu_get_kernel_directory());
+
+	proc->image.stack       = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+	PUSH(proc->image.stack, uintptr_t, (uintptr_t)entrypoint);
+	PUSH(proc->image.stack, void*, argp);
+
+	proc->thread.context.sp = proc->image.stack;
+	proc->thread.context.bp = proc->image.stack;
+	proc->thread.context.ip = (uintptr_t)&arch_enter_tasklet;
+
+
+	proc->wait_queue   = list_create("worker thread wait queue",proc);
+	proc->shm_mappings = list_create("worker thread shm mappings",proc);
+	proc->signal_queue = list_create("worker thread signal queue",proc);
+
+	proc->sched_node.value = proc;
+	proc->sleep_node.value = proc;
+
+	gettimeofday(&proc->start, NULL);
+	tree_node_t * entry = tree_node_create(proc);
+	proc->tree_entry = entry;
+
+	spin_lock(tree_lock);
+	tree_node_insert_child_node(process_tree, current_process->tree_entry, entry);
+	list_insert(process_list, (void*)proc);
+	spin_unlock(tree_lock);
+
+	make_process_ready(proc);
+
+	arch_exit_critical();
+	return proc;
+}

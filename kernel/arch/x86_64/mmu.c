@@ -435,6 +435,10 @@ void mmu_free(union PML * from) {
 	mmu_frame_clear((((uintptr_t)from) & 0xFFFFFFFF));
 }
 
+union PML * mmu_get_kernel_directory(void) {
+	return (union PML*)((uintptr_t)&init_page_region[0] | 0xFFFFffff00000000UL);
+}
+
 void mmu_set_directory(union PML * new_pml) {
 	if (!new_pml) new_pml = (union PML*)((uintptr_t)&init_page_region[0] | 0xFFFFffff00000000UL);
 	current_pml = new_pml;

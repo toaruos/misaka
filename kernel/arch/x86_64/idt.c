@@ -169,18 +169,18 @@ void idt_install(void) {
 static void dump_regs(struct regs * r) {
 	printf(
 		"Registers at interrupt:\n"
-		"  rax=0x%016lx rbx=0x%016lx rcx=0x%016lx rdx=0x%016lx\n"
-		"  rsi=0x%016lx rdi=0x%016lx rbp=0x%016lx\n"
-		"   r8=0x%016lx  r9=0x%016lx r10=0x%016lx r11=0x%016lx\n"
-		"  r12=0x%016lx r13=0x%016lx r14=0x%016lx r15=0x%016lx\n"
-		"  rip=0x%016lx  cs=0x%016lx rsp=0x%016lx  ss=0x%016lx\n"
-		"  rflags=0x%016lx int=0x%02lx err=0x%02lx\n",
+		"  $rip=0x%016lx\n"
+		"  $rsi=0x%016lx,$rdi=0x%016lx,$rbp=0x%016lx,$rsp=0x%016lx\n"
+		"  $rax=0x%016lx,$rbx=0x%016lx,$rcx=0x%016lx,$rdx=0x%016lx\n"
+		"  $r8= 0x%016lx,$r9= 0x%016lx,$r10=0x%016lx,$r11=0x%016lx\n"
+		"  $r12=0x%016lx,$r13=0x%016lx,$r14=0x%016lx,$r15=0x%016lx\n"
+		"  cs=0x%016lx  ss=0x%016lx rflags=0x%016lx int=0x%02lx err=0x%02lx\n",
+		r->rip,
+		r->rsi, r->rdi, r->rbp, r->rsp,
 		r->rax, r->rbx, r->rcx, r->rdx,
-		r->rsi, r->rdi, r->rbp,
 		r->r8, r->r9, r->r10, r->r11,
 		r->r12, r->r13, r->r14, r->r15,
-		r->rip, r->cs, r->rsp, r->ss,
-		r->rflags, r->int_no, r->err_code
+		r->cs, r->ss, r->rflags, r->int_no, r->err_code
 	);
 }
 

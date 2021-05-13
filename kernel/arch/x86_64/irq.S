@@ -170,3 +170,9 @@ arch_restore_context:
     movq $1, %rax
     jmpq *16(%rdi)
 
+.global arch_enter_tasklet
+.type arch_enter_tasklet, @function
+arch_enter_tasklet:
+    popq %rdi
+    popq %rsi
+    jmpq *%rsi
