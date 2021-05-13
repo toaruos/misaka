@@ -233,8 +233,13 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	/* This is generic and should probably be started earlier... */
 	extern void snd_install(void);
 	snd_install();
+
+	/* The ICH AC97 driver is really slow... or more accurately, the whole sound system is slow.
+	 * so for now we're just not going to turn it on. */
+#if 0
 	extern void ac97_install(void);
 	ac97_install();
+#endif
 
 	/* Special drivers should probably be modules... */
 	vmware_initialize();
