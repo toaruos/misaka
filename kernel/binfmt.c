@@ -1,3 +1,7 @@
+/**
+ * @file  kernel/binfmt.c
+ * @brief Top-level executable parsing.
+ */
 #include <errno.h>
 #include <kernel/vfs.h>
 #include <kernel/printf.h>
@@ -10,10 +14,17 @@
 extern int elf_exec(const char * path, fs_node_t * file, int argc, char *const argv[], char *const env[], int interp);
 int exec(const char * path, int argc, char *const argv[], char *const env[], int interp_depth);
 
+/**
+ * @brief hash-exclamation parser
+ *
+ * Tries to safely read the first line of a script file to find an appropriate loader.
+ */
 int exec_shebang(const char * path, fs_node_t * file, int argc, char *const argv[], char *const env[], int interp) {
-	if (interp > 4) /* sounds good to me */ {
+	if (interp > 4) {
+		/* If an interpreter calls an interpreter too many times, bail. */
 		return -ELOOP;
 	}
+
 	/* Read MAX_LINE... */
 	char tmp[100];
 	read_fs(file, 0, 100, (unsigned char *)tmp); close_fs(file);
@@ -22,20 +33,26 @@ int exec_shebang(const char * path, fs_node_t * file, int argc, char *const argv
 	char * space_or_linefeed = strpbrk(cmd, " \n");
 	char * arg = NULL;
 
+	/* We read too much stuff before finding EOL or another signal
+	 * that the interpreter was found, so bail. */
 	if (!space_or_linefeed) {
 		return -ENOEXEC;
 	}
 
+	/* If we found a space, accept one argument before the path... */
 	if (*space_or_linefeed == ' ') {
-		/* Oh lovely, an argument */
 		*space_or_linefeed = '\0';
 		space_or_linefeed++;
 		arg = space_or_linefeed;
+		/* ... and look for another EOL. */
 		space_or_linefeed = strpbrk(space_or_linefeed, "\n");
 		if (!space_or_linefeed) {
+			/* If we didn't find one, bail. */
 			return -ENOEXEC;
 		}
 	}
+
+	/* Make sure interpreter or argument is nil-terminated */
 	*space_or_linefeed = '\0';
 
 	char script[strlen(path)+1];
@@ -54,6 +71,7 @@ int exec_shebang(const char * path, fs_node_t * file, int argc, char *const argv
 	}
 	args[j] = NULL;
 
+	/* Try to execut the interpreter with the new arguments */
 	return exec(cmd, nargc, args, env, interp+1);
 }
 
@@ -78,6 +96,16 @@ static int matches(unsigned char * a, unsigned char * b, unsigned int len) {
 	return 1;
 }
 
+/**
+ * @brief Replace the current process with a new one.
+ *
+ * @param path Filename of the new executable.
+ * @param argc Number of arguments passed in @p argv
+ * @param argv Arguments to supply to the new executable's entry point.
+ * @param env  Environment strings to pass to the new executable.
+ * @param interp_depth Should be 0 for all external callers.
+ * @returns Either never or -ENOEXEC on failure.
+ */
 int exec(const char * path, int argc, char *const argv[], char *const env[], int interp_depth) {
 	fs_node_t * file = kopen(path, 0);
 	if (!file) return -ENOENT;
@@ -97,6 +125,11 @@ int exec(const char * path, int argc, char *const argv[], char *const env[], int
 	return -ENOEXEC;
 }
 
+/**
+ * This is generally only called by system startup code to launch /bin/init.
+ * Copies arguments from kernel constants into the heap, sets up a new MMU context
+ * from the kernel boot context, and then calls @ref exec.
+ */
 int system(const char * path, int argc, char *const argv[], char *const envin[]) {
 	char ** argv_ = malloc(sizeof(char*) * (argc + 1));
 	for (int j = 0; j < argc; ++j) {

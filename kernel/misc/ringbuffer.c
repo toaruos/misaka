@@ -1,7 +1,14 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file kernel/misc/ringbuffer.c
+ * @brief Generic ringbuffer with blocking reads and writes.
+ *
+ * Provides a buffer interface for devices such as at PTYs with
+ * blocking reads and writes.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2013-2018 K. Lange
+ * Copyright (C) 2013-2021 K. Lange
  */
 #include <stdint.h>
 #include <stddef.h>

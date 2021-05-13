@@ -1,15 +1,14 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
- * This file is part of ToaruOS and is released under the terms
- * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2011-2018 K. Lange
- *
- * Kernel Argument Manager
+/**
+ * @brief Kernel commandline argument parser.
  *
  * Arguments to the kernel are provided from the bootloader and
  * provide information such as what mode to pass to init, or what
- * hard disk partition should be mounted as root.
+ * hard disk partition should be mounted as root. We parse them
+ * into a hash table for easy lookup by key.
  *
- * This module provides access 
+ * @copyright This file is part of ToaruOS and is released under the terms
+ *            of the NCSA / University of Illinois License - see LICENSE.md
+ *            Copyright (C) 2011-2021 K. Lange
  */
 #include <kernel/string.h>
 #include <kernel/args.h>
@@ -19,6 +18,8 @@
 hashmap_t * kernel_args_map = NULL;
 
 /**
+ * @brief Determine if an argument was passed to the kernel.
+ *
  * Check if an argument was provided to the kernel. If the argument is
  * a simple switch, a response of 1 can be considered "on" for that
  * argument; otherwise, this just notes that the argument was present,
@@ -31,7 +32,7 @@ int args_present(const char * karg) {
 }
 
 /**
- * Return the value associated with an argument provided to the kernel.
+ * @brief Return the value associated with an argument provided to the kernel.
  */
 char * args_value(const char * karg) {
 	if (!kernel_args_map) return 0; /* derp */
@@ -40,7 +41,7 @@ char * args_value(const char * karg) {
 }
 
 /**
- * Parse the given arguments to the kernel.
+ * @brief Parse the given arguments to the kernel.
  *
  * @param arg A string containing all arguments, separated by spaces.
  */

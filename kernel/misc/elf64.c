@@ -1,8 +1,12 @@
 /**
  * @file kernel/misc/elf64.c
  * @brief Elf64 parsing tools for modules and static userspace binaries.
+ *
+ * Provides exec() for Elf64 binaries. Note that the loader only directly
+ * loads static binaries; for dynamic binaries, the requested interpreter
+ * is loaded, which should generally be /lib/ld.so, which should itself
+ * be a static binary. This loader is platform-generic.
  */
-
 #include <errno.h>
 #include <kernel/types.h>
 #include <kernel/symboltable.h>
@@ -15,6 +19,7 @@
 
 extern void arch_set_kernel_stack(uintptr_t);
 extern void arch_enter_critical(void);
+extern void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[], uintptr_t stack);
 
 static Elf64_Shdr * elf_getSection(Elf64_Header * this, Elf64_Word index) {
 	return (Elf64_Shdr*)((uintptr_t)this + this->e_shoff + index * this->e_shentsize);
@@ -62,8 +67,6 @@ void elf_parseModuleFromMemory(void * atAddress) {
 		}
 	}
 }
-
-extern void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[], uintptr_t stack);
 
 int elf_exec(const char * path, fs_node_t * file, int argc, const char *const argv[], const char *const env[], int interp) {
 	Elf64_Header header;
@@ -226,13 +229,8 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	PUSH(uintptr_t, argc);
 
 	arch_enter_critical();
-	if (!current_process->image.stack) {
-		printf("wtf\n");
-	}
 	arch_set_kernel_stack(current_process->image.stack);
 	arch_enter_user(header.e_entry, argc, _argv, _envp, userstack);
-
-	// arch_enter_user? (ip, stack...)
 
 	return -EINVAL;
 }

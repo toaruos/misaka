@@ -1,3 +1,9 @@
+/**
+ * @file  kernel/misc/string.c
+ * @brief Generic string functions and C standard library implementations for the kernel.
+ * @author Copyright (C) 2015-2021 K. Lange
+ * @author Copyright (C) 2015      Dale Weiler
+ */
 #include <kernel/types.h>
 #include <kernel/string.h>
 
@@ -24,6 +30,7 @@ void * memcpy(void * restrict dest, const void * restrict src, size_t n) {
 	return dest;
 }
 #else
+/* FIXME why is there an x86-specific memcpy outside of the arch dir... */
 void * memcpy(void * restrict dest, const void * restrict src, size_t n) {
 	asm volatile("rep movsb"
 	            : : "D"(dest), "S"(src), "c"(n)

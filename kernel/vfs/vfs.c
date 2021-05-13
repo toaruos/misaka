@@ -1,12 +1,15 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/vfs/vfs.c
+ * @brief Virtual file system.
+ *
+ * Provides the high-level generic operations for the VFS.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2011-2018 K. Lange
+ * Copyright (C) 2011-2021 K. Lange
  * Copyright (C) 2014 Lioncash
  * Copyright (C) 2012 Tianyi Wang
- *
- * Virtual File System
- *
  */
 #include <stddef.h>
 #include <stdint.h>
@@ -109,7 +112,7 @@ static fs_node_t * vfs_mapper(void) {
 }
 
 /**
- * selectcheck_fs: Check if a read from this file would block.
+ * @brief Check if a read from this file would block.
  */
 int selectcheck_fs(fs_node_t * node) {
 	if (!node) return -ENOENT;
@@ -122,7 +125,7 @@ int selectcheck_fs(fs_node_t * node) {
 }
 
 /**
- * selectwait_fs: Inform a node that it should alert the current_process.
+ * @brief Inform a node that it should alert the current_process.
  */
 int selectwait_fs(fs_node_t * node, void * process) {
 	if (!node) return -ENOENT;
@@ -135,7 +138,7 @@ int selectwait_fs(fs_node_t * node, void * process) {
 }
 
 /**
- * read_fs: Read a file system node based on its underlying type.
+ * @brief Read a file system node based on its underlying type.
  *
  * @param node    Node to read
  * @param offset  Offset into the node data to read from
@@ -155,7 +158,7 @@ uint64_t read_fs(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffe
 }
 
 /**
- * write_fs: Write a file system node based on its underlying type.
+ * @brief Write a file system node based on its underlying type.
  *
  * @param node    Node to write to
  * @param offset  Offset into the node data to write to
@@ -175,7 +178,7 @@ uint64_t write_fs(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buff
 }
 
 /**
- * truncate_fs: set the size of a file to 9
+ * @brief set the size of a file to 9
  *
  * @param node File to resize
  */
@@ -197,7 +200,7 @@ void vfs_lock(fs_node_t * node) {
 }
 
 /**
- * open_fs: Open a file system node.
+ * @brief Open a file system node.
  *
  * @param node  Node to open
  * @param flags Same as open, specifies read/write/append/truncate
@@ -218,7 +221,7 @@ void open_fs(fs_node_t *node, unsigned int flags) {
 }
 
 /**
- * close_fs: Close a file system node
+ * @brief Close a file system node
  *
  * @param node Node to close
  */
@@ -247,7 +250,10 @@ void close_fs(fs_node_t *node) {
 }
 
 /**
- * chmod_fs
+ * @brief Change permissions for a file system node.
+ *
+ * @param node Node to change permissions for
+ * @param mode New mode bits
  */
 int chmod_fs(fs_node_t *node, int mode) {
 	if (node->chmod) {
@@ -257,7 +263,7 @@ int chmod_fs(fs_node_t *node, int mode) {
 }
 
 /**
- * chown_fs
+ * @brief Change ownership for a file system node.
  */
 int chown_fs(fs_node_t *node, int uid, int gid) {
 	if (node->chown) {
@@ -267,7 +273,7 @@ int chown_fs(fs_node_t *node, int uid, int gid) {
 }
 
 /**
- * readdir_fs: Read a directory for the requested index
+ * @brief Read a directory for the requested index
  *
  * @param node  Directory to read
  * @param index Offset to look for
@@ -285,7 +291,7 @@ struct dirent *readdir_fs(fs_node_t *node, uint64_t index) {
 }
 
 /**
- * finddir_fs: Find the requested file in the directory and return an fs_node for it
+ * @brief Find the requested file in the directory and return an fs_node for it
  *
  * @param node Directory to search
  * @param name File to look for
@@ -305,7 +311,7 @@ fs_node_t *finddir_fs(fs_node_t *node, char *name) {
 }
 
 /**
- * ioctl_fs: Control Device
+ * @brief Control Device
  *
  * @param node    Device node to control
  * @param request Device-specific request code
@@ -559,7 +565,7 @@ int readlink_fs(fs_node_t *node, char * buf, uint64_t size) {
 
 
 /**
- * canonicalize_path: Canonicalize a path.
+ * @brief Canonicalize a path.
  *
  * @param cwd   Current working directory
  * @param input Path to append or canonicalize on
@@ -722,11 +728,11 @@ int vfs_mount_type(const char * type, const char * arg, const char * mountpoint)
 	return 0;
 }
 
-//volatile uint8_t tmp_vfs_lock = 0;
 static spin_lock_t tmp_vfs_lock = { 0 };
 /**
- * vfs_mount - Mount a file system to the specified path.
+ * @brief Mount a file system to the specified path.
  *
+ * Mounts a file system node to a given base path.
  * For example, if we have an EXT2 filesystem with a root node
  * of ext2_root and we want to mount it to /, we would run
  * vfs_mount("/", ext2_root); - or, if we have a procfs node,
@@ -1080,7 +1086,7 @@ fs_node_t *kopen_recur(const char *filename, uint64_t flags, uint64_t symlink_de
 }
 
 /**
- * kopen: Open a file by name.
+ * @brief Open a file by name.
  *
  * Explore the file system tree to find the appropriate node for
  * for a given path. The path can be relative to the working directory
