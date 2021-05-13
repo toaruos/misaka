@@ -78,7 +78,7 @@ CRTS  = $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 
 LC = $(BASE)/lib/libc.so $(GCC_SHARED) $(LIBSTDCXX)
 
-.PHONY: all system clean run
+.PHONY: all system clean run shell
 
 all: system
 system: misaka-kernel $(MODULES) ramdisk.tar
@@ -104,6 +104,12 @@ $(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs $(LC)
 
 run: system
 	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "root=/dev/ram0 start=live-session migrate" -initrd ramdisk.tar
+
+shell: system
+	${EMU} -m 3G ${EMU_KVM} -kernel misaka-kernel -append "root=/dev/ram0 start=--headless migrate" -initrd ramdisk.tar \
+		-nographic -no-reboot -audiodev none,id=id -serial null -serial mon:stdio \
+		-fw_cfg name=opt/org.toaruos.gettyargs,string="-a local /dev/ttyS1" \
+		-fw_cfg name=opt/org.toaruos.term,string=${TERM}
 
 misaka-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 	${CC} -g -T kernel/arch/${ARCH}/link.ld ${KERNEL_CFLAGS} -o $@.64 ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc
