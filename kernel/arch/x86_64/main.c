@@ -1,16 +1,22 @@
+/**
+ * @file  kernel/arch/x86_64/main.c
+ * @brief Intel/AMD x86-64 (IA64/amd64) architecture-specific startup.
+ *
+ * Parses multiboot data, sets up GDT/IDT/TSS, initializes PML4 paging,
+ * and sets up PC device drivers (PS/2, port I/O, serial).
+ */
 #include <kernel/types.h>
 #include <kernel/multiboot.h>
-#include <kernel/version.h>
 #include <kernel/symboltable.h>
 #include <kernel/string.h>
 #include <kernel/printf.h>
 #include <kernel/pci.h>
 #include <kernel/hashmap.h>
 #include <kernel/vfs.h>
-#include <kernel/process.h>
 #include <kernel/mmu.h>
-#include <kernel/args.h>
 #include <kernel/video.h>
+#include <kernel/generic.h>
+#include <kernel/ramdisk.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/idt.h>
@@ -18,6 +24,21 @@
 #include <kernel/arch/x86_64/pml.h>
 
 #include <errno.h>
+
+extern void arch_clock_initialize(void);
+
+extern char end[];
+
+extern void gdt_install(void);
+extern void idt_install(void);
+extern void pit_initialize(void);
+extern fs_node_t * lfb_device;
+extern void acpi_initialize(void);
+extern void portio_initialize(void);
+extern void keyboard_install(void);
+extern void mouse_install(void);
+extern void vmware_initialize(void);
+extern void serial_initialize(void);
 
 #define EARLY_LOG_DEVICE 0x3F8
 static size_t _early_log_write(size_t size, uint8_t * buffer) {
@@ -27,13 +48,12 @@ static size_t _early_log_write(size_t size, uint8_t * buffer) {
 	return size;
 }
 
-static void startup_initializeLog(void) {
+static void early_log_initialize(void) {
 	printf_output = &_early_log_write;
 }
 
-extern char end[];
 static size_t memCount = 0;
-static void startup_processMultiboot(struct multiboot * mboot) {
+static void multiboot_initialize(struct multiboot * mboot) {
 	/* Set memCount to 1M + high mem */
 	if (mboot->flags & MULTIBOOT_FLAG_MEM) {
 		/* mem_upper is in kibibytes and is one mebibyte less than
@@ -80,9 +100,14 @@ static void startup_processMultiboot(struct multiboot * mboot) {
 	mmu_set_kernel_heap(maxAddress);
 }
 
+/**
+ * FIXME: We don't currently use the kernel symbol table, but when modules
+ *        are implemented again we need it for linking... but also we could
+ *        just build the kernel with a dynamic symbol table attached?
+ */
 static hashmap_t * kernelSymbols = NULL;
 
-static void startup_processSymbols(void) {
+static void symbols_install(void) {
 	kernelSymbols = hashmap_create(10);
 	kernel_symbol_t * k = (kernel_symbol_t *)&kernel_symbols_start;
 	while ((uintptr_t)k < (uintptr_t)&kernel_symbols_end) {
@@ -91,7 +116,13 @@ static void startup_processSymbols(void) {
 	}
 }
 
-static void startup_initializePat(void) {
+/**
+ * @brief Initializes the page attribute table.
+ * FIXME: This seems to be assuming the lower entries are
+ *        already sane - we should probably initialize all
+ *        of the entries ourselves.
+ */
+static void pat_initialize(void) {
 	asm volatile (
 		"mov $0x277, %%ecx\n" /* IA32_MSR_PAT */
 		"rdmsr\n"
@@ -102,7 +133,17 @@ static void startup_initializePat(void) {
 	);
 }
 
-static void startup_initializeFPU(void) {
+/**
+ * @brief Turns on the floating-point unit.
+ *
+ * Enables a few bits so we can get SSE.
+ *
+ * We don't do any fancy lazy FPU reload as x86-64 assumes a wide
+ * variety of FPU-provided registers are available so most userspace
+ * code will be messing with the FPU anyway and we'd probably just
+ * waste time with all the interrupts turning it off and on...
+ */
+static void fpu_initialize(void) {
 	asm volatile (
 		"clts\n"
 		"mov %%cr0, %%rax\n"
@@ -123,34 +164,18 @@ static void startup_initializeFPU(void) {
 	: : : "rax");
 }
 
-extern void gdt_install(void);
-extern void idt_install(void);
-extern fs_node_t * ramdisk_mount(uintptr_t, size_t);
-extern void tarfs_register_init(void);
-extern void tmpfs_register_init(void);
-extern int system(const char * path, int argc, const char ** argv, const char ** envin);
-extern void arch_clock_initialize(void);
-extern void pit_initialize(void);
-extern fs_node_t * lfb_device;
-extern void acpi_initialize(void);
-extern void tasking_start(void);
-extern void packetfs_initialize(void);
-extern void portio_initialize(void);
-extern void zero_initialize(void);
-extern void procfs_initialize(void);
-extern void shm_install(void);
-extern void keyboard_install(void);
-extern void mouse_install(void);
-extern void random_initialize(void);
-extern void vmware_initialize(void);
-extern void serial_initialize(void);
-
 static struct multiboot * mboot_struct = NULL;
 
+/**
+ * x86-64: The kernel commandline is retrieved from the multiboot struct.
+ */
 const char * arch_get_cmdline(void) {
 	return (char*)((0xFFFFFFFF00000000UL) | mboot_struct->cmdline);
 }
 
+/**
+ * x86-64: The bootloader name is retrieved from the multiboot struct.
+ */
 const char * arch_get_loader(void) {
 	if (mboot_struct->flags & MULTIBOOT_FLAG_LOADER) {
 		return (char*)((0xFFFFFFFF00000000UL) | mboot_struct->boot_loader_name);
@@ -159,79 +184,55 @@ const char * arch_get_loader(void) {
 	}
 }
 
+/**
+ * @brief x86-64 multiboot C entrypoint.
+ *
+ * Called by the x86-64 longmode bootstrap.
+ */
 int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
-	startup_initializeLog();
+	/* The debug log is over /dev/ttyS0, but skips the PTY interface; it's available
+	 * as soon as we can call printf(), which is as soon as we get to long mode. */
+	early_log_initialize();
+
+	/* Time the TSC and get the initial boot time from the RTC. */
 	arch_clock_initialize();
+
+	/* Parse multiboot data so we can get memory map, modules, command line, etc. */
 	mboot_struct = mboot;
-	startup_processMultiboot(mboot);
+	multiboot_initialize(mboot);
+
+	/* memCount comes from multiboot data */
 	mmu_init(memCount);
-	startup_initializePat();
-	framebuffer_initialize();
-	startup_processSymbols();
 
+	/* With the MMU initialized, set up things required for the scheduler. */
+	pat_initialize();
+	symbols_install();
 	//acpi_initialize();
-
 	gdt_install();
 	idt_install();
-	startup_initializeFPU();
-	initialize_process_tree();
-	shm_install();
+	fpu_initialize();
 
-	vfs_install();
-	tarfs_register_init();
-	tmpfs_register_init();
-	map_vfs_directory("/dev");
+	/* Early generic stuff */
+	generic_startup();
+
+	/* Scheduler is running, so we can set up drivers. */
+	framebuffer_initialize();
 	vfs_mount("/dev/fb0", lfb_device);
 
-	/* Assume first module is ramdisk? */
+	/* Mount ramdisk (TODO: Should we be gzipping this and decompressing here?) */
 	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 	ramdisk_mount(mods[0].mod_start, mods[0].mod_end - mods[0].mod_start);
 
-	packetfs_initialize();
-	portio_initialize();
-	zero_initialize();
-	procfs_initialize();
-	random_initialize();
-
-	/* Most of this is generic from here on... */
-	args_parse(arch_get_cmdline());
-
-	tasking_start();
+	/* We set up the pit and interrupt stuff pretty late, after the scheduler is ready. */
 	pit_initialize();
 	keyboard_install();
 	mouse_install();
-	vmware_initialize();
 	serial_initialize();
+	portio_initialize();
 
-	if (args_present("root")) {
-		const char * root_type = "tar";
-		if (args_present("root_type")) {
-			root_type = args_value("root_type");
-		}
-		vfs_mount_type(root_type,args_value("root"),"/");
-	}
+	/* Special drivers should probably be modules... */
+	vmware_initialize();
 
-	const char * boot_arg = NULL;
-
-	if (args_present("args")) {
-		boot_arg = strdup(args_value("args"));
-	}
-
-	const char * boot_app = "/bin/init";
-	if (args_present("init")) {
-		boot_app = args_value("init");
-	}
-
-	const char * argv[] = {
-		boot_app,
-		boot_arg,
-		NULL
-	};
-	int argc = 0;
-	while (argv[argc]) argc++;
-	system(argv[0], argc, argv, NULL);
-
-	printf("Failed to execute %s.\n", boot_app);
-	switch_task(0);
-	return 0;
+	/* Yield the generic main, which starts /bin/init */
+	return generic_main();
 }

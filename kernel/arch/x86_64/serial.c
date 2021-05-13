@@ -72,15 +72,20 @@ static void process_serial(void * argp) {
 	pty_t * pty;
 	while (1) {
 		sleep_on((list_t*)argp);
-		int  port = 0;
+		int next = 0;
+		int port = 0;
 		if (inportb(portBase+1) & 0x01) {
 			port = portBase;
 		} else {
 			port = portBase - 0x100;
 		}
-		ch = serial_recv(port);
-		pty = *pty_for_port(port);
-		tty_input_process(pty, ch);
+		do {
+			ch = serial_recv(port);
+			pty = *pty_for_port(port);
+			tty_input_process(pty, ch);
+			next = serial_rcvd(port);
+			if (next) switch_task(1);
+		} while (next);
 	}
 }
 
