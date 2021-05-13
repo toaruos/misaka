@@ -142,13 +142,12 @@ static list_t * ac97_sem = NULL;
 static void ac97_tasklet(void * argp) {
 	while (1) {
 		sleep_on(ac97_sem);
-		size_t f = (_device.lvi + 1) & (AC97_BDL_LEN-1);
-		for (size_t i = 0; i < AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]); i += DIVISION) {
-			snd_request_buf(&_snd, DIVISION, (uint8_t *)_device.bufs[f] + i);
-		}
-		_device.lvi = f;
-		outportb(_device.nabmbar + AC97_PO_LVI, _device.lvi);
 		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_BCIS);
+		uint16_t current_buffer = inportb(_device.nabmbar + AC97_PO_CIV);
+		uint16_t last_valid = ((current_buffer+2) & (AC97_BDL_LEN-1));
+		snd_request_buf(&_snd, 0x1000, (uint8_t *)_device.bufs[last_valid]);
+		outportb(_device.nabmbar + AC97_PO_LVI, last_valid);
+		snd_request_buf(&_snd, 0x1000, (uint8_t *)_device.bufs[last_valid]+0x1000);
 	}
 }
 
@@ -240,6 +239,7 @@ static int ac97_mixer_write(uint32_t knob_id, uint32_t val) {
 	return 0;
 }
 
+extern uintptr_t mmu_allocate_n_frames(int n);
 void ac97_install(void) {
 	//debug_print(NOTICE, "Initializing AC97");
 	pci_scan(&find_ac97, -1, &_device);
@@ -267,7 +267,7 @@ void ac97_install(void) {
 	memset(_device.bdl, 0, AC97_BDL_LEN * sizeof(*_device.bdl));
 
 	for (int i = 0; i < AC97_BDL_LEN; i++) {
-		_device.bdl[i].pointer = mmu_allocate_a_frame() << 12;
+		_device.bdl[i].pointer = mmu_allocate_n_frames(2) << 12;
 		_device.bufs[i] = (void*)((uintptr_t)_device.bdl[i].pointer | 0xFFFFffff00000000);
 		memset(_device.bufs[i], 0, AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
 		AC97_CL_SET_LENGTH(_device.bdl[i].cl, AC97_BDL_BUFFER_LEN);

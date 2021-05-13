@@ -314,6 +314,16 @@ uintptr_t mmu_allocate_a_frame(void) {
 	return index;
 }
 
+uintptr_t mmu_allocate_n_frames(int n) {
+	spin_lock(frame_alloc_lock);
+	uintptr_t index = mmu_first_n_frames(n);
+	for (int i = 0; i < n; ++i) {
+		mmu_frame_set((index+i) << 12);
+	}
+	spin_unlock(frame_alloc_lock);
+	return index;
+}
+
 /**
  * TODO:
  * Both of these can check _just_ the right ranges...
