@@ -139,6 +139,7 @@ extern void task_exit(int retval);
 extern __attribute__((noreturn)) void switch_next(void);
 extern int process_awaken_from_fswait(process_t * process, int index);
 extern void process_release_directory(page_directory_t * dir);
+extern process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * name, void * argp);
 
 extern tree_t * process_tree;  /* Parent->Children tree */
 extern list_t * process_list;  /* Flat storage */

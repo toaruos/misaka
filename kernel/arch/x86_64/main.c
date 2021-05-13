@@ -230,6 +230,12 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	serial_initialize();
 	portio_initialize();
 
+	/* This is generic and should probably be started earlier... */
+	extern void snd_install(void);
+	snd_install();
+	extern void ac97_install(void);
+	ac97_install();
+
 	/* Special drivers should probably be modules... */
 	vmware_initialize();
 

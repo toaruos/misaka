@@ -158,7 +158,6 @@ static fs_node_t * serial_device_create(int port) {
 	return pty->slave;
 }
 
-extern process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * name, void * argp);
 void serial_initialize(void) {
 	sem_serial_ac = list_create("serial ac semaphore",NULL);
 	sem_serial_bd = list_create("serial bd semaphore",NULL);

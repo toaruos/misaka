@@ -254,6 +254,7 @@ extern void task_exit(int);
 
 extern int serial_handler_ac(struct regs *r);
 extern int serial_handler_bd(struct regs *r);
+extern int ac97_irq_handler(struct regs * regs);
 
 struct regs * isr_handler(struct regs * r) {
 	current_process->interrupt_registers = r;
@@ -327,6 +328,12 @@ struct regs * isr_handler(struct regs * r) {
 			/* Spurious interrupt */
 			break;
 		}
+		case 43: {
+			extern int ac97_irq_handler(struct regs * regs);
+			ac97_irq_handler(r);
+			irq_ack(11);
+			break;
+		}
 		case 44: {
 			extern int mouse_handler(struct regs *r);
 			mouse_handler(r);
@@ -342,9 +349,11 @@ struct regs * isr_handler(struct regs * r) {
 				printf("Killing %d from unhandled %s\n", current_process->id, exception_messages[r->int_no]);
 				send_signal(current_process->id, SIGILL, 1);
 			} else {
-				printf("Unhandled interrupt: %lu\n", r->int_no - 32);
 				irq_ack(r->int_no - 32);
+				#if 0
+				printf("Unhandled interrupt: %lu\n", r->int_no - 32);
 				dump_regs(r);
+				#endif
 			}
 		}
 	}
