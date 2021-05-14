@@ -3,15 +3,14 @@ BASE=base
 export PATH := $(shell $(TOOLCHAIN)/activate.sh)
 include build/arch.mk
 
-KERNEL_TARGET=x86_64-pc-toaru
-#${ARCH}-elf
+TARGET=x86_64-pc-toaru
 
-CC = ${KERNEL_TARGET}-gcc
-NM = ${KERNEL_TARGET}-nm
-CXX= ${KERNEL_TARGET}-g++
-AR = ${KERNEL_TARGET}-ar
-AS = ${KERNEL_TARGET}-as
-OC = ${KERNEL_TARGET}-objcopy
+CC = ${TARGET}-gcc
+NM = ${TARGET}-nm
+CXX= ${TARGET}-g++
+AR = ${TARGET}-ar
+AS = ${TARGET}-as
+OC = ${TARGET}-objcopy
 
 KERNEL_CFLAGS  = -ffreestanding -O2 -std=c11 -g -static
 
@@ -70,6 +69,7 @@ CFLAGS= -O2 -std=gnu11 -I. -Iapps -fplan9-extensions -Wall -Wextra -Wno-unused-p
 
 LIBC_OBJS  = $(patsubst %.c,%.o,$(wildcard libc/*.c))
 LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/*/*.c))
+LIBC_OBJS += $(patsubst %.c,%.o,$(wildcard libc/arch/${ARCH}/*.c))
 
 GCC_SHARED = $(BASE)/usr/lib/libgcc_s.so.1 $(BASE)/usr/lib/libgcc_s.so
 LIBSTDCXX =  $(BASE)/usr/lib/libstdc++.so.6.0.28 $(BASE)/usr/lib/libstdc++.so.6 $(BASE)/usr/lib/libstdc++.so
@@ -158,10 +158,10 @@ $(BASE)/lib/libc.a: ${LIBC_OBJS} $(CRTS)
 $(BASE)/lib/libc.so: ${LIBC_OBJS} | $(CRTS)
 	${CC} -nodefaultlibs -shared -fPIC -o $@ $^
 
-$(BASE)/lib/crt%.o: libc/crt%.S
+$(BASE)/lib/crt%.o: libc/arch/${ARCH}/crt%.S
 	${AS} -o $@ $<
 
-$(BASE)/usr/lib/%: util/local/x86_64-pc-toaru/lib/% | dirs
+$(BASE)/usr/lib/%: util/local/${TARGET}/lib/% | dirs
 	cp -a $< $@
 	-strip $@
 
@@ -229,7 +229,7 @@ apps: $(APPS_X)
 .PHONY: libstdcxx
 libstdcxx: $(LIBSTDCXX)
 
-util/local/x86_64-pc-toaru/lib/libstdc++.so.6.0.28: | $(BASE)/lib/libm.so
+util/local/${TARGET}/lib/libstdc++.so.6.0.28: | $(BASE)/lib/libm.so
 	cd util/build/gcc && make all-target-libstdc++-v3 && make install-target-libstdc++-v3
 
 SOURCE_FILES  = $(wildcard kernel/*.c kernel/*/*.c kernel/*/*/*.c kernel/*/*/*/*.c)
