@@ -33,7 +33,7 @@ static uint64_t read_ramdisk(fs_node_t *node, uint64_t offset, uint64_t size, ui
 		size = i;
 	}
 
-	memcpy(buffer, (void *)(node->inode + (uintptr_t)offset), size);
+	memcpy(buffer, (void *)(((uintptr_t)node->inode | 0xFFFFffff00000000UL) + (uintptr_t)offset), size);
 
 	return size;
 }
@@ -48,7 +48,7 @@ static uint64_t write_ramdisk(fs_node_t *node, uint64_t offset, uint64_t size, u
 		size = i;
 	}
 
-	memcpy((void *)(node->inode + (uintptr_t)offset), buffer, size);
+	memcpy((void *)(((uintptr_t)node->inode | 0xFFFFffff00000000UL) + (uintptr_t)offset), buffer, size);
 	return size;
 }
 

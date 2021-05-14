@@ -52,6 +52,7 @@ static void write_char(int x, int y, int val, uint32_t color) {
 }
 
 static void update_message(char * c, int line) {
+	if (framebuffer_fd < 0) return;
 	int x = 20;
 	int y = 20 + char_height * line;
 	while (*c) {
@@ -66,6 +67,8 @@ static void update_message(char * c, int line) {
 }
 
 static void clear_screen(void) {
+	if (framebuffer_fd < 0) return;
+
 	for (int y = 0; y < height; ++y) {
 		for (int x = 0; x < width; ++x) {
 			set_point(x,y,BG_COLOR);
@@ -75,6 +78,8 @@ static void clear_screen(void) {
 
 static void check_framebuffer(void) {
 	framebuffer_fd = open("/dev/fb0", O_RDONLY);
+	if (framebuffer_fd < 0) return;
+
 	ioctl(framebuffer_fd, IO_VID_WIDTH,  &width);
 	ioctl(framebuffer_fd, IO_VID_HEIGHT, &height);
 	ioctl(framebuffer_fd, IO_VID_DEPTH,  &depth);

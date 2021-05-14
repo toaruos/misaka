@@ -52,7 +52,8 @@ static void early_log_initialize(void) {
 	printf_output = &_early_log_write;
 }
 
-static size_t memCount = 0;
+static size_t     memCount = 0;
+static uintptr_t  maxAddress = (uintptr_t)&end;
 static void multiboot_initialize(struct multiboot * mboot) {
 	/* Set memCount to 1M + high mem */
 	if (mboot->flags & MULTIBOOT_FLAG_MEM) {
@@ -86,7 +87,6 @@ static void multiboot_initialize(struct multiboot * mboot) {
 	}
 #endif
 
-	uintptr_t maxAddress = (uintptr_t)&end;
 	if (mboot->flags & MULTIBOOT_FLAG_MODS) {
 		mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
 		for (unsigned int i = 0; i < mboot->mods_count; ++i) {
@@ -96,8 +96,7 @@ static void multiboot_initialize(struct multiboot * mboot) {
 	}
 
 	/* Round the max address up a page */
-	maxAddress = (maxAddress + 0x1000) & 0xFFFFffffFFFFf000;
-	mmu_set_kernel_heap(maxAddress);
+	maxAddress = (maxAddress + 0xFFF) & 0xFFFFffffFFFFf000;
 }
 
 /**
@@ -198,11 +197,13 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	arch_clock_initialize();
 
 	/* Parse multiboot data so we can get memory map, modules, command line, etc. */
-	mboot_struct = mboot;
 	multiboot_initialize(mboot);
 
-	/* memCount comes from multiboot data */
-	mmu_init(memCount);
+	/* memCount and maxAddress come from multiboot data */
+	mmu_init(memCount, maxAddress);
+
+	/* multiboot memory is now mapped high, if you want it. */
+	mboot_struct = (void*)((uintptr_t)mboot | 0xFFFFffff00000000UL);
 
 	/* With the MMU initialized, set up things required for the scheduler. */
 	pat_initialize();
@@ -217,11 +218,12 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	/* Scheduler is running, so we can set up drivers. */
 	framebuffer_initialize();
-	vfs_mount("/dev/fb0", lfb_device);
 
-	/* Mount ramdisk (TODO: Should we be gzipping this and decompressing here?) */
-	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)mboot->mods_addr;
-	ramdisk_mount(mods[0].mod_start, mods[0].mod_end - mods[0].mod_start);
+	/* ramdisk_mount takes physical pages, it will map them itself. */
+	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)(mboot->mods_addr | 0xFFFFffff00000000UL);
+	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
+		ramdisk_mount(mods[i].mod_start, mods[i].mod_end - mods[i].mod_start);
+	}
 
 	/* We set up the pit and interrupt stuff pretty late, after the scheduler is ready. */
 	pit_initialize();

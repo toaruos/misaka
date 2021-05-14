@@ -110,14 +110,13 @@ void mmu_frame_map_address(union PML * page, unsigned int flags, uintptr_t physA
 }
 
 /* Initial memory maps loaded by boostrap */
-union PML init_page_region[2][512] __attribute__((aligned(0x1000))) = {0};
-
-union PML high_base_pml[512] __attribute__((aligned(0x1000))) = {0};
-union PML heap_base_pml[512] __attribute__((aligned(0x1000))) = {0};
-
-/* Direct mapping of low memory */
-union PML low_base_pmls[20][512] __attribute__((aligned(0x1000)))  = {0};
-extern uint32_t * framebuffer;
+#define _pagemap __attribute__((aligned(0x1000))) = {0}
+union PML init_page_region[2][512] _pagemap;
+union PML high_base_pml[512] _pagemap;
+union PML heap_base_pml[512] _pagemap;
+union PML heap_base_pd[512] _pagemap;
+union PML heap_base_pt[512] _pagemap;
+union PML low_base_pmls[34][512] _pagemap;
 
 union PML * current_pml = (union PML *)&init_page_region[0];
 
@@ -465,11 +464,12 @@ void mmu_invalidate(uintptr_t addr) {
 }
 
 static char * heapStart = NULL;
+extern char end[];
 
 /**
  * @brief Switch from the boot-time 1GiB-page identity map to 4KiB pages.
  */
-void mmu_init(size_t memsize) {
+void mmu_init(size_t memsize, uintptr_t firstFreePage) {
 
 	/* Map the high base PDP */
 	init_page_region[0][511].raw = (uintptr_t)&high_base_pml | 0x03;
@@ -484,8 +484,16 @@ void mmu_init(size_t memsize) {
 	/* Map low base PDP */
 	low_base_pmls[0][0].raw = (uintptr_t)&low_base_pmls[1] | 0x07;
 
-	/* Map 32MiB of low memory directly, this is where we're loaded. */
-	for (int j = 0; j < 16; ++j) {
+	/* How much memory do we need to map low for our *kernel* to fit? */
+	uintptr_t endPtr = ((uintptr_t)&end + 0xFFF) & 0xFFFFffffFFFFf000UL;
+
+	/* How many pages does that need? */
+	size_t lowPages = endPtr >> 12;
+
+	/* And how many 512-page blocks does that fit in? */
+	size_t pdCount = (lowPages + 511) / 512;
+
+	for (size_t j = 0; j < pdCount; ++j) {
 		low_base_pmls[1][j].raw = (uintptr_t)&low_base_pmls[2+j] | 0x03;
 		for (int i = 0; i < 512; ++i) {
 			low_base_pmls[2+j][i].raw = (uintptr_t)(0x200000 * j + 0x1000 * i) | 0x03;
@@ -498,25 +506,39 @@ void mmu_init(size_t memsize) {
 	/* Now map our new low base */
 	init_page_region[0][0].raw = (uintptr_t)&low_base_pmls[0] | 0x07;
 
-	/* Use input from bootloader to initialize physical page frame allocator */
-	nframes = (memsize / 0x1000);
-	frames = malloc(INDEX_FROM_BIT(nframes * 8));
-	memset(frames, 0, INDEX_FROM_BIT(nframes * 8));
+	/* Set up the page allocator bitmap... */
+	nframes = (memsize >> 12);
+	size_t bytesOfFrames = INDEX_FROM_BIT(nframes * 8);
+	bytesOfFrames = (bytesOfFrames + 0xFFF) & 0xFFFFffffFFFFf000UL;
+	firstFreePage = (firstFreePage + 0xFFF) & 0xFFFFffffFFFFf000UL;
+	size_t pagesOfFrames = bytesOfFrames >> 12;
 
-	/* Mark the currently-in-use low memory pages as allocated, based on the current heap. */
-	unsigned int i = 0;
-	for (; i < ((uintptr_t)heapStart / 0x1000) / 32; i++) {
-		frames[i] = (uint32_t)-1;
+	/* Set up heap map for that... */
+	heap_base_pml[0].raw = (uintptr_t)&heap_base_pd | 0x03;
+	heap_base_pd[0].raw  = (uintptr_t)&heap_base_pt | 0x03;
+
+	if (pagesOfFrames > 512) {
+		printf("Warning: Too much available memory for current setup. Need %zu pages to represent allocation bitmap.\n", pagesOfFrames);
 	}
-	for (size_t j = i * 32 * 0x1000; j < (uintptr_t)heapStart; j++) {
-		mmu_frame_set(j);
+
+	for (size_t i = 0; i < pagesOfFrames; i++) {
+		heap_base_pt[i].raw = (firstFreePage + (i << 12)) | 0x03;
 	}
 
-	/* From here on out, kernel heap allocations are in high memory. */
-	mmu_set_kernel_heap(0xFFFFff0000000000);
-
-	/* And physical memory references, like page tables, are through the 4GiB window. */
+	asm volatile ("" : : : "memory");
 	current_pml = (union PML*)((uintptr_t)current_pml | 0xFFFFffff00000000UL);
+	asm volatile ("" : : : "memory");
+
+	/* We are now in the new stuff. */
+	frames = (void*)((uintptr_t)0xFFFFff0000000000UL);
+	memset(frames, 0, bytesOfFrames);
+
+	/* Now mark everything up to (firstFreePage + bytesOfFrames) as in use */
+	for (uintptr_t i = 0; i < firstFreePage + bytesOfFrames; i += 0x1000) {
+		mmu_frame_set(i);
+	}
+
+	mmu_set_kernel_heap(0xFFFFff0000000000UL + bytesOfFrames);
 }
 
 void * sbrk(size_t bytes) {

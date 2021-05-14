@@ -495,7 +495,7 @@ static int lfb_init(const char * c) {
 int framebuffer_initialize(void) {
 	lfb_device = lfb_video_device_create();
 	lfb_init("auto,1440,900");
-	/* install /dev device? we moved this because we initialize framebuffer early */
+	vfs_mount("/dev/fb0", lfb_device);
 
 #if 0
 	char * c;
