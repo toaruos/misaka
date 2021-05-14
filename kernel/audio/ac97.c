@@ -136,25 +136,16 @@ static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, voi
 
 }
 
-static list_t * ac97_sem = NULL;
-
 #define DIVISION 0x1000
-static void ac97_tasklet(void * argp) {
-	while (1) {
-		sleep_on(ac97_sem);
-		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_BCIS);
+int ac97_irq_handler(struct regs * regs) {
+	uint16_t sr = inports(_device.nabmbar + AC97_PO_SR);
+	if (sr & AC97_X_SR_BCIS) {
 		uint16_t current_buffer = inportb(_device.nabmbar + AC97_PO_CIV);
 		uint16_t last_valid = ((current_buffer+2) & (AC97_BDL_LEN-1));
 		snd_request_buf(&_snd, 0x1000, (uint8_t *)_device.bufs[last_valid]);
 		outportb(_device.nabmbar + AC97_PO_LVI, last_valid);
 		snd_request_buf(&_snd, 0x1000, (uint8_t *)_device.bufs[last_valid]+0x1000);
-	}
-}
-
-int ac97_irq_handler(struct regs * regs) {
-	uint16_t sr = inports(_device.nabmbar + AC97_PO_SR);
-	if (sr & AC97_X_SR_BCIS) {
-		wakeup_queue(ac97_sem);
+		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_BCIS);
 	} else if (sr & AC97_X_SR_LVBCI) {
 		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_LVBCI);
 	} else if (sr & AC97_X_SR_FIFOE) {
@@ -250,8 +241,6 @@ void ac97_install(void) {
 	_device.nambar = pci_read_field(_device.pci_device, PCI_BAR0, 4) & ((uint32_t) -1) << 1;
 	_device.irq = pci_get_interrupt(_device.pci_device);
 	//printf("device wants irq %zd\n", _device.irq);
-	ac97_sem = list_create("ac97 semaphore", &_device);
-	spawn_worker_thread(ac97_tasklet, "[ac97]", NULL);
 	//irq_install_handler(_device.irq, irq_handler, "ac97");
 	/* Enable all matter of interrupts */
 	outportb(_device.nabmbar + AC97_PO_CR, AC97_X_CR_FEIE | AC97_X_CR_IOCE);
