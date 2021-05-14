@@ -16,7 +16,7 @@ OC = ${KERNEL_TARGET}-objcopy
 KERNEL_CFLAGS  = -ffreestanding -O2 -std=c11 -g -static
 
 # Arch-specific arguments
-KERNEL_CFLAGS += -mcmodel=large -mno-red-zone -fno-omit-frame-pointer
+KERNEL_CFLAGS += -mno-red-zone -fno-omit-frame-pointer
 KERNEL_CFLAGS += -mgeneral-regs-only -z max-page-size=0x1000 -nostdlib
 
 # Warnings
