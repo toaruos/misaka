@@ -14,8 +14,7 @@
 #include <kernel/printf.h>
 #include <kernel/string.h>
 #include <kernel/process.h>
-
-#include <kernel/arch/x86_64/mmu.h>
+#include <kernel/mmu.h>
 
 static uint64_t read_ramdisk(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer);
 static uint64_t write_ramdisk(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer);

@@ -14,9 +14,6 @@
 #include <kernel/procfs.h>
 #include <kernel/hashmap.h>
 
-#include <kernel/arch/x86_64/ports.h>
-#include <kernel/arch/x86_64/regs.h>
-
 extern uint64_t now(void);
 extern list_t * process_list;
 
@@ -92,6 +89,15 @@ extern size_t mmu_count_shm(union PML * from);
 extern size_t mmu_total_memory(void);
 extern size_t mmu_used_memory(void);
 
+extern long arch_syscall_number(struct regs * r);
+extern long arch_syscall_arg0(struct regs * r);
+extern long arch_syscall_arg1(struct regs * r);
+extern long arch_syscall_arg2(struct regs * r);
+extern long arch_syscall_arg3(struct regs * r);
+extern long arch_syscall_arg4(struct regs * r);
+extern long arch_stack_pointer(struct regs * r);
+extern long arch_user_ip(struct regs * r);
+
 static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[2048];
 	process_t * proc = process_from_pid(node->inode);
@@ -151,14 +157,14 @@ static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size
 			proc->job,
 			proc->session,
 			proc->user,
-			proc->syscall_registers ? proc->syscall_registers->rip : 0,
-			proc->syscall_registers ? proc->syscall_registers->rax : 0,
-			proc->syscall_registers ? proc->syscall_registers->rbx : 0,
-			proc->syscall_registers ? proc->syscall_registers->rcx : 0,
-			proc->syscall_registers ? proc->syscall_registers->rdx : 0,
-			proc->syscall_registers ? proc->syscall_registers->rsi : 0,
-			proc->syscall_registers ? proc->syscall_registers->rdi : 0,
-			proc->syscall_registers ? proc->syscall_registers->rsp : 0,
+			proc->syscall_registers ? arch_user_ip(proc->syscall_registers) : 0,
+			proc->syscall_registers ? arch_syscall_number(proc->syscall_registers) : 0,
+			proc->syscall_registers ? arch_syscall_arg0(proc->syscall_registers) : 0,
+			proc->syscall_registers ? arch_syscall_arg1(proc->syscall_registers) : 0,
+			proc->syscall_registers ? arch_syscall_arg2(proc->syscall_registers) : 0,
+			proc->syscall_registers ? arch_syscall_arg3(proc->syscall_registers) : 0,
+			proc->syscall_registers ? arch_syscall_arg4(proc->syscall_registers) : 0,
+			proc->syscall_registers ? arch_stack_pointer(proc->syscall_registers) : 0,
 			proc->cmdline ? proc->cmdline[0] : "(none)",
 			mem_usage, shm_usage, mem_permille
 			);

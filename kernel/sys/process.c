@@ -31,9 +31,11 @@
 #include <kernel/mmu.h>
 #include <kernel/shm.h>
 #include <kernel/signal.h>
-#include <kernel/arch/x86_64/regs.h>
 #include <sys/wait.h>
 #include <sys/signal_defs.h>
+
+/* FIXME: This only needs the size of the regs struct... */
+#include <kernel/arch/x86_64/regs.h>
 
 extern void arch_enter_critical(void);
 extern void arch_exit_critical(void);

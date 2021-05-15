@@ -134,7 +134,7 @@ node_t * list_insert_before(list_t * list, node_t * after, void * item) {
 	return node;
 }
 
-list_t * list_create(const char * name, void * metadata) {
+list_t * list_create(const char * name, const void * metadata) {
 	/* Create a fresh list */
 	list_t * out = malloc(sizeof(list_t));
 	out->head = NULL;

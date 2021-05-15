@@ -13,8 +13,7 @@
 #include <kernel/tokenize.h>
 #include <kernel/tmpfs.h>
 #include <kernel/spinlock.h>
-
-#include <kernel/arch/x86_64/mmu.h>
+#include <kernel/mmu.h>
 
 extern uint64_t now(void);
 

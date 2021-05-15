@@ -18,14 +18,14 @@ typedef struct ListHeader {
 	node_t * tail;
 	size_t length;
 	const char * name;
-	void * metadata;
+	const void * metadata;
 } __attribute__((packed)) list_t;
 
 extern void list_destroy(list_t * list);
 extern void list_free(list_t * list);
 extern void list_append(list_t * list, node_t * item);
 extern node_t * list_insert(list_t * list, void * item);
-extern list_t * list_create(const char * name, void * metadata);
+extern list_t * list_create(const char * name, const void * metadata);
 extern node_t * list_find(list_t * list, void * value);
 extern int list_index_of(list_t * list, void * value);
 extern void list_remove(list_t * list, size_t index);

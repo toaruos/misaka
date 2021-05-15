@@ -16,22 +16,15 @@
 #include <kernel/spinlock.h>
 #include <kernel/signal.h>
 
-#include <kernel/arch/x86_64/regs.h>
-
-/* TODO: kernel/arch/x86_64/syscall.c/h ? */
-static unsigned long arch_syscall_number(struct regs * r) {
-	return (unsigned long)r->rax;
-}
-
-static void arch_syscall_return(struct regs * r, long retval) {
-	r->rax = retval;
-}
-
-static long arch_syscall_arg0(struct regs * r) { return r->rbx; }
-static long arch_syscall_arg1(struct regs * r) { return r->rcx; }
-static long arch_syscall_arg2(struct regs * r) { return r->rdx; }
-static long arch_syscall_arg3(struct regs * r) { return r->rsi; }
-static long arch_syscall_arg4(struct regs * r) { return r->rdi; }
+extern long arch_reboot(void);
+extern unsigned long arch_syscall_number(struct regs * r);
+extern void arch_syscall_return(struct regs * r, long retval);
+extern long arch_syscall_arg0(struct regs * r);
+extern long arch_syscall_arg1(struct regs * r);
+extern long arch_syscall_arg2(struct regs * r);
+extern long arch_syscall_arg3(struct regs * r);
+extern long arch_syscall_arg4(struct regs * r);
+extern void arch_set_tls_base(uintptr_t tlsbase);
 
 static char   hostname[256];
 static size_t hostname_len = 0;
@@ -60,72 +53,6 @@ void ptr_validate(void * ptr, const char * syscall) {
 	}
 }
 
-static const char * syscallNames[] = {
-#define _(o) [o] = #o,
-_(SYS_EXT)
-_(SYS_GETEUID)
-_(SYS_OPEN)
-_(SYS_READ)
-_(SYS_WRITE)
-_(SYS_CLOSE)
-_(SYS_GETTIMEOFDAY)
-_(SYS_EXECVE)
-_(SYS_FORK)
-_(SYS_GETPID)
-_(SYS_SBRK)
-_(SYS_UNAME)
-_(SYS_OPENPTY)
-_(SYS_SEEK)
-_(SYS_STAT)
-_(SYS_MKPIPE)
-_(SYS_DUP2)
-_(SYS_GETUID)
-_(SYS_SETUID)
-_(SYS_REBOOT)
-_(SYS_READDIR)
-_(SYS_CHDIR)
-_(SYS_GETCWD)
-_(SYS_CLONE)
-_(SYS_SETHOSTNAME)
-_(SYS_GETHOSTNAME)
-_(SYS_MKDIR)
-_(SYS_SHM_OBTAIN)
-_(SYS_SHM_RELEASE)
-_(SYS_KILL)
-_(SYS_SIGNAL)
-_(SYS_GETTID)
-_(SYS_YIELD)
-_(SYS_SYSFUNC)
-_(SYS_SLEEPABS)
-_(SYS_SLEEP)
-_(SYS_IOCTL)
-_(SYS_ACCESS)
-_(SYS_STATF)
-_(SYS_CHMOD)
-_(SYS_UMASK)
-_(SYS_UNLINK)
-_(SYS_WAITPID)
-_(SYS_PIPE)
-_(SYS_MOUNT)
-_(SYS_SYMLINK)
-_(SYS_READLINK)
-_(SYS_LSTAT)
-_(SYS_FSWAIT)
-_(SYS_FSWAIT2)
-_(SYS_CHOWN)
-_(SYS_SETSID)
-_(SYS_SETPGID)
-_(SYS_GETPGID)
-_(SYS_FSWAIT3)
-};
-
-static long unimplemented(void) {
-	printf("unimplemented system call %s (%ld)\n",
-		syscallNames[arch_syscall_number(current_process->syscall_registers)],
-		arch_syscall_number(current_process->syscall_registers));
-	return -EINVAL;
-}
-
 static long sys_sbrk(ssize_t size) {
 	if (size & 0xFFF) return -EINVAL;
 	volatile process_t * volatile proc = current_process;
@@ -147,7 +74,6 @@ static long sys_sbrk(ssize_t size) {
 	return (long)out;
 }
 
-extern void arch_set_tls_base(uintptr_t tlsbase);
 static long sys_sysfunc(long fn, char ** args) {
 	/* FIXME: Most of these should be top-level, many are hacks/broken in Misaka */
 	switch (fn) {
@@ -956,6 +882,14 @@ static long sys_kill(pid_t process, int signal) {
 	}
 }
 
+static long sys_reboot(void) {
+	if (current_process->user != USER_ROOT_UID) {
+		return -EPERM;
+	}
+
+	return arch_reboot();
+}
+
 static long (*syscalls[])() = {
 	/* System Call Table */
 	[SYS_EXT]          = sys_exit,
@@ -1011,9 +945,7 @@ static long (*syscalls[])() = {
 	[SYS_SHM_RELEASE]  = sys_shm_release,
 	[SYS_SIGNAL]       = sys_signal,
 	[SYS_KILL]         = sys_kill,
-
-	[SYS_MKPIPE]       = unimplemented, /* Legacy pipe, unused by userspace. */
-	[SYS_REBOOT]       = unimplemented, /* Toaru32 just did a triple fault... */
+	[SYS_REBOOT]       = sys_reboot,
 };
 
 static size_t num_syscalls = sizeof(syscalls) / sizeof(*syscalls);

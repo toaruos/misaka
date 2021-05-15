@@ -10,8 +10,10 @@
 #include <kernel/tokenize.h>
 #include <kernel/multiboot.h>
 #include <kernel/procfs.h>
+#include <kernel/mmu.h>
+
+/* FIXME: Not sure what to do with this; ifdef around it? */
 #include <kernel/arch/x86_64/ports.h>
-#include <kernel/arch/x86_64/mmu.h>
 
 #define PREFERRED_W  1024
 #define PREFERRED_H  768
