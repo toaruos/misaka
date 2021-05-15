@@ -36,6 +36,13 @@ struct rsdt {
 	uint32_t pointers[];
 };
 
+struct madt {
+	struct acpi_sdt_header header;
+	uint32_t lapic_addr;
+	uint32_t flags;
+	uint8_t entries[];
+};
+
 static inline int acpi_checksum(struct acpi_sdt_header * header) {
 	uint8_t check = 0;
 	for (size_t i = 0; i < header->length; ++i) {
