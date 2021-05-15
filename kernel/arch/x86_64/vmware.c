@@ -1,11 +1,10 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
- * This file is part of ToaruOS and is released under the terms
- * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2017-2018 K. Lange
- *
- * VMWare backdoor driver.
+/**
+ * @file  kernel/arch/x86_64/vmware.c
+ * @brief VMware/QEMU mouse and VMWare backdoor driver.
  *
  * Supports absolute mouse cursor and resolution setting.
+ *
+ * FIXME The vmware display size adjustment is currently disabled.
  *
  * Mouse:
  *   Toggle off / on with ioctl 1 and 2 respectively to /dev/vmmouse.
@@ -15,6 +14,11 @@
  * Resolution setting:
  *   Enabled when the "vmware" LFB driver is active. Automatically
  *   resizes the display when the window size changes.
+ *
+ * @copyright
+ * This file is part of ToaruOS and is released under the terms
+ * of the NCSA / University of Illinois License - see LICENSE.md
+ * Copyright (C) 2017-2021 K. Lange
  */
 
 #include <errno.h>

@@ -1,12 +1,22 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file kernel/audio/ac97.c
+ * @brief Driver for the Intel AC'97.
+ *
+ * Simple PCM interface for the AC'97 codec when used with the
+ * ICH hardware interface. There are other hardware interfaces
+ * that use this codec and this driver could probably be ported
+ * to them.
+ *
+ * Note that the audio subsystem is intended to be non-blocking
+ * so that buffer filling can be done directly in interrupt handlers.
+ *
+ * @see http://www.intel.com/design/chipsets/manuals/29802801.pdf
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
  * Copyright (C) 2015 Michael Gerow
- * Copyright (C) 2015-2018 K. Lange
- *
- * Driver for the Intel AC'97.
- *
- * See <http://www.intel.com/design/chipsets/manuals/29802801.pdf>.
+ * Copyright (C) 2015-2021 K. Lange
  */
 
 #include <kernel/types.h>

@@ -1,9 +1,11 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/vfs/tarfs.c
+ * @brief Read-only filesystem driver for ustar archives.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
  * Copyright (C) 2018 K. Lange
- *
- * tarfs - Allows read-only mounting of ustar archives
  */
 #include <kernel/types.h>
 #include <kernel/vfs.h>

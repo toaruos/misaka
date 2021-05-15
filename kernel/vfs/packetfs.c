@@ -1,7 +1,23 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file kernel/vfs/packetfs.c
+ * @brief Packet-based multiple-client IPC mechanism. aka PEX
+ *
+ * Provides a server-client packet-based IPC socket system for
+ * userspace applications. Primarily used by the compositor to
+ * communicate with clients.
+ *
+ * Care must be taken to ensure that this is backed by an atomic
+ * stream; the legacy pseudo-pipe interface is used at the moment.
+ *
+ * @bug We leak kernel heap addresses directly to userspace as the
+ *      client identifiers in PEX messages. We should probably do
+ *      something else. I'm also reasonably certain a server can
+ *      just throw a random address at the PEX API?
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2014-2018 K. Lange
+ * Copyright (C) 2014-2021 K. Lange
  */
 #include <errno.h>
 #include <stdint.h>

@@ -1,10 +1,13 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/vfs/random.c
+ * @brief Bad RNG.
+ *
+ * Provides a terrible little xorshift random number generator.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
  * Copyright (C) 2014-2018 K. Lange
- *
- * Provides access to the kernel RNG
- *
  */
 #include <stdint.h>
 #include <kernel/vfs.h>

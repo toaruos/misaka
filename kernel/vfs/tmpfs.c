@@ -1,7 +1,14 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/vfs/tmpfs.c
+ * @brief In-memory read-write filesystem.
+ *
+ * Generally provides the filesystem for "migrated" live CDs,
+ * as well as /tmp and /var.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2014-2018 K. Lange
+ * Copyright (C) 2014-2021 K. Lange
  */
 #include <stdint.h>
 #include <errno.h>

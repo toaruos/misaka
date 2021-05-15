@@ -1,10 +1,17 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/arch/x86_64/serial.c
+ * @brief PC serial port driver.
+ *
+ * Attaches serial ports to TTY interfaces. Serial input processing
+ * happens in a kernel tasklet so that blocking is handled smoothly.
+ *
+ * FIXME This needs to be adapted to an irq chaining API when one
+ *       is built for Misaka.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2014-2018 K. Lange
- *
- * Serial communication device
- *
+ * Copyright (C) 2014-2021 K. Lange
  */
 
 #include <kernel/string.h>
@@ -169,27 +176,4 @@ void serial_initialize(void) {
 	fs_node_t * ttyS1 = serial_device_create(SERIAL_PORT_B); vfs_mount(DEV_PATH TTY_B, ttyS1);
 	fs_node_t * ttyS2 = serial_device_create(SERIAL_PORT_C); vfs_mount(DEV_PATH TTY_C, ttyS2);
 	fs_node_t * ttyS3 = serial_device_create(SERIAL_PORT_D); vfs_mount(DEV_PATH TTY_D, ttyS3);
-
-#if 0
-	char * c;
-	if ((c = args_value("logtoserial"))) {
-		debug_file = ttyS0;
-		if (!strcmp(c,"INFO") || !strcmp(c,"info")) {
-			debug_level = INFO;
-		} else if (!strcmp(c,"NOTICE") || !strcmp(c,"notice")) {
-			debug_level = NOTICE;
-		} else if (!strcmp(c,"WARNING") || !strcmp(c,"warning")) {
-			debug_level = WARNING;
-		} else if (!strcmp(c,"ERROR") || !strcmp(c,"error")) {
-			debug_level = ERROR;
-		} else if (!strcmp(c,"CRITICAL") || !strcmp(c,"critical")) {
-			debug_level = CRITICAL;
-		} else if (!strcmp(c,"INSANE") || !strcmp(c,"insane")) {
-			debug_level = INSANE;
-		} else {
-			debug_level = atoi(c);
-		}
-		debug_print(NOTICE, "Serial logging enabled at level %d.", debug_level);
-	}
-#endif
 }

@@ -1,9 +1,22 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/sys/signal.c
+ * @brief Signal handling.
+ *
+ * Provides signal entry and delivery; also handles suspending
+ * and resuming jobs (SIGTSTP, SIGCONT).
+ *
+ * Signal delivery in ToaruOS is a bit odd; we save a lot of the
+ * kernel context from before the signal, including the entire
+ * kernel stack, so that we can resume userspace in a new context;
+ * essentially we build a whole new kernel thread for the signal
+ * handler to run in, and then restore the original when the signal
+ * handler exits. Signal handler exits are generally handled by
+ * a page fault at a magic known address.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2012-2018 K. Lange
- *
- * Signal Handling
+ * Copyright (C) 2012-2021 K. Lange
  */
 #include <errno.h>
 #include <stdint.h>

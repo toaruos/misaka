@@ -1,9 +1,6 @@
-/* vim: ts=4 sw=4 noexpandtab
- * This file is part of ToaruOS and is released under the terms
- * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2016-2018 Kevin Lange
- *
- * ELF Dynamic Linker/Loader
+/**
+ * @file linker/linker.c
+ * @brief ELF Dynamic Linker/Loader
  *
  * Loads ELF executables and links them at runtime to their
  * shared library dependencies.
@@ -18,6 +15,11 @@
  *
  * However, it's sufficient for our purposes, and works well enough
  * to load Python C modules.
+ *
+ * @copyright
+ * This file is part of ToaruOS and is released under the terms
+ * of the NCSA / University of Illinois License - see LICENSE.md
+ * Copyright (C) 2016-2021 K. Lange
  */
 #include <stdlib.h>
 #include <stdint.h>

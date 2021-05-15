@@ -1,14 +1,19 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
- * This file is part of ToaruOS and is released under the terms
- * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2015 Mike Gerow
+/**
+ * @file  kernel/audio/snd.c
+ * @brief Gerow's Audio Subsystem for ToaruOS
  *
- * Sound subsystem.
+ * Simple generic mixer interface. Allows userspace to pipe audio data
+ * to the kernel audio drivers and control volume knobs.
  *
  * Currently has the ability to mix several sound sources together. Could use
  * a /dev/mixer device to allow changing of audio settings. Also could use
  * the ability to change frequency and format for audio samples. Also doesn't
  * really support multiple devices despite the interface suggesting it might...
+ *
+ * @copyright
+ * This file is part of ToaruOS and is released under the terms
+ * of the NCSA / University of Illinois License - see LICENSE.md
+ * Copyright (C) 2015 Mike Gerow
  */
 
 #include <kernel/types.h>

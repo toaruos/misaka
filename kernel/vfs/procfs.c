@@ -1,7 +1,21 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/vfs/procfs.c
+ * @brief Extensible file-based information interface.
+ *
+ * Provides /proc and its contents, which allow userspace tools
+ * to query kernel status through directory and text file interfaces.
+ *
+ * The way this is implemented is a bit messy... every time a read
+ * request happens, we generate a text blob and then try to provide
+ * the part the reader actually asked for. This is susceptible to
+ * corruption if the layout of data changed between two read calls.
+ * We should probably be generating data on open and disposing of
+ * it on call...
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2014-2018 K. Lange
+ * Copyright (C) 2014-2021 K. Lange
  */
 #include <stdint.h>
 #include <stddef.h>

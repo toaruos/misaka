@@ -1,10 +1,11 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/vfs/zero.c
+ * @brief /dev/null and /dev/zero provider.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
  * Copyright (C) 2014-2018 K. Lange
- *
- * Null Device
- *
  */
 
 #include <stdint.h>

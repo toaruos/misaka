@@ -112,8 +112,8 @@ long arch_reboot(void) {
 	return 0;
 }
 
-long arch_syscall_number(struct regs * r) { return (unsigned long)r->rax; }
 void arch_syscall_return(struct regs * r, long retval) { r->rax = retval; }
+long arch_syscall_number(struct regs * r) { return (unsigned long)r->rax; }
 long arch_syscall_arg0(struct regs * r) { return r->rbx; }
 long arch_syscall_arg1(struct regs * r) { return r->rcx; }
 long arch_syscall_arg2(struct regs * r) { return r->rdx; }

@@ -2,14 +2,22 @@
  * @file  kprintf.c
  * @brief Kernel printf implementation.
  *
+ * This is the newer, 64-bit-friendly printf originally implemented
+ * for EFI builds of Kuroko. It was merged into the ToaruOS libc
+ * and later became the kernel printf in Misaka. It supports the
+ * standard set of width specifiers, '0' or ' ' padding, left or
+ * right alignment, and the usermode version has a (rudimentary,
+ * inaccurate) floating point printer. This kernel version excludes
+ * float support. printf output is passed to callback functions
+ * which can write the output to a string buffer or spit them
+ * directly at an MMIO port. Support is also present for bounded
+ * writes, and we've left @c sprintf out of the kernel entirely
+ * in favor of @c snprintf.
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
  * Copyright (C) 2011-2021 K. Lange
- *
- * Kernel printf implementation
- *
- * Simple, painfully lacking, implementation of printf(),
- * for the kernel of all things.
  */
 #include <stdint.h>
 #include <stddef.h>

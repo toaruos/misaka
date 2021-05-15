@@ -1,11 +1,21 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/vfs/ramdisk.c
+ * @brief VFS wrapper for physical memory blocks.
+ *
+ * Allows raw physical memory blocks provided by the loader to be
+ * used like a block file. Used to provide multiboot payloads
+ * as /dev/ram* files.
+ *
+ * Note that the ramdisk driver really does deal with physical
+ * memory addresses, not virtual address, and once a block of
+ * pages has been handed over to the ramdisk driver it is owned
+ * by the ramdisk driver which may mark those pages as available
+ * (via an ioctl request).
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2014-2018 K. Lange
-  *
- * Ramdisk driver.
- *
- * Provide raw block access to files loaded into kernel memory.
+ * Copyright (C) 2014-2021 K. Lange
  */
 
 #include <errno.h>
