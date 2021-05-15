@@ -2,24 +2,24 @@
 
 Misaka is the "next-generation" (x86-64) kernel for [ToaruOS](https://github.com/klange/toaruos).
 
-This repository contains most of the same content as the upstream repository, including the userspace applications and libraries and toolchain scripts.
+This repository contains most of the same content as the upstream repository, including the userspace applications, libraries, and toolchain scripts. The bootloaders are not included.
 
-Note that Misaka is still considered a _work in progress_. While most of the OS is functioning, there are still several subsystems which have not been completed.
+Note that Misaka is still considered a _work in progress_. While most of the OS is functioning, third-party ports are not ready and the network stack is being redesigned.
 
-![screenshot](https://klange.dev/s/Screenshot%20from%202021-05-07%2017-03-38.png)
+![screenshot](https://klange.dev/s/Screenshot%20from%202021-05-15%2011-05-51.png)
 
 ## Completed Work
 
 - The Toaru kernel has been ported to x86-64.
 - Considerable changes have been made to make the kernel more portable to other architectures.
 - Userspace fixes have been implemented to run on the new kernel.
-- Some drivers have been ported.
+- Some drivers have been ported (AC'97, serial, vmware mouse)
 
 ## Roadmap
 
 - SMP support is the next key target for the project.
 - Some subsystems are being rewritten from scratch, such as the network stack.
-- Ports have not been made/tested yet; current plan is to have everything from the 1.10.x package series available again for x86-64.
+- Third-party ports have not been made/tested yet; current plan is to have everything from the 1.10.x package series available again for x86-64.
 - aarch64 and riscv64 ports are on the long-term roadmap.
 - All of this will eventually be merged upstream.
 
