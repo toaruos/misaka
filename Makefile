@@ -97,7 +97,7 @@ $(BASE)/lib/kuroko/%.so: kuroko/src/modules/module_%.c| dirs $(LC)
 	$(CC) -O2 -shared -fPIC -Ikuroko/src -o $@ $<
 
 $(BASE)/lib/libkuroko.so: $(KRK_SRC) | $(LC)
-	$(CC) -O2 -shared -fPIC -Ikuroko/src -DKRK_DISABLE_THREADS -o $@ $(filter-out kuroko/src/kuroko.c,$(KRK_SRC))
+	$(CC) -O2 -shared -fPIC -Ikuroko/src -o $@ $(filter-out kuroko/src/kuroko.c,$(KRK_SRC))
 
 $(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs $(LC)
 	$(CC) -g -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<
