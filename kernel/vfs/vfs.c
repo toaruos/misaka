@@ -17,6 +17,7 @@
 #include <kernel/printf.h>
 #include <kernel/string.h>
 #include <kernel/vfs.h>
+#include <kernel/time.h>
 #include <kernel/process.h>
 
 #include <kernel/list.h>
@@ -34,8 +35,6 @@ hashmap_t * fs_types = NULL;
 
 #define MIN(l,r) ((l) < (r) ? (l) : (r))
 #define MAX(l,r) ((l) > (r) ? (l) : (r))
-
-extern uint64_t now(void);
 
 #define debug_print(x, ...) do { if (0) {printf("vfs.c [%s] ", #x); printf(__VA_ARGS__); printf("\n"); } } while (0)
 

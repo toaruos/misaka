@@ -5,6 +5,7 @@
 #include <kernel/version.h>
 #include <kernel/process.h>
 #include <kernel/signal.h>
+#include <kernel/misc.h>
 
 #include <sys/time.h>
 #include <sys/utsname.h>
@@ -16,11 +17,6 @@
 
 static struct idt_pointer idtp;
 static idt_entry_t idt[256];
-
-extern void arch_enter_critical(void);
-extern void arch_exit_critical(void);
-extern void idt_load(void *);
-extern void task_exit(int);
 
 void idt_set_gate(uint8_t num, interrupt_handler_t handler, uint16_t selector, uint8_t flags) {
 	uintptr_t base = (uintptr_t)handler;

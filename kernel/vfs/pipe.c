@@ -26,10 +26,9 @@
 #include <kernel/string.h>
 #include <kernel/spinlock.h>
 #include <kernel/signal.h>
+#include <kernel/time.h>
 
 #include <sys/signal_defs.h>
-
-extern uint64_t now(void);
 
 #define DEBUG_PIPES 0
 

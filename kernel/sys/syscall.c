@@ -15,16 +15,9 @@
 #include <kernel/pty.h>
 #include <kernel/spinlock.h>
 #include <kernel/signal.h>
-
-extern long arch_reboot(void);
-extern unsigned long arch_syscall_number(struct regs * r);
-extern void arch_syscall_return(struct regs * r, long retval);
-extern long arch_syscall_arg0(struct regs * r);
-extern long arch_syscall_arg1(struct regs * r);
-extern long arch_syscall_arg2(struct regs * r);
-extern long arch_syscall_arg3(struct regs * r);
-extern long arch_syscall_arg4(struct regs * r);
-extern void arch_set_tls_base(uintptr_t tlsbase);
+#include <kernel/time.h>
+#include <kernel/syscall.h>
+#include <kernel/misc.h>
 
 static char   hostname[256];
 static size_t hostname_len = 0;
@@ -160,8 +153,6 @@ static long sys_sysfunc(long fn, char ** args) {
 			return -EINVAL;
 	}
 }
-
-extern void task_exit(int retval);
 
 __attribute__((noreturn))
 static long sys_exit(long exitcode) {
@@ -657,7 +648,6 @@ static long sys_unlink(char * file) {
 	return unlink_fs(file);
 }
 
-extern int exec(const char * path, int argc, char *const argv[], char *const env[], int interp_depth);
 static long sys_execve(const char * filename, char *const argv[], char *const envp[]) {
 	PTR_VALIDATE(filename);
 	PTR_VALIDATE(argv);
@@ -701,19 +691,16 @@ static long sys_execve(const char * filename, char *const argv[], char *const en
 	return exec(filename, argc, argv_, envp_, 0);
 }
 
-extern pid_t fork(void);
 static long sys_fork(void) {
 	return fork();
 }
 
-extern pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg);
 static long sys_clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	if (!new_stack || !PTR_INRANGE(new_stack)) return -EINVAL;
 	if (!thread_func || !PTR_INRANGE(thread_func)) return -EINVAL;
 	return (int)clone(new_stack, thread_func, arg);
 }
 
-extern int waitpid(int pid, int * status, int options);
 static long sys_waitpid(int pid, int * status, int options) {
 	if (status && !PTR_INRANGE(status)) return -EINVAL;
 	return waitpid(pid, status, options);
@@ -724,7 +711,6 @@ static long sys_yield(void) {
 	return 1;
 }
 
-extern void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds);
 static long sys_sleepabs(unsigned long seconds, unsigned long subseconds) {
 	/* Mark us as asleep until <some time period> */
 	sleep_until((process_t *)current_process, seconds, subseconds);
@@ -948,7 +934,7 @@ static long (*syscalls[])() = {
 	[SYS_REBOOT]       = sys_reboot,
 };
 
-static size_t num_syscalls = sizeof(syscalls) / sizeof(*syscalls);
+static long num_syscalls = sizeof(syscalls) / sizeof(*syscalls);
 typedef long (*scall_func)();
 
 void syscall_handler(struct regs * r) {

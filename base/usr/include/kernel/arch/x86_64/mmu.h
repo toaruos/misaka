@@ -24,4 +24,12 @@ void mmu_init(size_t memsize, uintptr_t firstFreePage);
 void mmu_invalidate(uintptr_t addr);
 uintptr_t mmu_allocate_a_frame(void);
 uintptr_t mmu_allocate_n_frames(int n);
+union PML * mmu_get_kernel_directory(void);
 void mmu_set_kernel_heap(uintptr_t heap_start);
+
+size_t mmu_count_user(union PML * from);
+size_t mmu_count_shm(union PML * from);
+size_t mmu_total_memory(void);
+size_t mmu_used_memory(void);
+
+void * sbrk(size_t);

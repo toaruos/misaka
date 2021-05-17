@@ -37,9 +37,7 @@ extern void acpi_initialize(void);
 extern void portio_initialize(void);
 extern void keyboard_install(void);
 extern void mouse_install(void);
-extern void vmware_initialize(void);
 extern void serial_initialize(void);
-extern void vbox_initialize(void);
 
 #define EARLY_LOG_DEVICE 0x3F8
 static size_t _early_log_write(size_t size, uint8_t * buffer) {
@@ -233,15 +231,15 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	serial_initialize();
 	portio_initialize();
 
-	/* This is generic and should probably be started earlier... */
-	extern void snd_install(void);
-	snd_install();
+	/* Special drivers should probably be modules... */
 	extern void ac97_install(void);
 	ac97_install();
-
-	/* Special drivers should probably be modules... */
+	extern void vmware_initialize(void);
 	vmware_initialize();
+	extern void vbox_initialize(void);
 	vbox_initialize();
+	extern void e1000_initialize(void);
+	e1000_initialize();
 
 	/* Yield the generic main, which starts /bin/init */
 	return generic_main();

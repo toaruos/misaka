@@ -28,9 +28,6 @@
 #include <kernel/signal.h>
 #include <kernel/spinlock.h>
 
-__attribute__((noreturn))
-extern void arch_enter_signal_handler(uintptr_t,int);
-
 static spin_lock_t sig_lock;
 static spin_lock_t sig_lock_b;
 

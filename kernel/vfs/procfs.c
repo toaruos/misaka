@@ -27,9 +27,10 @@
 #include <kernel/pci.h>
 #include <kernel/procfs.h>
 #include <kernel/hashmap.h>
-
-extern uint64_t now(void);
-extern list_t * process_list;
+#include <kernel/time.h>
+#include <kernel/syscall.h>
+#include <kernel/mmu.h>
+#include <kernel/misc.h>
 
 #define PROCFS_STANDARD_ENTRIES (sizeof(std_entries) / sizeof(struct procfs_entry))
 #define PROCFS_PROCDIR_ENTRIES  (sizeof(procdir_entries) / sizeof(struct procfs_entry))
@@ -97,20 +98,6 @@ static uint64_t proc_cmdline_func(fs_node_t *node, uint64_t offset, uint64_t siz
 	memcpy(buffer, buf + offset, size);
 	return size;
 }
-
-extern size_t mmu_count_user(union PML * from);
-extern size_t mmu_count_shm(union PML * from);
-extern size_t mmu_total_memory(void);
-extern size_t mmu_used_memory(void);
-
-extern long arch_syscall_number(struct regs * r);
-extern long arch_syscall_arg0(struct regs * r);
-extern long arch_syscall_arg1(struct regs * r);
-extern long arch_syscall_arg2(struct regs * r);
-extern long arch_syscall_arg3(struct regs * r);
-extern long arch_syscall_arg4(struct regs * r);
-extern long arch_stack_pointer(struct regs * r);
-extern long arch_user_ip(struct regs * r);
 
 static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[2048];
@@ -299,7 +286,6 @@ static uint64_t cpuinfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 		memcpy(model_name, brand, 48);
 	}
 
-	extern size_t arch_cpu_mhz(void);
 	size_t _mhz = arch_cpu_mhz();
 
 	size_t _bsize = snprintf(buf, 1000,
@@ -316,8 +302,6 @@ static uint64_t cpuinfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 	memcpy(buffer, buf + offset, size);
 	return size;
 }
-
-extern void * sbrk(size_t);
 
 static uint64_t meminfo_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
@@ -395,7 +379,6 @@ static uint64_t pat_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_
 }
 #endif
 
-extern void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds);
 static uint64_t uptime_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
 	unsigned long timer_ticks, timer_subticks;
@@ -410,7 +393,6 @@ static uint64_t uptime_func(fs_node_t *node, uint64_t offset, uint64_t size, uin
 	return size;
 }
 
-extern const char * arch_get_cmdline(void);
 static uint64_t cmdline_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
 	const char * cmdline = arch_get_cmdline();
@@ -579,7 +561,6 @@ static uint64_t filesystems_func(fs_node_t *node, uint64_t offset, uint64_t size
 	return size;
 }
 
-extern const char * arch_get_loader(void);
 static uint64_t loader_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char * buf = malloc(512);
 

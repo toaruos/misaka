@@ -42,6 +42,7 @@ void arch_enter_signal_handler(uintptr_t entrypoint, int signum) {
 		"iretq"
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
 	    "D"(signum));
+	__builtin_unreachable();
 }
 
 __attribute__((naked))

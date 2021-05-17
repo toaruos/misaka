@@ -34,8 +34,6 @@
 #define SERIAL_IRQ_AC 4
 #define SERIAL_IRQ_BD 3
 
-extern void irq_ack(size_t irq_no);
-
 static pty_t * _serial_port_pty_a = NULL;
 static pty_t * _serial_port_pty_b = NULL;
 static pty_t * _serial_port_pty_c = NULL;

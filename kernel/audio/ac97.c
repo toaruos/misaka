@@ -241,7 +241,6 @@ static int ac97_mixer_write(uint32_t knob_id, uint32_t val) {
 	return 0;
 }
 
-extern uintptr_t mmu_allocate_n_frames(int n);
 void ac97_install(void) {
 	//debug_print(NOTICE, "Initializing AC97");
 	pci_scan(&find_ac97, -1, &_device);

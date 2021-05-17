@@ -21,8 +21,7 @@
 #include <kernel/tmpfs.h>
 #include <kernel/spinlock.h>
 #include <kernel/mmu.h>
-
-extern uint64_t now(void);
+#include <kernel/time.h>
 
 /* 4KB */
 #define BLOCKSIZE 0x1000

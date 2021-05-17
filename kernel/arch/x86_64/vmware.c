@@ -32,6 +32,7 @@
 #include <kernel/pipe.h>
 #include <kernel/process.h>
 #include <kernel/mouse.h>
+#include <kernel/time.h>
 #include <kernel/args.h>
 #include <kernel/arch/x86_64/ports.h>
 
@@ -59,7 +60,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 
 extern void (*ps2_mouse_alternate)(void); /* modules/mouse.c */
-extern void relative_time(unsigned long, unsigned long, unsigned long *, unsigned long *);
 
 static fs_node_t * mouse_pipe;
 
