@@ -39,6 +39,7 @@ extern void keyboard_install(void);
 extern void mouse_install(void);
 extern void vmware_initialize(void);
 extern void serial_initialize(void);
+extern void vbox_initialize(void);
 
 #define EARLY_LOG_DEVICE 0x3F8
 static size_t _early_log_write(size_t size, uint8_t * buffer) {
@@ -240,6 +241,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	/* Special drivers should probably be modules... */
 	vmware_initialize();
+	vbox_initialize();
 
 	/* Yield the generic main, which starts /bin/init */
 	return generic_main();

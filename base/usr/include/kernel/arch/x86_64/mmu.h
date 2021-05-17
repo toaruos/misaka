@@ -23,4 +23,5 @@ union PML * mmu_clone(union PML * from);
 void mmu_init(size_t memsize, uintptr_t firstFreePage);
 void mmu_invalidate(uintptr_t addr);
 uintptr_t mmu_allocate_a_frame(void);
+uintptr_t mmu_allocate_n_frames(int n);
 void mmu_set_kernel_heap(uintptr_t heap_start);
