@@ -17,10 +17,13 @@
 #include <kernel/list.h>
 #include <kernel/spinlock.h>
 #include <kernel/time.h>
+#include <kernel/vfs.h>
 #include <kernel/mod/net.h>
+#include <errno.h>
 
 #include <kernel/arch/x86_64/irq.h>
 
+static fs_node_t * e1000_fsdev = NULL;
 static uint32_t e1000_device_pci = 0x00000000;
 static int e1000_irq = 0;
 static uintptr_t mem_base = 0;
@@ -236,6 +239,7 @@ static int irq_handler(struct regs *r) {
 	}
 
 	irq_ack(e1000_irq);
+	printf("irq from e1000, %x\n", status);
 
 	if (status & 0x04) {
 		/* Start link */
@@ -244,6 +248,7 @@ static int irq_handler(struct regs *r) {
 		/* ?? */
 	} else if (status & ((1 << 6) | (1 << 7))) {
 		/* receive packet */
+		printf("receive packet\n");
 		do {
 			rx_index = read_command(E1000_REG_RXDESCTAIL);
 			if (rx_index == (int)read_command(E1000_REG_RXDESCHEAD)) return 1;
@@ -320,6 +325,22 @@ static void init_tx(void) {
 		read_command(E1000_REG_TCTRL));
 }
 
+static int ioctl_e1000(fs_node_t * node, int request, void * argp) {
+	switch (request) {
+		case 0x12340001:
+			/* fill argp with mac */
+			memcpy(argp, mac, sizeof(mac));
+			return 0;
+		default:
+			return -EINVAL;
+	}
+}
+
+static uint64_t write_e1000(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
+	/* write packet */
+	send_packet(buffer, size);
+	return size;
+}
 
 static void e1000_init(void * data) {
 
@@ -435,6 +456,15 @@ static void e1000_init(void * data) {
 	int link_is_up = (read_command(E1000_REG_STATUS) & (1 << 1));
 	printf("e1000: startup done, ready to receive; has_eeprom = %d, link is up = %d, irq=%d\n", has_eeprom, link_is_up, e1000_irq);
 
+	e1000_fsdev = calloc(sizeof(fs_node_t),1);
+	snprintf(e1000_fsdev->name, 100, "eth0");
+	e1000_fsdev->flags = FS_BLOCKDEVICE; /* NETDEVICE? */
+	e1000_fsdev->mask  = 0666; /* let everyone in on the party for now */
+	e1000_fsdev->ioctl = ioctl_e1000;
+	e1000_fsdev->write = write_e1000;
+
+	vfs_mount("/dev/eth0", e1000_fsdev);
+
 	//init_netif_funcs(get_mac, dequeue_packet, send_packet, "Intel E1000");
 
 	/* FIXME: We are not destroying kernel worker threads correctly... */
@@ -452,9 +482,10 @@ void e1000_initialize(void) {
 	mem_base  = (pci_read_field(e1000_device_pci, PCI_BAR0, 4) & 0xFFFFFFF0) | 0xFFFFffff00000000;
 
 	/* Allocate a frame to use for stuff */
-	uintptr_t ind = mmu_allocate_a_frame() << 12;
-	rx = (void*)(ind | 0xFFFFffff00000000UL);
-	tx = (void*)((ind+512) | 0xFFFFffff00000000UL);
+	rx_phys = mmu_allocate_a_frame() << 12;
+	rx = (void*)(rx_phys | 0xFFFFffff00000000UL);
+	tx_phys = rx_phys + 512;
+	tx = (void*)((tx_phys) | 0xFFFFffff00000000UL);
 
 	/* Allocate buffers */
 	for (int i = 0; i < E1000_NUM_RX_DESC; ++i) {
