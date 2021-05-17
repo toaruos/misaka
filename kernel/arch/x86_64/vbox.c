@@ -1,9 +1,18 @@
-/* vim: tabstop=4 shiftwidth=4 noexpandtab
+/**
+ * @file  kernel/arch/x86_64/vbox.c
+ * @brief VirtualBox Guest Additions driver
+ *
+ * Implements the following features:
+ * - Absolute mouse cursor positioning
+ * - "Hardware" cursor sprites
+ * - Automatic display modesetting
+ * - "Seamless" mode rectangle device
+ * - Log device
+ *
+ * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
- * Copyright (C) 2016-2018 K. Lange
- *
- * VirtualBox Guest Additions driver
+ * Copyright (C) 2016-2021 K. Lange
  */
 
 #include <kernel/types.h>
