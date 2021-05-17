@@ -30,6 +30,7 @@
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/regs.h>
+#include <kernel/arch/x86_64/irq.h>
 
 /* Utility macros */
 #define N_ELEMENTS(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -147,7 +148,7 @@ static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, voi
 }
 
 #define DIVISION 0x1000
-int ac97_irq_handler(struct regs * regs) {
+static int ac97_irq_handler(struct regs * regs) {
 	uint16_t sr = inports(_device.nabmbar + AC97_PO_SR);
 	if (sr & AC97_X_SR_BCIS) {
 		uint16_t current_buffer = inportb(_device.nabmbar + AC97_PO_CIV);
@@ -163,7 +164,7 @@ int ac97_irq_handler(struct regs * regs) {
 	} else {
 		return 0;
 	}
-	/* FIXME: We should be the ones acking this irq... */
+	irq_ack(_device.irq);
 	return 1;
 }
 
@@ -251,7 +252,7 @@ void ac97_install(void) {
 	_device.nambar = pci_read_field(_device.pci_device, PCI_BAR0, 4) & ((uint32_t) -1) << 1;
 	_device.irq = pci_get_interrupt(_device.pci_device);
 	//printf("device wants irq %zd\n", _device.irq);
-	//irq_install_handler(_device.irq, irq_handler, "ac97");
+	irq_install_handler(_device.irq, ac97_irq_handler, "ac97");
 	/* Enable all matter of interrupts */
 	outportb(_device.nabmbar + AC97_PO_CR, AC97_X_CR_FEIE | AC97_X_CR_IOCE);
 

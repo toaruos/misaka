@@ -1,5 +1,6 @@
 #include <kernel/printf.h>
 #include <kernel/arch/x86_64/ports.h>
+#include <kernel/arch/x86_64/ports.h>
 
 /* Programmable interrupt controller */
 #define PIC1           0x20
@@ -103,8 +104,12 @@ static void pit_set_timer_phase(long hz) {
 	outportb(PIT_A, (divisor >> 8) & PIT_MASK);
 }
 
+extern int cmos_time_stuff(struct regs *r);
+
 void pit_initialize(void) {
 	irq_remap();
+
+	irq_install_handler(TIMER_IRQ, cmos_time_stuff, "pit timer");
 
 	/* ELCR? */
 	uint8_t val = inportb(0x4D1);
