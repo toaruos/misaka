@@ -80,4 +80,5 @@ extern void irq_ack(size_t irq_no);
 
 typedef int (*irq_handler_chain_t) (struct regs *);
 extern void irq_install_handler(size_t irq, irq_handler_chain_t handler, const char * desc);
+extern const char * get_irq_handler(int irq, int chain);
 

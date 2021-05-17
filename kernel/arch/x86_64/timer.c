@@ -1,6 +1,7 @@
 #include <kernel/printf.h>
 #include <kernel/arch/x86_64/ports.h>
-#include <kernel/arch/x86_64/ports.h>
+#include <kernel/arch/x86_64/irq.h>
+#include <kernel/arch/x86_64/regs.h>
 
 /* Programmable interrupt controller */
 #define PIC1           0x20

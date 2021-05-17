@@ -155,6 +155,12 @@ static const char *exception_messages[32] = {
 static irq_handler_chain_t irq_routines[IRQ_CHAIN_SIZE * IRQ_CHAIN_DEPTH] = { NULL };
 static const char * _irq_handler_descriptions[IRQ_CHAIN_SIZE * IRQ_CHAIN_DEPTH] = { NULL };
 
+const char * get_irq_handler(int irq, int chain) {
+	if (irq >= IRQ_CHAIN_SIZE) return NULL;
+	if (chain >= IRQ_CHAIN_DEPTH) return NULL;
+	return _irq_handler_descriptions[IRQ_CHAIN_SIZE * chain + irq];
+}
+
 void irq_install_handler(size_t irq, irq_handler_chain_t handler, const char * desc) {
 	arch_enter_critical();
 	for (size_t i = 0; i < IRQ_CHAIN_DEPTH; i++) {
