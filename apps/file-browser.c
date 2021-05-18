@@ -435,7 +435,7 @@ static void update_status(void) {
 	char tmp_size[50];
 	if (selected_count == 0) {
 		print_human_readable_size(tmp_size, total_size);
-		sprintf(window_status, "%d item%s (%s)", file_pointers_len, file_pointers_len == 1 ? "" : "s", tmp_size);
+		sprintf(window_status, "%zd item%s (%s)", file_pointers_len, file_pointers_len == 1 ? "" : "s", tmp_size);
 	} else if (selected_count == 1) {
 		print_human_readable_size(tmp_size, selected->size);
 		sprintf(window_status, "\"%s\" (%s) %s", selected->name, tmp_size, selected->filetype);

@@ -17,11 +17,7 @@ typedef unsigned short nlink_t;
 typedef long off_t;
 typedef long time_t;
 
-#if defined(__INT_MAX__) && __INT_MAX__ == 2147483647
-typedef int ssize_t;
-#else
 typedef long ssize_t;
-#endif
 
 typedef unsigned long useconds_t;
 typedef long suseconds_t;
