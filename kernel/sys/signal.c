@@ -182,6 +182,11 @@ int send_signal(pid_t process, int signal, int force_root) {
 		}
 	}
 
+	if (receiver->flags & PROC_FLAG_IS_TASKLET) {
+		/* Can not send signals to kernel tasklets */
+		return -EINVAL;
+	}
+
 	if (signal > NUMSIGNALS) {
 		/* Invalid signal */
 		return -EINVAL;

@@ -364,13 +364,30 @@ static uint64_t read_e1000(fs_node_t *node, uint64_t offset, uint64_t size, uint
 
 static void e1000_init(void * data) {
 	uint16_t command_reg = pci_read_field(e1000_device_pci, PCI_COMMAND, 2);
+	printf("command_reg = %#x\n", command_reg);
 	command_reg |= (1 << 2);
 	command_reg |= (1 << 0);
 	pci_write_field(e1000_device_pci, PCI_COMMAND, 2, command_reg);
+	printf("command_reg = %#x\n", command_reg);
+
+	unsigned long s, ss;
+	relative_time(0, 10000, &s, &ss);
+	sleep_until((process_t *)current_process, s, ss);
+	switch_task(0);
+
+	command_reg = pci_read_field(e1000_device_pci, PCI_COMMAND, 2);
+	printf("command_reg = %#x\n", command_reg);
+
+	printf("e1000: checking mem base one more time\n");
+	uint32_t initial_bar = pci_read_field(e1000_device_pci, PCI_BAR0, 4);
+	mem_base  = (uintptr_t)mmu_map_from_physical(initial_bar & 0xFFFFFFF0);
+	printf("e1000: setting mem_base to %#zx from var of %#x\n", mem_base, initial_bar);
+
 	eeprom_detect();
+	printf("e1000: reading mac\n");
 	read_mac();
 	write_mac();
-	unsigned long s, ss;
+	printf("e1000: flipping control bits\n");
 	uint32_t ctrl = read_command(E1000_REG_CTRL);
 
 	/* reset phy */
@@ -486,24 +503,33 @@ void e1000_initialize(void) {
 	}
 
 	/* This seems to always be memory mapped on important devices. */
-	mem_base  = (pci_read_field(e1000_device_pci, PCI_BAR0, 4) & 0xFFFFFFF0) | 0xFFFFffff00000000;
+	uint32_t initial_bar = pci_read_field(e1000_device_pci, PCI_BAR0, 4);
+	mem_base  = mmu_map_from_physical(initial_bar & 0xFFFFFFF0);
+	printf("e1000: setting mem_base to %#zx from var of %#x\n", mem_base, initial_bar);
+
+	eeprom_detect();
 
 	/* Allocate a frame to use for stuff */
 	rx_phys = mmu_allocate_a_frame() << 12;
-	rx = (void*)(rx_phys | 0xFFFFffff00000000UL);
+	if (rx_phys == 0) printf("uh oh\n");
+	rx = mmu_map_from_physical(rx_phys);
+	printf("e1000: setting rx to %p\n", rx);
 	tx_phys = rx_phys + 512;
-	tx = (void*)((tx_phys) | 0xFFFFffff00000000UL);
+	tx = mmu_map_from_physical(tx_phys);
+	printf("e1000: setting tx to %p\n", tx);
 
 	/* Allocate buffers */
 	for (int i = 0; i < E1000_NUM_RX_DESC; ++i) {
 		rx[i].addr = mmu_allocate_n_frames(2) << 12;
-		rx_virt[i] = (void*)((uintptr_t)rx[i].addr | 0xFFFFffff00000000UL);
+		if (rx[i].addr == 0) printf("uh oh\n");
+		rx_virt[i] = mmu_map_from_physical(rx[i].addr);
 		rx[i].status = 0;
 	}
 
 	for (int i = 0; i < E1000_NUM_TX_DESC; ++i) {
 		tx[i].addr = mmu_allocate_n_frames(2) << 12;
-		tx_virt[i] = (void*)((uintptr_t)tx[i].addr | 0xFFFFffff00000000UL);
+		if (tx[i].addr == 0) printf("uh oh\n");
+		tx_virt[i] = mmu_map_from_physical(tx[i].addr);
 		tx[i].status = 0;
 		tx[i].cmd = (1 << 0);
 	}

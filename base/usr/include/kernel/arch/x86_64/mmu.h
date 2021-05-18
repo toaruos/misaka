@@ -26,6 +26,7 @@ uintptr_t mmu_allocate_a_frame(void);
 uintptr_t mmu_allocate_n_frames(int n);
 union PML * mmu_get_kernel_directory(void);
 void mmu_set_kernel_heap(uintptr_t heap_start);
+void * mmu_map_from_physical(uintptr_t frameaddress);
 
 size_t mmu_count_user(union PML * from);
 size_t mmu_count_shm(union PML * from);

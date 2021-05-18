@@ -119,13 +119,17 @@ struct vbox_pointershape {
 
 
 #define EARLY_LOG_DEVICE 0x504
-static uint64_t _vbox_write(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
+static size_t _vbox_write(size_t size, uint8_t * buffer) {
 	for (unsigned int i = 0; i < size; ++i) {
 		outportb(EARLY_LOG_DEVICE, buffer[i]);
 	}
 	return size;
 }
-static fs_node_t vb = { .write = &_vbox_write };
+
+void vbox_set_log(void) {
+	printf_output = &_vbox_write;
+	printf("Hello world, using VBox machine log for kernel output\n");
+}
 
 static uint32_t vbox_device = 0;
 static uint32_t vbox_port = 0x0;
@@ -193,10 +197,6 @@ static int vbox_irq_handler(struct regs *r) {
 	}
 
 	return 1;
-}
-
-void vbox_set_log(void) {
-	vfs_mount("/dev/vblog", &vb);
 }
 
 #define VBOX_MOUSE_ON (1 << 0) | (1 << 4)
@@ -286,7 +286,7 @@ uint64_t write_rectpipe(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t
 static void * kvmalloc_p(size_t size, uint32_t * outphys) {
 	uintptr_t index = mmu_allocate_n_frames(size / 0x1000) << 12;
 	*outphys = index;
-	return (void*)(index | 0xFFFFffff00000000UL);
+	return mmu_map_from_physical(index);
 }
 
 void vbox_initialize(void) {
@@ -295,7 +295,7 @@ void vbox_initialize(void) {
 	if (vbox_device) {
 		//fprintf(&vb, "VirtualBox host detected, switching log to VirtualBox.\n");
 
-		if (args_present("vboxdebug")) {
+		if (!args_present("novboxdebug")) {
 			vbox_set_log();
 		}
 		//fprintf(&vb, "HELLO WORLD\n");
@@ -331,7 +331,7 @@ void vbox_initialize(void) {
 		packet->header.reserved1 = 0;
 		packet->header.reserved2 = 0;
 		packet->version = VMMDEV_VERSION;
-		packet->ostype = 0;
+		packet->ostype = 0x00100; /* Unknown, x86-64 */
 
 		outportl(vbox_port, vbox_phys);
 
@@ -462,7 +462,8 @@ void vbox_initialize(void) {
 			uintptr_t t = pci_read_field(vbox_device, PCI_BAR1, 4);
 			//fprintf(&vb, "mapping vmm_dev = 0x%x\n", t);
 			if (t > 0) {
-				vbox_vmmdev =  (void *)((t & 0xFFFFFFF0) | 0xFFFFffff00000000UL);
+				vbox_vmmdev =  mmu_map_from_physical(t & 0xFFFFFFF0);
+				printf("Setting vbox mem device at %p\n", (void*)vbox_vmmdev);
 			}
 		}
 

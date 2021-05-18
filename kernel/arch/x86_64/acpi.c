@@ -1,13 +1,14 @@
 #include <stdint.h>
 #include <kernel/printf.h>
 #include <kernel/arch/x86_64/acpi.h>
+#include <kernel/arch/x86_64/mmu.h>
 
 void acpi_initialize(void) {
 	/* ACPI */
 	uintptr_t scan;
 	int good = 0;
 	for (scan = 0x000E0000; scan < 0x00100000; scan += 16) {
-		char * _scan = (char *)(scan | 0xFFFFFFFF00000000);
+		char * _scan = mmu_map_from_physical(scan);
 		if (_scan[0] == 'R' &&
 			_scan[1] == 'S' &&
 			_scan[2] == 'D' &&

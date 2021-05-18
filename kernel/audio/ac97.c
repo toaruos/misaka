@@ -262,12 +262,12 @@ void ac97_install(void) {
 
 	/* Allocate our BDL and our buffers */
 	_device.bdl_p = mmu_allocate_a_frame() << 12;
-	_device.bdl   = (void*)((uintptr_t)_device.bdl_p | 0xFFFFffff00000000);
+	_device.bdl   = mmu_map_from_physical(_device.bdl_p);
 	memset(_device.bdl, 0, AC97_BDL_LEN * sizeof(*_device.bdl));
 
 	for (int i = 0; i < AC97_BDL_LEN; i++) {
 		_device.bdl[i].pointer = mmu_allocate_n_frames(2) << 12;
-		_device.bufs[i] = (void*)((uintptr_t)_device.bdl[i].pointer | 0xFFFFffff00000000);
+		_device.bufs[i] = mmu_map_from_physical(_device.bdl[i].pointer);
 		memset(_device.bufs[i], 0, AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
 		AC97_CL_SET_LENGTH(_device.bdl[i].cl, AC97_BDL_BUFFER_LEN);
 		/* Set all buffers to interrupt */

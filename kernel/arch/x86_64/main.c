@@ -169,7 +169,7 @@ static struct multiboot * mboot_struct = NULL;
  * x86-64: The kernel commandline is retrieved from the multiboot struct.
  */
 const char * arch_get_cmdline(void) {
-	return (char*)((0xFFFFFFFF00000000UL) | mboot_struct->cmdline);
+	return mmu_map_from_physical(mboot_struct->cmdline);
 }
 
 /**
@@ -177,7 +177,7 @@ const char * arch_get_cmdline(void) {
  */
 const char * arch_get_loader(void) {
 	if (mboot_struct->flags & MULTIBOOT_FLAG_LOADER) {
-		return (char*)((0xFFFFFFFF00000000UL) | mboot_struct->boot_loader_name);
+		return mmu_map_from_physical(mboot_struct->boot_loader_name);
 	} else {
 		return "(unknown)";
 	}
@@ -203,7 +203,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	mmu_init(memCount, maxAddress);
 
 	/* multiboot memory is now mapped high, if you want it. */
-	mboot_struct = (void*)((uintptr_t)mboot | 0xFFFFffff00000000UL);
+	mboot_struct = mmu_map_from_physical((uintptr_t)mboot);
 
 	/* With the MMU initialized, set up things required for the scheduler. */
 	pat_initialize();
@@ -220,13 +220,13 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	framebuffer_initialize();
 
 	/* ramdisk_mount takes physical pages, it will map them itself. */
-	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)(mboot->mods_addr | 0xFFFFffff00000000UL);
+	mboot_mod_t * mods = mmu_map_from_physical(mboot->mods_addr);
 	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
 		/* Is this a gzipped data source? */
-		uint8_t * data = (uint8_t*)((uintptr_t)mods[i].mod_start | 0xFFFFffff00000000UL);
+		uint8_t * data = mmu_map_from_physical(mods[i].mod_start);
 		if (data[0] == 0x1F && data[1] == 0x8B) {
 			/* Yes - decompress it first */
-			uint32_t decompressedSize = *(uint32_t*)((uintptr_t)(mods[i].mod_end - sizeof(uint32_t)) | 0xFFFFffff00000000UL);
+			uint32_t decompressedSize = *(uint32_t*)mmu_map_from_physical(mods[i].mod_end - sizeof(uint32_t));
 			size_t pageCount = (((size_t)decompressedSize + 0xFFF) & ~(0xFFF)) >> 12;
 			uintptr_t physicalAddress = mmu_allocate_n_frames(pageCount) << 12;
 			if (physicalAddress == (uintptr_t)-1) {
@@ -234,7 +234,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 				continue;
 			}
 			gzip_inputPtr = (void*)data;
-			gzip_outputPtr = (void*)(physicalAddress | 0xFFFFffff00000000UL);
+			gzip_outputPtr = mmu_map_from_physical(physicalAddress);
 			/* Do the deed */
 			if (gzip_decompress()) {
 				printf("gzip: failed to decompress payload, skipping\n");

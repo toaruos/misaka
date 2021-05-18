@@ -198,6 +198,10 @@ struct regs * isr_handler(struct regs * r) {
 			}
 			printf("Page fault in pid=%d (%s) at %#zx\n", (int)current_process->id, current_process->name, faulting_address);
 			dump_regs(r);
+			if (current_process->flags & PROC_FLAG_IS_TASKLET) {
+				printf("Segmentation fault in kernel worker thread, halting.\n");
+				arch_fatal();
+			}
 			send_signal(current_process->id, SIGSEGV, 1);
 			break;
 		}

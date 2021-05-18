@@ -452,7 +452,7 @@ static fs_node_t * tar_mount(const char * device, const char * mount_path) {
 
 	if (argc > 1) {
 		//debug_print(WARNING, "tarfs driver takes no options");
-		printf("tarfs got unexpected mount arguments\n");
+		printf("tarfs got unexpected mount arguments: %s\n", device);
 	}
 
 	fs_node_t * dev = kopen(argv[0], 0);
