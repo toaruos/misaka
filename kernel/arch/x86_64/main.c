@@ -242,8 +242,8 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 			}
 			ramdisk_mount(physicalAddress, decompressedSize);
 			/* Free the pages from the original mod */
-			for (size_t i = mods[i].mod_start; i < mods[i].mod_end; i += 0x1000) {
-				mmu_frame_clear(i);
+			for (size_t j = mods[i].mod_start; j < mods[i].mod_end; j += 0x1000) {
+				mmu_frame_clear(j);
 			}
 		} else {
 			/* No, or it doesn't look like one - mount it directly */
