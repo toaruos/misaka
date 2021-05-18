@@ -150,6 +150,14 @@ uint16_t calculate_ipv4_checksum(struct ipv4_packet * p) {
 	return ~(sum & 0xFFFF) & 0xFFFF;
 }
 
+void ip_ntoa(uint32_t src_addr, char * out) {
+	sprintf(out, "%d.%d.%d.%d",
+		(src_addr & 0xFF000000) >> 24,
+		(src_addr & 0xFF0000) >> 16,
+		(src_addr & 0xFF00) >> 8,
+		(src_addr & 0xFF));
+}
+
 int main(int argc, char * argv[]) {
 	int netdev = open("/dev/eth0", O_RDWR);
 
@@ -233,6 +241,29 @@ int main(int argc, char * argv[]) {
 	thething.payload[7] = 255;
 
 	write(netdev, &thething, sizeof(struct payload));
+	do {
+		char buf[8092] = {0};
+		ssize_t rsize = read(netdev, &buf, 8092);
+
+		if (rsize <= 0) {
+			printf("bad size? %zd\n", rsize);
+			continue;
+		}
+
+		struct payload * response = (void*)buf;
+
+		if (ntohs(response->udp_header.destination_port) != 68) {
+			printf("not what I was expecting\n");
+			continue;
+		}
+
+		uint32_t yiaddr = ntohl(response->dhcp_header.yiaddr);
+		char yiaddr_ip[16];
+		ip_ntoa(yiaddr, yiaddr_ip);
+
+		printf("Response from DHCP Discover: %s\n", yiaddr_ip);
+		break;
+	} while (1);
 
 	return 0;
 }

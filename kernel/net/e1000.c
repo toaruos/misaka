@@ -257,7 +257,7 @@ static int irq_handler(struct regs *r) {
 				uint8_t * pbuf = (uint8_t *)rx_virt[rx_index];
 				uint16_t  plen = rx[rx_index].length;
 
-				void * packet = malloc(plen);
+				void * packet = malloc(8092);
 				memcpy(packet, pbuf, plen);
 
 				rx[rx_index].status = 0;
@@ -340,6 +340,14 @@ static uint64_t write_e1000(fs_node_t *node, uint64_t offset, uint64_t size, uin
 	/* write packet */
 	send_packet(buffer, size);
 	return size;
+}
+
+static uint64_t read_e1000(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
+	if (size != 8092) return 0;
+	struct ethernet_packet * packet = dequeue_packet();
+	memcpy(buffer, packet, 8092);
+	free(packet);
+	return 8092;
 }
 
 static void e1000_init(void * data) {
@@ -462,6 +470,7 @@ static void e1000_init(void * data) {
 	e1000_fsdev->mask  = 0666; /* let everyone in on the party for now */
 	e1000_fsdev->ioctl = ioctl_e1000;
 	e1000_fsdev->write = write_e1000;
+	e1000_fsdev->read  = read_e1000;
 
 	vfs_mount("/dev/eth0", e1000_fsdev);
 
