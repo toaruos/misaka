@@ -108,7 +108,10 @@ static long sys_sysfunc(long fn, char ** args) {
 			volatile process_t * volatile proc = current_process;
 			if (proc->group != 0) proc = process_from_pid(proc->group);
 			spin_lock(proc->image.lock);
-			for (uintptr_t i = (uintptr_t)args[0]; i < (uintptr_t)args[0] + (size_t)args[1]; i += 0x1000) {
+			/* Align inputs */
+			uintptr_t start = ((uintptr_t)args[0]) & 0xFFFFffffFFFFf000UL;
+			uintptr_t end   = ((uintptr_t)args[0] + (size_t)args[1] + 0xFFF) & 0xFFFFffffFFFFf000UL;
+			for (uintptr_t i = start; i < end; i += 0x1000) {
 				union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 				mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
 				mmu_invalidate(i);
