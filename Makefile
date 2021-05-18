@@ -82,12 +82,12 @@ LC = $(BASE)/lib/libc.so $(GCC_SHARED) $(LIBSTDCXX)
 .PHONY: all system clean run shell
 
 all: system
-system: misaka-kernel $(MODULES) ramdisk.tar
+system: misaka-kernel $(MODULES) ramdisk.igz
 
 %.ko: %.c
 	${CC} -c ${KERNEL_CFLAGS} -o $@ $<
 
-ramdisk.tar: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(KRK_MODS_X) $(BASE)/bin/kuroko $(BASE)/lib/ld.so $(APPS_KRK_X) $(KRK_MODS)
+ramdisk.igz: $(wildcard $(BASE)/* $(BASE)/*/* $(BASE)/*/*/*) $(APPS_X) $(LIBS_X) $(KRK_MODS_X) $(BASE)/bin/kuroko $(BASE)/lib/ld.so $(APPS_KRK_X) $(KRK_MODS)
 	python3 util/createramdisk.py
 
 KRK_SRC = $(sort $(wildcard kuroko/src/*.c))
@@ -104,10 +104,10 @@ $(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs $(LC)
 	$(CC) -g -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<
 
 run: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "root=/dev/ram0 start=live-session migrate" -initrd ramdisk.tar
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "root=/dev/ram0 start=live-session migrate" -initrd ramdisk.igz
 
 shell: system
-	${EMU} -m 3G ${EMU_KVM} -kernel misaka-kernel -append "root=/dev/ram0 start=--headless migrate" -initrd ramdisk.tar \
+	${EMU} -m 3G ${EMU_KVM} -kernel misaka-kernel -append "root=/dev/ram0 start=--headless migrate" -initrd ramdisk.igz \
 		-nographic -no-reboot -audiodev none,id=id -serial null -serial mon:stdio \
 		-fw_cfg name=opt/org.toaruos.gettyargs,string="-a local /dev/ttyS1" \
 		-fw_cfg name=opt/org.toaruos.term,string=${TERM}

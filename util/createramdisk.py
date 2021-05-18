@@ -47,7 +47,7 @@ def file_filter(tarinfo):
 
     return tarinfo
 
-with tarfile.open('ramdisk.tar','w') as ramdisk:
+with tarfile.open('ramdisk.igz','w:gz') as ramdisk:
     ramdisk.add('base',arcname='/',filter=file_filter)
 
     ramdisk.add('.',arcname='/src',filter=file_filter,recursive=False) # Add a src directory

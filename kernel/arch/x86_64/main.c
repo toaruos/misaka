@@ -16,6 +16,7 @@
 #include <kernel/mmu.h>
 #include <kernel/video.h>
 #include <kernel/generic.h>
+#include <kernel/gzip.h>
 #include <kernel/ramdisk.h>
 
 #include <kernel/arch/x86_64/ports.h>
@@ -221,7 +222,33 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	/* ramdisk_mount takes physical pages, it will map them itself. */
 	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)(mboot->mods_addr | 0xFFFFffff00000000UL);
 	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
-		ramdisk_mount(mods[i].mod_start, mods[i].mod_end - mods[i].mod_start);
+		/* Is this a gzipped data source? */
+		uint8_t * data = (uint8_t*)((uintptr_t)mods[i].mod_start | 0xFFFFffff00000000UL);
+		if (data[0] == 0x1F && data[1] == 0x8B) {
+			/* Yes - decompress it first */
+			uint32_t decompressedSize = *(uint32_t*)((uintptr_t)(mods[i].mod_end - sizeof(uint32_t)) | 0xFFFFffff00000000UL);
+			size_t pageCount = (((size_t)decompressedSize + 0xFFF) & ~(0xFFF)) >> 12;
+			uintptr_t physicalAddress = mmu_allocate_n_frames(pageCount) << 12;
+			if (physicalAddress == (uintptr_t)-1) {
+				printf("gzip: failed to allocate pages for decompressed payload, skipping\n");
+				continue;
+			}
+			gzip_inputPtr = (void*)data;
+			gzip_outputPtr = (void*)(physicalAddress | 0xFFFFffff00000000UL);
+			/* Do the deed */
+			if (gzip_decompress()) {
+				printf("gzip: failed to decompress payload, skipping\n");
+				continue;
+			}
+			ramdisk_mount(physicalAddress, decompressedSize);
+			/* Free the pages from the original mod */
+			for (size_t i = mods[i].mod_start; i < mods[i].mod_end; i += 0x1000) {
+				mmu_frame_clear(i);
+			}
+		} else {
+			/* No, or it doesn't look like one - mount it directly */
+			ramdisk_mount(mods[i].mod_start, mods[i].mod_end - mods[i].mod_start);
+		}
 	}
 
 	/* We set up the pit and interrupt stuff pretty late, after the scheduler is ready. */

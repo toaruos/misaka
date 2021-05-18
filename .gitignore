@@ -15,6 +15,7 @@
 *.pcap
 .gdb_history
 /ramdisk.tar
+/ramdisk.igz
 /misaka-kernel.64
 /misaka-kernel
 /kernel/symbols.S
