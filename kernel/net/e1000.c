@@ -378,9 +378,19 @@ static void e1000_init(void * data) {
 	command_reg = pci_read_field(e1000_device_pci, PCI_COMMAND, 2);
 	printf("command_reg = %#x\n", command_reg);
 
-	printf("e1000: checking mem base one more time\n");
+	printf("e1000: setting up MMIO\n");
 	uint32_t initial_bar = pci_read_field(e1000_device_pci, PCI_BAR0, 4);
-	mem_base  = (uintptr_t)mmu_map_from_physical(initial_bar & 0xFFFFFFF0);
+	//mem_base  = (uintptr_t)mmu_map_from_physical(initial_bar & 0xFFFFFFF0);
+
+	/* We can't use the general -128GiB mapping are because _certain VMs_
+	 * won't let us access this MMIO range through 1GiB pages, so we'll
+	 * map to the region just above the heap */
+	mem_base = 0xffffff1fc0000000;
+	for (size_t i = 0; i < 0x80000; i += 0x1000) {
+		union PML * p = mmu_get_page(mem_base + i, MMU_GET_MAKE);
+		mmu_frame_map_address(p, MMU_FLAG_KERNEL | MMU_FLAG_WRITABLE, initial_bar + i);
+		mmu_invalidate(mem_base + i);
+	}
 	printf("e1000: setting mem_base to %#zx from var of %#x\n", mem_base, initial_bar);
 
 	eeprom_detect();
@@ -502,21 +512,14 @@ void e1000_initialize(void) {
 		return;
 	}
 
-	/* This seems to always be memory mapped on important devices. */
-	uint32_t initial_bar = pci_read_field(e1000_device_pci, PCI_BAR0, 4);
-	mem_base  = mmu_map_from_physical(initial_bar & 0xFFFFFFF0);
-	printf("e1000: setting mem_base to %#zx from var of %#x\n", mem_base, initial_bar);
-
-	eeprom_detect();
-
 	/* Allocate a frame to use for stuff */
 	rx_phys = mmu_allocate_a_frame() << 12;
 	if (rx_phys == 0) printf("uh oh\n");
 	rx = mmu_map_from_physical(rx_phys);
-	printf("e1000: setting rx to %p\n", rx);
+	printf("e1000: setting rx to %p\n", (void*)rx);
 	tx_phys = rx_phys + 512;
 	tx = mmu_map_from_physical(tx_phys);
-	printf("e1000: setting tx to %p\n", tx);
+	printf("e1000: setting tx to %p\n", (void*)tx);
 
 	/* Allocate buffers */
 	for (int i = 0; i < E1000_NUM_RX_DESC; ++i) {

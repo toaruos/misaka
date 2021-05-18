@@ -142,20 +142,20 @@ uintptr_t mmu_map_to_physical(uintptr_t virtAddr) {
 	/* Get the PML4 entry for this address */
 	if (!root[pml4_entry].bits.present) return (uintptr_t)-1;
 
-	union PML * pdp = mmu_map_from_physical(root[pml4_entry].bits.page << 12);
+	union PML * pdp = mmu_map_from_physical((uintptr_t)root[pml4_entry].bits.page << 12);
 
 	if (!pdp[pdp_entry].bits.present) return (uintptr_t)-2;
 	if (pdp[pdp_entry].bits.size) return ((uintptr_t)pdp[pdp_entry].bits.page << 12) | (virtAddr & 0x3fffffff);
 
-	union PML * pd = mmu_map_from_physical(pdp[pdp_entry].bits.page << 12);
+	union PML * pd = mmu_map_from_physical((uintptr_t)pdp[pdp_entry].bits.page << 12);
 
 	if (!pd[pd_entry].bits.present) return (uintptr_t)-3;
 	if (pd[pd_entry].bits.size) return ((uintptr_t)pd[pd_entry].bits.page << 12) | (virtAddr & 0x1FFFFF);
 
-	union PML * pt = mmu_map_from_physical(pd[pd_entry].bits.page << 12);
+	union PML * pt = mmu_map_from_physical((uintptr_t)pd[pd_entry].bits.page << 12);
 
 	if (!pt[pt_entry].bits.present) return (uintptr_t)-4;
-	return (pt[pt_entry].bits.page << 12) | (virtAddr & 0xFFF);
+	return ((uintptr_t)pt[pt_entry].bits.page << 12) | (virtAddr & 0xFFF);
 }
 
 union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
@@ -180,7 +180,7 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 		root[pml4_entry].raw = (newPage) | 0x07;
 	}
 
-	union PML * pdp = mmu_map_from_physical(root[pml4_entry].bits.page << 12);
+	union PML * pdp = mmu_map_from_physical((uintptr_t)root[pml4_entry].bits.page << 12);
 
 	if (!pdp[pdp_entry].bits.present) {
 		if (!(flags & MMU_GET_MAKE)) goto _noentry;
@@ -198,7 +198,7 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 		return NULL;
 	}
 
-	union PML * pd = mmu_map_from_physical(pdp[pdp_entry].bits.page << 12);
+	union PML * pd = mmu_map_from_physical((uintptr_t)pdp[pdp_entry].bits.page << 12);
 
 	if (!pd[pd_entry].bits.present) {
 		if (!(flags & MMU_GET_MAKE)) goto _noentry;
@@ -216,7 +216,7 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 		return NULL;
 	}
 
-	union PML * pt = mmu_map_from_physical(pd[pd_entry].bits.page << 12);
+	union PML * pt = mmu_map_from_physical((uintptr_t)pd[pd_entry].bits.page << 12);
 	return (union PML *)&pt[pt_entry];
 
 _noentry:
@@ -244,7 +244,7 @@ union PML * mmu_clone(union PML * from) {
 	/* Copy PDPs */
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
-			union PML * pdp_in = mmu_map_from_physical(from[i].bits.page << 12);
+			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
 			spin_lock(frame_alloc_lock);
 			uintptr_t newPage = mmu_first_frame() << 12;
 			mmu_frame_set(newPage);
@@ -256,7 +256,7 @@ union PML * mmu_clone(union PML * from) {
 			/* Copy the PDs */
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
-					union PML * pd_in = mmu_map_from_physical(pdp_in[j].bits.page << 12);
+					union PML * pd_in = mmu_map_from_physical((uintptr_t)pdp_in[j].bits.page << 12);
 					spin_lock(frame_alloc_lock);
 					uintptr_t newPage = mmu_first_frame() << 12;
 					mmu_frame_set(newPage);
@@ -268,7 +268,7 @@ union PML * mmu_clone(union PML * from) {
 					/* Now copy the PTs */
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
-							union PML * pt_in = mmu_map_from_physical(pd_in[k].bits.page << 12);
+							union PML * pt_in = mmu_map_from_physical((uintptr_t)pd_in[k].bits.page << 12);
 							spin_lock(frame_alloc_lock);
 							uintptr_t newPage = mmu_first_frame() << 12;
 							mmu_frame_set(newPage);
@@ -283,7 +283,7 @@ union PML * mmu_clone(union PML * from) {
 								if (address >= 0x100000000 && address <= 0x400000000) continue;
 								if (pt_in[l].bits.present) {
 									if (pt_in[l].bits.user) {
-										char * page_in = mmu_map_from_physical(pt_in[l].bits.page << 12);
+										char * page_in = mmu_map_from_physical((uintptr_t)pt_in[l].bits.page << 12);
 										spin_lock(frame_alloc_lock);
 										uintptr_t newPage = mmu_first_frame() << 12;
 										mmu_frame_set(newPage);
@@ -342,13 +342,13 @@ size_t mmu_count_user(union PML * from) {
 
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
-			union PML * pdp_in = mmu_map_from_physical(from[i].bits.page << 12);
+			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
-					union PML * pd_in = mmu_map_from_physical(pdp_in[j].bits.page << 12);
+					union PML * pd_in = mmu_map_from_physical((uintptr_t)pdp_in[j].bits.page << 12);
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
-							union PML * pt_in = mmu_map_from_physical(pd_in[k].bits.page << 12);
+							union PML * pt_in = mmu_map_from_physical((uintptr_t)pd_in[k].bits.page << 12);
 							for (size_t l = 0; l < 512; ++l) {
 								/* Calculate final address to skip SHM */
 								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
@@ -373,13 +373,13 @@ size_t mmu_count_shm(union PML * from) {
 
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
-			union PML * pdp_in = mmu_map_from_physical(from[i].bits.page << 12);
+			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
-					union PML * pd_in = mmu_map_from_physical(pdp_in[j].bits.page << 12);
+					union PML * pd_in = mmu_map_from_physical((uintptr_t)pdp_in[j].bits.page << 12);
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
-							union PML * pt_in = mmu_map_from_physical(pd_in[k].bits.page << 12);
+							union PML * pt_in = mmu_map_from_physical((uintptr_t)pd_in[k].bits.page << 12);
 							for (size_t l = 0; l < 512; ++l) {
 								/* Calculate final address to skip SHM */
 								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
@@ -425,29 +425,29 @@ void mmu_free(union PML * from) {
 
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
-			union PML * pdp_in = mmu_map_from_physical(from[i].bits.page << 12);
+			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
-					union PML * pd_in = mmu_map_from_physical(pdp_in[j].bits.page << 12);
+					union PML * pd_in = mmu_map_from_physical((uintptr_t)pdp_in[j].bits.page << 12);
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
-							union PML * pt_in = mmu_map_from_physical(pd_in[k].bits.page << 12);
+							union PML * pt_in = mmu_map_from_physical((uintptr_t)pd_in[k].bits.page << 12);
 							for (size_t l = 0; l < 512; ++l) {
 								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
 								if (address >= 0x200000000 && address <= 0x400000000) continue;
 								if (pt_in[l].bits.present) {
 									if (pt_in[l].bits.user) {
-										mmu_frame_clear(pt_in[l].bits.page << 12);
+										mmu_frame_clear((uintptr_t)pt_in[l].bits.page << 12);
 									}
 								}
 							}
-							mmu_frame_clear(pd_in[k].bits.page << 12);
+							mmu_frame_clear((uintptr_t)pd_in[k].bits.page << 12);
 						}
 					}
-					mmu_frame_clear(pdp_in[j].bits.page << 12);
+					mmu_frame_clear((uintptr_t)pdp_in[j].bits.page << 12);
 				}
 			}
-			mmu_frame_clear(from[i].bits.page << 12);
+			mmu_frame_clear((uintptr_t)from[i].bits.page << 12);
 		}
 	}
 
