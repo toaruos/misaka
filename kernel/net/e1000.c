@@ -31,6 +31,7 @@ static int has_eeprom = 0;
 static uint8_t mac[6];
 static int rx_index = 0;
 static int tx_index = 0;
+static int link_is_up = 0;
 
 static list_t * net_queue = NULL;
 static spin_lock_t net_queue_lock = { 0 };
@@ -108,6 +109,7 @@ static uint8_t* get_mac() {
 #define E1000_REG_STATUS     0x0008
 #define E1000_REG_EEPROM     0x0014
 #define E1000_REG_CTRL_EXT   0x0018
+#define E1000_REG_ICR        0x00C0
 
 #define E1000_REG_RCTRL      0x0100
 #define E1000_REG_RXDESCLO   0x2800
@@ -132,9 +134,9 @@ static uint8_t* get_mac() {
 #define RCTL_LPE                        (1 << 5)    /* Long Packet Reception Enable */
 #define RCTL_LBM_NONE                   (0 << 6)    /* No Loopback */
 #define RCTL_LBM_PHY                    (3 << 6)    /* PHY or external SerDesc loopback */
-#define RTCL_RDMTS_HALF                 (0 << 8)    /* Free Buffer Threshold is 1/2 of RDLEN */
-#define RTCL_RDMTS_QUARTER              (1 << 8)    /* Free Buffer Threshold is 1/4 of RDLEN */
-#define RTCL_RDMTS_EIGHTH               (2 << 8)    /* Free Buffer Threshold is 1/8 of RDLEN */
+#define RCTL_RDMTS_HALF                 (0 << 8)    /* Free Buffer Threshold is 1/2 of RDLEN */
+#define RCTL_RDMTS_QUARTER              (1 << 8)    /* Free Buffer Threshold is 1/4 of RDLEN */
+#define RCTL_RDMTS_EIGHTH               (2 << 8)    /* Free Buffer Threshold is 1/8 of RDLEN */
 #define RCTL_MO_36                      (0 << 12)   /* Multicast Offset - bits 47:36 */
 #define RCTL_MO_35                      (1 << 12)   /* Multicast Offset - bits 46:35 */
 #define RCTL_MO_34                      (2 << 12)   /* Multicast Offset - bits 45:34 */
@@ -169,6 +171,15 @@ static uint8_t* get_mac() {
 #define CMD_RPS                         (1 << 4)    /* Report Packet Sent */
 #define CMD_VLE                         (1 << 6)    /* VLAN Packet Enable */
 #define CMD_IDE                         (1 << 7)    /* Interrupt Delay Enable */
+
+#define ICR_TXDW   (1 << 0)
+#define ICR_TXQE   (1 << 1)  /* Transmit queue is empty */
+#define ICR_LSC    (1 << 2)  /* Link status changed */
+#define ICR_RXSEQ  (1 << 3)  /* Receive sequence count error */
+#define ICR_RXDMT0 (1 << 4)  /* Receive descriptor minimum threshold */
+/* what's 5 (0x20)? */
+#define ICR_RXO    (1 << 6)  /* Receive overrun */
+#define ICR_RXT0   (1 << 7)  /* Receive timer interrupt? */
 
 static int eeprom_detect(void) {
 
@@ -232,23 +243,25 @@ static void read_mac(void) {
 
 static int irq_handler(struct regs *r) {
 
-	uint32_t status = read_command(0xc0);
+	uint32_t status = read_command(E1000_REG_ICR);
 
 	if (!status) {
 		return 0;
 	}
 
 	irq_ack(e1000_irq);
-	printf("irq from e1000, %x\n", status);
 
-	if (status & 0x04) {
-		/* Start link */
-		printf("e1000: start link\n");
-	} else if (status & 0x10) {
-		/* ?? */
-	} else if (status & ((1 << 6) | (1 << 7))) {
-		/* receive packet */
-		printf("receive packet\n");
+	if (status & ICR_LSC) {
+		/* TODO: Change interface link status. */
+		link_is_up = (read_command(E1000_REG_STATUS) & (1 << 1));
+	}
+
+	if (status & ICR_TXQE) {
+		/* Transmit queue empty; nothing to do. */
+	}
+
+	if (status & (ICR_RXO | ICR_RXT0)) {
+		/* Packet received. */
 		do {
 			rx_index = read_command(E1000_REG_RXDESCTAIL);
 			if (rx_index == (int)read_command(E1000_REG_RXDESCHEAD)) return 1;
@@ -277,7 +290,6 @@ static int irq_handler(struct regs *r) {
 
 static void send_packet(uint8_t* payload, size_t payload_size) {
 	tx_index = read_command(E1000_REG_TXDESCTAIL);
-	printf("e1000: sending packet %p, %zu desc[%d]\n", (void*)payload, payload_size, tx_index);
 
 	memcpy(tx_virt[tx_index], payload, payload_size);
 	tx[tx_index].length = payload_size;
@@ -351,24 +363,16 @@ static uint64_t read_e1000(fs_node_t *node, uint64_t offset, uint64_t size, uint
 }
 
 static void e1000_init(void * data) {
-
-	printf("e1000: enabling bus mastering\n");
 	uint16_t command_reg = pci_read_field(e1000_device_pci, PCI_COMMAND, 2);
 	command_reg |= (1 << 2);
 	command_reg |= (1 << 0);
 	pci_write_field(e1000_device_pci, PCI_COMMAND, 2, command_reg);
-
-	printf("e1000: mem base: %#zx\n", mem_base);
-
 	eeprom_detect();
-	printf("e1000: has_eeprom = %d\n", has_eeprom);
 	read_mac();
 	write_mac();
-
-	printf("e1000: device mac %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 	unsigned long s, ss;
-
 	uint32_t ctrl = read_command(E1000_REG_CTRL);
+
 	/* reset phy */
 	write_command(E1000_REG_CTRL, ctrl | (0x80000000));
 	read_command(E1000_REG_STATUS);
@@ -398,7 +402,6 @@ static void e1000_init(void * data) {
 	relative_time(0, 10000, &s, &ss);
 	sleep_until((process_t *)current_process, s, ss);
 	switch_task(0);
-	printf("e1000: back from sleep\n");
 
 	uint32_t status = read_command(E1000_REG_CTRL);
 	status |= (1 << 5);   /* set auto speed detection */
@@ -430,8 +433,6 @@ static void e1000_init(void * data) {
 
 	irq_install_handler(e1000_irq, irq_handler, "e1000");
 
-	printf("e1000: binding interrupt %d\n", e1000_irq);
-
 	for (int i = 0; i < 128; ++i) {
 		write_command(0x5200 + i * 4, 0);
 	}
@@ -461,8 +462,7 @@ static void e1000_init(void * data) {
 	sleep_until((process_t *)current_process, s, ss);
 	switch_task(0);
 
-	int link_is_up = (read_command(E1000_REG_STATUS) & (1 << 1));
-	printf("e1000: startup done, ready to receive; has_eeprom = %d, link is up = %d, irq=%d\n", has_eeprom, link_is_up, e1000_irq);
+	link_is_up = (read_command(E1000_REG_STATUS) & (1 << 1));
 
 	e1000_fsdev = calloc(sizeof(fs_node_t),1);
 	snprintf(e1000_fsdev->name, 100, "eth0");
@@ -473,8 +473,6 @@ static void e1000_init(void * data) {
 	e1000_fsdev->read  = read_e1000;
 
 	vfs_mount("/dev/eth0", e1000_fsdev);
-
-	//init_netif_funcs(get_mac, dequeue_packet, send_packet, "Intel E1000");
 
 	/* FIXME: We are not destroying kernel worker threads correctly... */
 	switch_task(0);
