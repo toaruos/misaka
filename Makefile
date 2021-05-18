@@ -136,11 +136,10 @@ kernel/%.o: kernel/%.c ${HEADERS}
 clean:
 	-rm -f ${KERNEL_ASMOBJS}
 	-rm -f ${KERNEL_OBJS}
-	-rm -f kernel/symbols.o
-	-rm -f misaka-kernel
-	-rm -f misaka-kernel.64
-	-rm -f $(APPS_Y) $(LIBS_Y) $(KRK_MODS_Y) $(KRK_MODS_X) $(KRK_MODS)
-	-rm -f $(APPS_X) $(LIBS_X) $(BASE)/bin/demo ramdisk.tar $(APPS_KRK_X) $(APPS_SH_X)
+	-rm -f kernel/symbols.o misaka-kernel misaka-kernel.64
+	-rm -f ramdisk.tar ramdisk.igz 
+	-rm -f $(APPS_Y) $(LIBS_Y) $(KRK_MODS_Y) $(KRK_MODS)
+	-rm -f $(APPS_X) $(LIBS_X) $(KRK_MODS_X) $(APPS_KRK_X) $(APPS_SH_X)
 	-rm -f $(BASE)/lib/crt0.o $(BASE)/lib/crti.o $(BASE)/lib/crtn.o
 	-rm -f $(BASE)/lib/libc.so $(BASE)/lib/libc.a
 	-rm -f $(LIBC_OBJS) $(BASE)/lib/ld.so $(BASE)/lib/libkuroko.so $(BASE)/lib/libm.so
