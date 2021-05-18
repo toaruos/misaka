@@ -1,8 +1,12 @@
 #pragma once
 #include <stdint.h>
 #include <kernel/arch/x86_64/pml.h>
-#define MMU_FLAG_KERNEL    0x01
-#define MMU_FLAG_WRITABLE  0x02
+#define MMU_FLAG_KERNEL       0x01
+#define MMU_FLAG_WRITABLE     0x02
+#define MMU_FLAG_NOCACHE      0x04
+#define MMU_FLAG_WRITETHROUGH 0x08
+#define MMU_FLAG_SPEC         0x10
+#define MMU_FLAG_WC           (MMU_FLAG_NOCACHE | MMU_FLAG_WRITETHROUGH | MMU_FLAG_SPEC)
 
 #define MMU_GET_MAKE 0x01
 

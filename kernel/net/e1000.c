@@ -388,7 +388,7 @@ static void e1000_init(void * data) {
 	mem_base = 0xffffff1fc0000000;
 	for (size_t i = 0; i < 0x80000; i += 0x1000) {
 		union PML * p = mmu_get_page(mem_base + i, MMU_GET_MAKE);
-		mmu_frame_map_address(p, MMU_FLAG_KERNEL | MMU_FLAG_WRITABLE, initial_bar + i);
+		mmu_frame_map_address(p, MMU_FLAG_KERNEL | MMU_FLAG_WRITABLE | MMU_FLAG_NOCACHE | MMU_FLAG_WRITETHROUGH, initial_bar + i);
 		mmu_invalidate(mem_base + i);
 	}
 	printf("e1000: setting mem_base to %#zx from var of %#x\n", mem_base, initial_bar);

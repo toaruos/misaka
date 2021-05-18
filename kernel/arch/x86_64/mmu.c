@@ -88,6 +88,9 @@ void mmu_frame_allocate(union PML * page, unsigned int flags) {
 		page->bits.present  = 1;
 		page->bits.writable = (flags & MMU_FLAG_WRITABLE) ? 1 : 0;
 		page->bits.user     = (flags & MMU_FLAG_KERNEL)   ? 0 : 1;
+		page->bits.nocache  = (flags & MMU_FLAG_NOCACHE)  ? 1 : 0;
+		page->bits.writethrough  = (flags & MMU_FLAG_WRITETHROUGH)  ? 1 : 0;
+		page->bits.size     = (flags & MMU_FLAG_SPEC) ? 1 : 0;
 		/* TODO NX, etc. */
 	} else {
 		spin_lock(frame_alloc_lock);
@@ -98,6 +101,9 @@ void mmu_frame_allocate(union PML * page, unsigned int flags) {
 		page->bits.present  = 1;
 		page->bits.writable = (flags & MMU_FLAG_WRITABLE) ? 1 : 0;
 		page->bits.user     = (flags & MMU_FLAG_KERNEL)   ? 0 : 1;
+		page->bits.nocache  = (flags & MMU_FLAG_NOCACHE)  ? 1 : 0;
+		page->bits.writethrough  = (flags & MMU_FLAG_WRITETHROUGH)  ? 1 : 0;
+		page->bits.size     = (flags & MMU_FLAG_SPEC) ? 1 : 0;
 		spin_unlock(frame_alloc_lock);
 	}
 }
@@ -107,6 +113,9 @@ void mmu_frame_map_address(union PML * page, unsigned int flags, uintptr_t physA
 	page->bits.present  = 1;
 	page->bits.writable = (flags & MMU_FLAG_WRITABLE) ? 1 : 0;
 	page->bits.user     = (flags & MMU_FLAG_KERNEL)   ? 0 : 1;
+	page->bits.nocache  = (flags & MMU_FLAG_NOCACHE)  ? 1 : 0;
+	page->bits.writethrough  = (flags & MMU_FLAG_WRITETHROUGH)  ? 1 : 0;
+	page->bits.size     = (flags & MMU_FLAG_SPEC) ? 1 : 0;
 	page->bits.page     = physAddr >> 12;
 	mmu_frame_set(physAddr);
 }
