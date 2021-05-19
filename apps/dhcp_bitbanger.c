@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 
 struct ethernet_packet {
 	uint8_t destination[6];
@@ -159,6 +160,11 @@ void ip_ntoa(uint32_t src_addr, char * out) {
 }
 
 int main(int argc, char * argv[]) {
+
+	/* Let's make a socket. */
+	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sockfd < 0) { perror("socket"); return 1; }
+
 	int netdev = open("/dev/eth0", O_RDWR);
 
 	uint8_t mac_addr[6];

@@ -22,22 +22,6 @@
 static char   hostname[256];
 static size_t hostname_len = 0;
 
-#define FD_INRANGE(FD) \
-	((FD) < (int)current_process->fds->length && (FD) >= 0)
-#define FD_ENTRY(FD) \
-	(current_process->fds->entries[(FD)])
-#define FD_CHECK(FD) \
-	(FD_INRANGE(FD) && FD_ENTRY(FD))
-#define FD_OFFSET(FD) \
-	(current_process->fds->offsets[(FD)])
-#define FD_MODE(FD) \
-	(current_process->fds->modes[(FD)])
-
-#define PTR_INRANGE(PTR) \
-	((uintptr_t)(PTR) > current_process->image.entry && ((uintptr_t)(PTR) < 0x8000000000000000))
-#define PTR_VALIDATE(PTR) \
-	ptr_validate((void *)(PTR), __func__)
-
 void ptr_validate(void * ptr, const char * syscall) {
 	if (ptr && !PTR_INRANGE(ptr)) {
 		printf("invalid pointer passed to %s (%p < %p)\n",
@@ -879,6 +863,17 @@ static long sys_reboot(void) {
 	return arch_reboot();
 }
 
+extern long net_socket();
+extern long net_setsockopt();
+extern long net_bind();
+extern long net_accept();
+extern long net_listen();
+extern long net_connect();
+extern long net_getsockopt();
+extern long net_recv();
+extern long net_send();
+extern long net_shutdown();
+
 static long (*syscalls[])() = {
 	/* System Call Table */
 	[SYS_EXT]          = sys_exit,
@@ -935,6 +930,17 @@ static long (*syscalls[])() = {
 	[SYS_SIGNAL]       = sys_signal,
 	[SYS_KILL]         = sys_kill,
 	[SYS_REBOOT]       = sys_reboot,
+
+	[SYS_SOCKET]       = net_socket,
+	[SYS_SETSOCKOPT]   = net_setsockopt,
+	[SYS_BIND]         = net_bind,
+	[SYS_ACCEPT]       = net_accept,
+	[SYS_LISTEN]       = net_listen,
+	[SYS_CONNECT]      = net_connect,
+	[SYS_GETSOCKOPT]   = net_getsockopt,
+	[SYS_RECV]         = net_recv,
+	[SYS_SEND]         = net_send,
+	[SYS_SHUTDOWN]     = net_shutdown,
 };
 
 static long num_syscalls = sizeof(syscalls) / sizeof(*syscalls);
