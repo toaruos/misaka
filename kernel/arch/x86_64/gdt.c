@@ -5,6 +5,7 @@
  */
 
 #include <kernel/printf.h>
+#include <kernel/string.h>
 
 /**
  * @brief 64-bit TSS
@@ -43,7 +44,7 @@ typedef struct  {
 	gdt_entry_high_t tss_extra;
 	gdt_pointer_t pointer;
 	tss_entry_t tss;
-} __attribute__((packed)) FullGDT;
+} __attribute__((packed)) __attribute__((aligned(0x10))) FullGDT;
 
 FullGDT gdt[32] __attribute__((used)) = {{
 	{
@@ -60,6 +61,10 @@ FullGDT gdt[32] __attribute__((used)) = {{
 }};
 
 void gdt_install(void) {
+	for (int i = 1; i < 32; ++i) {
+		memcpy(&gdt[i], &gdt[0], sizeof(gdt));
+	}
+
 	for (int i = 0; i < 32; ++i) {
 		gdt[i].pointer.limit = sizeof(gdt[i].entries)+sizeof(gdt[i].tss_extra)-1;
 		gdt[i].pointer.base  = (uintptr_t)&gdt[i].entries;
@@ -86,6 +91,10 @@ void gdt_install(void) {
 		"ltr %%ax\n"
 		: : "r"(&gdt[0].pointer)
 	);
+}
+
+void gdt_copy_to_trampoline(int ap, char * trampoline) {
+	memcpy(trampoline, &gdt[ap].pointer, sizeof(gdt[ap].pointer));
 }
 
 void arch_set_kernel_stack(uintptr_t stack) {

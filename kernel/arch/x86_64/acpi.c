@@ -1,75 +1,103 @@
 #include <stdint.h>
 #include <kernel/string.h>
+#include <kernel/process.h>
 #include <kernel/printf.h>
 #include <kernel/arch/x86_64/acpi.h>
 #include <kernel/arch/x86_64/mmu.h>
 
 void __ap_bootstrap(void) {
 	asm volatile (
+		".code16\n"
+		".org 0x0\n"
 		".global _ap_bootstrap_start\n"
 		"_ap_bootstrap_start:\n"
-		".code16\n"
-		"1:\n"
-		"cli\n"
-		"hlt\n"
-		"jmp 1b\n"
-		".org 0x1000\n"
-		"movb  $0xF8,%%al\n"
-		"movb  $0x03,%%ah\n"
-		"mov   %%ax,%%dx\n"
-		"mov $'h',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $'e',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $'l',%%al\n"
-		"outb %%al,%%dx\n"
-		"outb %%al,%%dx\n"
-		"mov $'o',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $' ',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $'w',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $'o',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $'r',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $'l',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $'d',%%al\n"
-		"outb %%al,%%dx\n"
-		"mov $'\n',%%al\n"
-		"outb %%al,%%dx\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
-		"hlt\n"
+
+		/* Enable PAE, paging */
+		"mov $0xA0, %%eax\n"
+		"mov %%eax, %%cr4\n"
+
+		/* Kernel base PML4 */
+		".global init_page_region\n"
+		"mov $init_page_region, %%edx\n"
+		"mov %%edx, %%cr3\n"
+
+		/* Set LME */
+		"mov $0xc0000080, %%ecx\n"
+		"rdmsr\n"
+		"or $0x100, %%eax\n"
+		"wrmsr\n"
+
+		/* Enable long mode */
+		"mov $0x80000011, %%ebx\n"
+		"mov  %%ebx, %%cr0\n"
+
+		/* Set up basic GDT */
+		"addr32 lgdtl %%cs:_ap_bootstrap_gdtp-_ap_bootstrap_start\n"
+
+		/* Jump... */
+		"data32 jmp $0x08,$ap_premain\n"
+
+		".global _ap_bootstrap_gdtp\n"
+		".align 16\n"
+		"_ap_bootstrap_gdtp:\n"
+		".word 0\n"
+		".quad 0\n"
+
+		".code64\n"
+		".align 16\n"
+		"ap_premain:\n"
+		"mov $0x10, %%ax\n"
+		"mov %%ax, %%ds\n"
+		"mov %%ax, %%ss\n"
+		".extern _ap_stack_base\n"
+		"mov _ap_stack_base,%%esp\n"
+		".extern ap_main\n"
+		"callq ap_main\n"
+
 		".global _ap_bootstrap_end\n"
 		"_ap_bootstrap_end:\n"
-		".code64\n"
 		: : : "memory"
 	);
 }
 
 extern char _ap_bootstrap_start[];
 extern char _ap_bootstrap_end[];
+extern char _ap_bootstrap_gdtp[];
+extern size_t arch_cpu_mhz(void);
+extern void gdt_copy_to_trampoline(int ap, char * trampoline);
 
+uintptr_t _ap_stack_base = 0;
+static volatile int _ap_startup_flag = 0;
+
+/* For timing delays on IPIs */
 static inline uint64_t read_tsc(void) {
 	uint32_t lo, hi;
 	asm volatile ( "rdtsc" : "=a"(lo), "=d"(hi) );
 	return ((uint64_t)hi << 32) | (uint64_t)lo;
+}
+
+static void short_delay(unsigned long amount) {
+	uint64_t clock = read_tsc();
+	while (read_tsc() < clock + amount * arch_cpu_mhz());
+}
+
+/* C entrypoint for APs */
+void ap_main(void) {
+	uint32_t ebx;
+	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
+	printf("Hello, world! I am AP %d\n", ebx >> 24);
+	_ap_startup_flag = 1;
+	while (1) {
+		/* AP will just sit here for now... */
+		asm volatile ("hlt");
+	}
+}
+
+static void lapic_send_ipi(uintptr_t lapic_final, int i, uint32_t val) {
+	*((volatile uint32_t*)(lapic_final + 0x310)) = (i << 24);
+	asm volatile ("":::"memory");
+	*((volatile uint32_t*)(lapic_final + 0x300)) = val;
+	do { asm volatile ("pause" : : : "memory"); } while (*((volatile uint32_t*)(lapic_final + 0x300)) & (1 << 12));
 }
 
 void acpi_initialize(void) {
@@ -93,101 +121,65 @@ void acpi_initialize(void) {
 	if (!good) return;
 
 	struct rsdp_descriptor * rsdp = (struct rsdp_descriptor *)scan;
-	printf("ACPI RSDP found at 0x%016lx; ", scan);
-	printf("ACPI revision %d.0; ", rsdp->revision + 1);
-
 	uint8_t check = 0;
 	uint8_t * tmp;
 	for (tmp = (uint8_t *)scan; (uintptr_t)tmp < scan + sizeof(struct rsdp_descriptor); tmp++) {
 		check += *tmp;
 	}
 	if (check != 0) {
-		printf("Bad checksum? %d\n", check);
+		return; /* bad checksum */
 	}
 
-	printf("OEMID: %c%c%c%c%c%c; ",
-			rsdp->oemid[0],
-			rsdp->oemid[1],
-			rsdp->oemid[2],
-			rsdp->oemid[3],
-			rsdp->oemid[4],
-			rsdp->oemid[5]);
-
-	printf("RSDT address: 0x%08x; ", rsdp->rsdt_address);
-
-	struct rsdt * rsdt = (struct rsdt *)((uintptr_t)rsdp->rsdt_address | 0xFFFFffff00000000UL);
-	printf("RSDT length: %d; ", rsdt->header.length);
-	printf("RSDT checksum %s\n", acpi_checksum((struct acpi_sdt_header *)rsdt) ? "passed" : "failed");
+	struct rsdt * rsdt = mmu_map_from_physical(rsdp->rsdt_address);
 
 	int cores = 0;
 	uintptr_t lapic_base = 0x0;
-
-	printf("Tables:\n");
 	for (unsigned int i = 0; i < (rsdt->header.length - 36) / 4; ++i) {
-		uint8_t * table = (uint8_t*)((uintptr_t)rsdt->pointers[i] | 0xFFFFffff00000000UL);
-		printf("%2d (%#x) - %c%c%c%c\n",
-			i, rsdt->pointers[i], table[0], table[1], table[2], table[3]);
+		uint8_t * table = mmu_map_from_physical(rsdt->pointers[i]);
 		if (table[0] == 'A' && table[1] == 'P' && table[2] == 'I' && table[3] == 'C') {
 			/* APIC table! Let's find some CPUs! */
 			struct madt * madt = (void*)table;
-			printf("lapic base: %#x\n", madt->lapic_addr);
-			lapic_base = (uintptr_t)madt->lapic_addr | 0xFFFFffff00000000UL;
-			printf("flags: %#x\n", madt->flags);
+			lapic_base = madt->lapic_addr;
 			for (uint8_t * entry = madt->entries; entry < table + madt->header.length; entry += entry[1]) {
 				switch (entry[0]) {
 					case 0:
-						if (entry[4] & 0x01) {
-							cores++;
-						}
-						printf("lapic id (flags=%#x, %#x)\n", entry[4], entry[3]);
+						if (entry[4] & 0x01) cores++;
 						break;
-					case 1: printf("ioapic ptr %#x\n", *((uint32_t*)(entry+4))); break;
-					case 2: printf("int source override\n"); break;
-					case 4: printf("nmi info\n"); break;
-					case 5: printf("64-bit lapic ptr\n"); break;
-					default: printf("unknown type? (%d)\n", entry[0]); break;
+					/* TODO: Other entries */
 				}
 			}
 		}
 	}
 
-	printf("%d core%s\n", cores, (cores==1)?"":"s");
+	if (!lapic_base || cores <= 1) return;
 
-	asm volatile ("wrmsr" : : "c"(0x1B), "d"(0), "a"(0xFEE00000));
+	/* Allocate a virtual address with which we can poke the lapic */
+	uintptr_t lapic_final = 0xffffff1fd0000000;
+	union PML * p = mmu_get_page(lapic_final, MMU_GET_MAKE);
+	mmu_frame_map_address(p, MMU_FLAG_KERNEL | MMU_FLAG_WRITABLE | MMU_FLAG_NOCACHE | MMU_FLAG_WRITETHROUGH, lapic_base);
+	mmu_invalidate(lapic_final);
 
-	printf("Shoving %#zx into 0x1000\n", (uintptr_t)&_ap_bootstrap_start);
-	memcpy((void*)0xFFFFffff00001000, &_ap_bootstrap_start, (uintptr_t)&_ap_bootstrap_end - (uintptr_t)&_ap_bootstrap_start);
+	/* Map the bootstrap code */
+	memcpy(mmu_map_from_physical(0x1000), &_ap_bootstrap_start, (uintptr_t)&_ap_bootstrap_end - (uintptr_t)&_ap_bootstrap_start);
 
-	uint32_t ebx;
-	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
-	printf("local apic id = %u\n", ebx >> 24);
+	for (int i = 1; i < cores; ++i) {
+		_ap_startup_flag = 0;
 
-	printf("Telling APs to INIT by writing crap to %#zx\n", lapic_base);
-	for (int i = 1; i < 4; ++i) {
+		/* Set gdt pointer value */
+		gdt_copy_to_trampoline(i, (char*)mmu_map_from_physical(0x1000) + ((uintptr_t)&_ap_bootstrap_gdtp - (uintptr_t)&_ap_bootstrap_start));
 
-		*((volatile uint32_t*)(lapic_base + 0x310)) = (i << 24);
-		asm volatile ("":::"memory");
-		*((volatile uint32_t*)(lapic_base + 0x300)) = 0x004500;
-		do { asm volatile ("pause" : : : "memory"); } while (*((volatile uint32_t*)(lapic_base + 0x300)) & (1 << 12));
+		/* Make an initial stack for this AP */
+		_ap_stack_base = (uintptr_t)valloc(KERNEL_STACK_SIZE)+ KERNEL_STACK_SIZE;
 
-		/* wait a bit */
-		uint64_t clock = read_tsc();
+		/* Send INIT */
+		lapic_send_ipi(lapic_final, i, 0x4500);
+		short_delay(5000UL);
 
-		while (read_tsc() < clock + 34150000UL);
+		/* Send SIPI */
+		lapic_send_ipi(lapic_final, i, 0x4601);
 
-		for (int j = 0; j < 2; j++) {
-			*((volatile uint32_t*)(lapic_base + 0x310)) = (i << 24);
-			asm volatile ("":::"memory");
-			*((volatile uint32_t*)(lapic_base + 0x300)) = 0x004601;
-			asm volatile ("":::"memory");
-			uint64_t clock = read_tsc();
-			while (read_tsc() < clock + 683000UL);
-			do { asm volatile ("pause" : : : "memory"); } while (*((volatile uint32_t*)(lapic_base + 0x300)) & (1 << 12));
-		}
+		/* Wait for AP to signal it is ready before starting next AP */
+		do { asm volatile ("pause" : : : "memory"); } while (!_ap_startup_flag);
 	}
-
-	printf("Done sending startup.\n");
-
-
 }
 

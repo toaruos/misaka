@@ -208,10 +208,11 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	/* With the MMU initialized, set up things required for the scheduler. */
 	pat_initialize();
 	symbols_install();
-	//acpi_initialize();
 	gdt_install();
 	idt_install();
 	fpu_initialize();
+
+	acpi_initialize();
 
 	/* Early generic stuff */
 	generic_startup();
