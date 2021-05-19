@@ -92,7 +92,7 @@ static int ioctl_vid(fs_node_t * node, int request, void * argp) {
 				}
 				for (uintptr_t i = 0; i < lfb_memsize; i += 0x1000) {
 					union PML * page = mmu_get_page(lfb_user_offset + i, MMU_GET_MAKE);
-					mmu_frame_map_address(page,MMU_FLAG_WRITABLE,((uintptr_t)(lfb_vid_memory) & 0xFFFFFFFF) + i);
+					mmu_frame_map_address(page,MMU_FLAG_WRITABLE|MMU_FLAG_WC,((uintptr_t)(lfb_vid_memory) & 0xFFFFFFFF) + i);
 				}
 				*((uintptr_t *)argp) = lfb_user_offset;
 			}
@@ -191,7 +191,7 @@ static void bochs_scan_pci(uint32_t device, uint16_t v, uint16_t d, void * extra
 	    (v == 0x10de && d == 0x0a20))  {
 		uintptr_t t = pci_read_field(device, PCI_BAR0, 4);
 		if (t > 0) {
-			*((uint8_t **)extra) = (uint8_t *)((uintptr_t)(t & 0xFFFFFFF0) | 0xFFFFFFFF00000000);
+			*((uint8_t **)extra) = mmu_map_from_physical(t & 0xFFFFFFF0);
 		}
 	}
 }
@@ -281,7 +281,7 @@ struct multiboot * mboot_ptr = NULL;
 
 static void graphics_install_preset(uint16_t w, uint16_t h) {
 	/* Extract framebuffer information from multiboot */
-	lfb_vid_memory = (void *)((uintptr_t)mboot_ptr->framebuffer_addr | 0xFFFFFFFF00000000);
+	lfb_vid_memory = mmu_map_from_physical(mboot_ptr->framebuffer_addr);
 	lfb_resolution_x = mboot_ptr->framebuffer_width;
 	lfb_resolution_y = mboot_ptr->framebuffer_height;
 	lfb_resolution_s = mboot_ptr->framebuffer_pitch;
@@ -414,7 +414,7 @@ static void graphics_install_vmware(uint16_t w, uint16_t h) {
 
 	printf("vmware fb size: 0x%lx\n", fb_size);
 
-	lfb_vid_memory = (uint8_t *)((uintptr_t)fb_addr | 0xFFFFFFFF00000000);
+	lfb_vid_memory = mmu_map_from_physical(fb_addr);
 
 	uintptr_t fb_offset = (uintptr_t)lfb_vid_memory;
 	for (uintptr_t i = fb_offset; i <= fb_offset + fb_size; i += 0x1000) {

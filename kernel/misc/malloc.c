@@ -34,10 +34,9 @@
 #include <kernel/string.h>
 #include <kernel/printf.h>
 #include <kernel/spinlock.h>
+#include <kernel/mmu.h>
 /* }}} */
 /* Definitions {{{ */
-
-extern void * sbrk(size_t bytes);
 
 /*
  * Defines for often-used integral values

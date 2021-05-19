@@ -140,8 +140,24 @@ extern __attribute__((noreturn)) void switch_next(void);
 extern int process_awaken_from_fswait(process_t * process, int index);
 extern void process_release_directory(page_directory_t * dir);
 extern process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * name, void * argp);
+extern pid_t fork(void);
+extern pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg);
+extern int waitpid(int pid, int * status, int options);
+extern int exec(const char * path, int argc, char *const argv[], char *const env[], int interp_depth);
 
 extern tree_t * process_tree;  /* Parent->Children tree */
 extern list_t * process_list;  /* Flat storage */
 extern list_t * process_queue; /* Ready queue */
 extern list_t * sleep_queue;
+
+extern void arch_enter_tasklet(void);
+extern __attribute__((noreturn)) void arch_resume_user(void);
+extern __attribute__((noreturn)) void arch_restore_context(volatile thread_t * buf);
+extern __attribute__((returns_twice)) int arch_save_context(volatile thread_t * buf);
+extern void arch_restore_floating(process_t * proc);
+extern void arch_save_floating(process_t * proc);
+extern void arch_set_kernel_stack(uintptr_t);
+extern void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[], uintptr_t stack);
+__attribute__((noreturn))
+extern void arch_enter_signal_handler(uintptr_t,int);
+

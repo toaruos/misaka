@@ -30,6 +30,7 @@
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/regs.h>
+#include <kernel/arch/x86_64/irq.h>
 
 /* Utility macros */
 #define N_ELEMENTS(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -147,7 +148,7 @@ static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, voi
 }
 
 #define DIVISION 0x1000
-int ac97_irq_handler(struct regs * regs) {
+static int ac97_irq_handler(struct regs * regs) {
 	uint16_t sr = inports(_device.nabmbar + AC97_PO_SR);
 	if (sr & AC97_X_SR_BCIS) {
 		uint16_t current_buffer = inportb(_device.nabmbar + AC97_PO_CIV);
@@ -163,7 +164,7 @@ int ac97_irq_handler(struct regs * regs) {
 	} else {
 		return 0;
 	}
-	/* FIXME: We should be the ones acking this irq... */
+	irq_ack(_device.irq);
 	return 1;
 }
 
@@ -240,7 +241,6 @@ static int ac97_mixer_write(uint32_t knob_id, uint32_t val) {
 	return 0;
 }
 
-extern uintptr_t mmu_allocate_n_frames(int n);
 void ac97_install(void) {
 	//debug_print(NOTICE, "Initializing AC97");
 	pci_scan(&find_ac97, -1, &_device);
@@ -251,7 +251,7 @@ void ac97_install(void) {
 	_device.nambar = pci_read_field(_device.pci_device, PCI_BAR0, 4) & ((uint32_t) -1) << 1;
 	_device.irq = pci_get_interrupt(_device.pci_device);
 	//printf("device wants irq %zd\n", _device.irq);
-	//irq_install_handler(_device.irq, irq_handler, "ac97");
+	irq_install_handler(_device.irq, ac97_irq_handler, "ac97");
 	/* Enable all matter of interrupts */
 	outportb(_device.nabmbar + AC97_PO_CR, AC97_X_CR_FEIE | AC97_X_CR_IOCE);
 
@@ -262,12 +262,12 @@ void ac97_install(void) {
 
 	/* Allocate our BDL and our buffers */
 	_device.bdl_p = mmu_allocate_a_frame() << 12;
-	_device.bdl   = (void*)((uintptr_t)_device.bdl_p | 0xFFFFffff00000000);
+	_device.bdl   = mmu_map_from_physical(_device.bdl_p);
 	memset(_device.bdl, 0, AC97_BDL_LEN * sizeof(*_device.bdl));
 
 	for (int i = 0; i < AC97_BDL_LEN; i++) {
 		_device.bdl[i].pointer = mmu_allocate_n_frames(2) << 12;
-		_device.bufs[i] = (void*)((uintptr_t)_device.bdl[i].pointer | 0xFFFFffff00000000);
+		_device.bufs[i] = mmu_map_from_physical(_device.bdl[i].pointer);
 		memset(_device.bufs[i], 0, AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
 		AC97_CL_SET_LENGTH(_device.bdl[i].cl, AC97_BDL_BUFFER_LEN);
 		/* Set all buffers to interrupt */

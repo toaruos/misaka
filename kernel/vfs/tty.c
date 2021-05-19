@@ -18,6 +18,7 @@
 #include <kernel/hashmap.h>
 #include <kernel/process.h>
 #include <kernel/signal.h>
+#include <kernel/time.h>
 #include <sys/ioctl.h>
 #include <sys/termios.h>
 #include <sys/signal_defs.h>
@@ -25,7 +26,6 @@
 #define TTY_BUFFER_SIZE 4096
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
-extern uint64_t now(void);
 extern void ptr_validate(void * ptr, const char * syscall);
 #define validate(o) ptr_validate(o,"ioctl")
 

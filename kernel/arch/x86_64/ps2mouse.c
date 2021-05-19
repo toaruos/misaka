@@ -12,11 +12,11 @@
 #include <kernel/printf.h>
 #include <kernel/pipe.h>
 #include <kernel/mouse.h>
+#include <kernel/misc.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/regs.h>
-
-extern void task_exit(int);
+#include <kernel/arch/x86_64/irq.h>
 
 static uint8_t mouse_cycle = 0;
 static uint8_t mouse_byte[4];
@@ -155,7 +155,7 @@ finish_packet:
 read_next:
 		break;
 	}
-	//irq_ack(MOUSE_IRQ);
+	irq_ack(MOUSE_IRQ);
 	return 1;
 }
 
@@ -166,9 +166,6 @@ static int ioctl_mouse(fs_node_t * node, int request, void * argp) {
 	}
 	return -1;
 }
-
-extern void arch_enter_critical(void);
-extern void arch_exit_critical(void);
 
 void mouse_install(void) {
 	uint8_t status, result;
@@ -228,7 +225,7 @@ void mouse_install(void) {
 	mouse_wait(1);
 	mouse_read();
 
-	//irq_install_handler(MOUSE_IRQ, mouse_handler, "ps2 mouse");
+	irq_install_handler(MOUSE_IRQ, mouse_handler, "ps2 mouse");
 	arch_exit_critical();
 
 	uint8_t tmp = inportb(0x61);

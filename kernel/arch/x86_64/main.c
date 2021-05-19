@@ -16,6 +16,7 @@
 #include <kernel/mmu.h>
 #include <kernel/video.h>
 #include <kernel/generic.h>
+#include <kernel/gzip.h>
 #include <kernel/ramdisk.h>
 
 #include <kernel/arch/x86_64/ports.h>
@@ -37,7 +38,6 @@ extern void acpi_initialize(void);
 extern void portio_initialize(void);
 extern void keyboard_install(void);
 extern void mouse_install(void);
-extern void vmware_initialize(void);
 extern void serial_initialize(void);
 
 #define EARLY_LOG_DEVICE 0x3F8
@@ -169,7 +169,7 @@ static struct multiboot * mboot_struct = NULL;
  * x86-64: The kernel commandline is retrieved from the multiboot struct.
  */
 const char * arch_get_cmdline(void) {
-	return (char*)((0xFFFFFFFF00000000UL) | mboot_struct->cmdline);
+	return mmu_map_from_physical(mboot_struct->cmdline);
 }
 
 /**
@@ -177,7 +177,7 @@ const char * arch_get_cmdline(void) {
  */
 const char * arch_get_loader(void) {
 	if (mboot_struct->flags & MULTIBOOT_FLAG_LOADER) {
-		return (char*)((0xFFFFFFFF00000000UL) | mboot_struct->boot_loader_name);
+		return mmu_map_from_physical(mboot_struct->boot_loader_name);
 	} else {
 		return "(unknown)";
 	}
@@ -203,7 +203,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	mmu_init(memCount, maxAddress);
 
 	/* multiboot memory is now mapped high, if you want it. */
-	mboot_struct = (void*)((uintptr_t)mboot | 0xFFFFffff00000000UL);
+	mboot_struct = mmu_map_from_physical((uintptr_t)mboot);
 
 	/* With the MMU initialized, set up things required for the scheduler. */
 	pat_initialize();
@@ -220,9 +220,35 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	framebuffer_initialize();
 
 	/* ramdisk_mount takes physical pages, it will map them itself. */
-	mboot_mod_t * mods = (mboot_mod_t *)(uintptr_t)(mboot->mods_addr | 0xFFFFffff00000000UL);
+	mboot_mod_t * mods = mmu_map_from_physical(mboot->mods_addr);
 	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
-		ramdisk_mount(mods[i].mod_start, mods[i].mod_end - mods[i].mod_start);
+		/* Is this a gzipped data source? */
+		uint8_t * data = mmu_map_from_physical(mods[i].mod_start);
+		if (data[0] == 0x1F && data[1] == 0x8B) {
+			/* Yes - decompress it first */
+			uint32_t decompressedSize = *(uint32_t*)mmu_map_from_physical(mods[i].mod_end - sizeof(uint32_t));
+			size_t pageCount = (((size_t)decompressedSize + 0xFFF) & ~(0xFFF)) >> 12;
+			uintptr_t physicalAddress = mmu_allocate_n_frames(pageCount) << 12;
+			if (physicalAddress == (uintptr_t)-1) {
+				printf("gzip: failed to allocate pages for decompressed payload, skipping\n");
+				continue;
+			}
+			gzip_inputPtr = (void*)data;
+			gzip_outputPtr = mmu_map_from_physical(physicalAddress);
+			/* Do the deed */
+			if (gzip_decompress()) {
+				printf("gzip: failed to decompress payload, skipping\n");
+				continue;
+			}
+			ramdisk_mount(physicalAddress, decompressedSize);
+			/* Free the pages from the original mod */
+			for (size_t j = mods[i].mod_start; j < mods[i].mod_end; j += 0x1000) {
+				mmu_frame_clear(j);
+			}
+		} else {
+			/* No, or it doesn't look like one - mount it directly */
+			ramdisk_mount(mods[i].mod_start, mods[i].mod_end - mods[i].mod_start);
+		}
 	}
 
 	/* We set up the pit and interrupt stuff pretty late, after the scheduler is ready. */
@@ -232,14 +258,15 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	serial_initialize();
 	portio_initialize();
 
-	/* This is generic and should probably be started earlier... */
-	extern void snd_install(void);
-	snd_install();
+	/* Special drivers should probably be modules... */
 	extern void ac97_install(void);
 	ac97_install();
-
-	/* Special drivers should probably be modules... */
+	extern void vmware_initialize(void);
 	vmware_initialize();
+	extern void vbox_initialize(void);
+	vbox_initialize();
+	extern void e1000_initialize(void);
+	e1000_initialize();
 
 	/* Yield the generic main, which starts /bin/init */
 	return generic_main();

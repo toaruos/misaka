@@ -14,6 +14,7 @@ extern void procfs_initialize(void);
 extern void shm_install(void);
 extern void random_initialize(void);
 extern int system(const char * path, int argc, const char ** argv, const char ** envin);
+extern void snd_install(void);
 
 void generic_startup(void) {
 	initialize_process_tree();
@@ -26,6 +27,7 @@ void generic_startup(void) {
 	zero_initialize();
 	procfs_initialize();
 	random_initialize();
+	snd_install();
 	args_parse(arch_get_cmdline());
 	tasking_start();
 }

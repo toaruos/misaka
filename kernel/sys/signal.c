@@ -28,9 +28,6 @@
 #include <kernel/signal.h>
 #include <kernel/spinlock.h>
 
-__attribute__((noreturn))
-extern void arch_enter_signal_handler(uintptr_t,int);
-
 static spin_lock_t sig_lock;
 static spin_lock_t sig_lock_b;
 
@@ -183,6 +180,11 @@ int send_signal(pid_t process, int signal, int force_root) {
 		if (!(signal == SIGCONT && receiver->session == current_process->session)) {
 			return -EPERM;
 		}
+	}
+
+	if (receiver->flags & PROC_FLAG_IS_TASKLET) {
+		/* Can not send signals to kernel tasklets */
+		return -EINVAL;
 	}
 
 	if (signal > NUMSIGNALS) {

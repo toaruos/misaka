@@ -8,6 +8,7 @@
 #include <kernel/string.h>
 #include <kernel/process.h>
 #include <kernel/arch/x86_64/ports.h>
+#include <kernel/arch/x86_64/irq.h>
 #include <sys/time.h>
 
 #define from_bcd(val)  ((val / 16) * 10 + (val & 0xf))
@@ -216,13 +217,15 @@ void relative_time(unsigned long seconds, unsigned long subseconds, unsigned lon
 	}
 }
 
-void cmos_time_stuff(void) {
+int cmos_time_stuff(struct regs *r) {
 	update_ticks();
 	wakeup_sleepers(timer_ticks, timer_subticks);
+	irq_ack(0);
 	switch_task(1);
 	asm volatile (
 		".global _ret_from_preempt_source\n"
 		"_ret_from_preempt_source:"
 	);
+	return 1;
 }
 

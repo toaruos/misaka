@@ -31,22 +31,13 @@
 #include <kernel/mmu.h>
 #include <kernel/shm.h>
 #include <kernel/signal.h>
+#include <kernel/time.h>
+#include <kernel/misc.h>
 #include <sys/wait.h>
 #include <sys/signal_defs.h>
 
 /* FIXME: This only needs the size of the regs struct... */
 #include <kernel/arch/x86_64/regs.h>
-
-extern void arch_enter_critical(void);
-extern void arch_exit_critical(void);
-extern __attribute__((noreturn)) void arch_resume_user(void);
-extern __attribute__((noreturn)) void arch_restore_context(volatile thread_t * buf);
-extern __attribute__((returns_twice)) int arch_save_context(volatile thread_t * buf);
-extern void arch_set_kernel_stack(uintptr_t stack);
-extern void arch_restore_floating(process_t * proc);
-extern void arch_save_floating(process_t * proc);
-extern void arch_pause(void);
-extern void arch_fatal(void);
 
 tree_t * process_tree;  /* Stores the parent-child process relationships; the root of this graph is 'init'. */
 list_t * process_list;  /* Stores all existing processes. Mostly used for sanity checking or for places where iterating over all processes is useful. */
@@ -880,8 +871,6 @@ int waitpid(int pid, int * status, int options) {
 	} while (1);
 }
 
-extern void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds);
-
 int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
 	fs_node_t ** n = nodes;
 	int index = 0;
@@ -1123,9 +1112,6 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	arch_exit_critical();
 	return new_proc->id;
 }
-
-extern void arch_enter_tasklet(void);
-extern union PML * mmu_get_kernel_directory(void);
 
 process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * name, void * argp) {
 	arch_enter_critical();

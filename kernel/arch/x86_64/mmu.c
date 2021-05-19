@@ -61,6 +61,8 @@ uintptr_t mmu_first_n_frames(int n) {
 			return i / 0x1000;
 		}
 	}
+	printf("failed to allocate %d contiguous frames\n", n);
+	while (1) {};
 	return (uintptr_t)-1;
 }
 
@@ -86,6 +88,9 @@ void mmu_frame_allocate(union PML * page, unsigned int flags) {
 		page->bits.present  = 1;
 		page->bits.writable = (flags & MMU_FLAG_WRITABLE) ? 1 : 0;
 		page->bits.user     = (flags & MMU_FLAG_KERNEL)   ? 0 : 1;
+		page->bits.nocache  = (flags & MMU_FLAG_NOCACHE)  ? 1 : 0;
+		page->bits.writethrough  = (flags & MMU_FLAG_WRITETHROUGH)  ? 1 : 0;
+		page->bits.size     = (flags & MMU_FLAG_SPEC) ? 1 : 0;
 		/* TODO NX, etc. */
 	} else {
 		spin_lock(frame_alloc_lock);
@@ -96,6 +101,9 @@ void mmu_frame_allocate(union PML * page, unsigned int flags) {
 		page->bits.present  = 1;
 		page->bits.writable = (flags & MMU_FLAG_WRITABLE) ? 1 : 0;
 		page->bits.user     = (flags & MMU_FLAG_KERNEL)   ? 0 : 1;
+		page->bits.nocache  = (flags & MMU_FLAG_NOCACHE)  ? 1 : 0;
+		page->bits.writethrough  = (flags & MMU_FLAG_WRITETHROUGH)  ? 1 : 0;
+		page->bits.size     = (flags & MMU_FLAG_SPEC) ? 1 : 0;
 		spin_unlock(frame_alloc_lock);
 	}
 }
@@ -105,13 +113,16 @@ void mmu_frame_map_address(union PML * page, unsigned int flags, uintptr_t physA
 	page->bits.present  = 1;
 	page->bits.writable = (flags & MMU_FLAG_WRITABLE) ? 1 : 0;
 	page->bits.user     = (flags & MMU_FLAG_KERNEL)   ? 0 : 1;
+	page->bits.nocache  = (flags & MMU_FLAG_NOCACHE)  ? 1 : 0;
+	page->bits.writethrough  = (flags & MMU_FLAG_WRITETHROUGH)  ? 1 : 0;
+	page->bits.size     = (flags & MMU_FLAG_SPEC) ? 1 : 0;
 	page->bits.page     = physAddr >> 12;
 	mmu_frame_set(physAddr);
 }
 
 /* Initial memory maps loaded by boostrap */
 #define _pagemap __attribute__((aligned(0x1000))) = {0}
-union PML init_page_region[2][512] _pagemap;
+union PML init_page_region[3][512] _pagemap;
 union PML high_base_pml[512] _pagemap;
 union PML heap_base_pml[512] _pagemap;
 union PML heap_base_pd[512] _pagemap;
@@ -119,6 +130,10 @@ union PML heap_base_pt[512] _pagemap;
 union PML low_base_pmls[34][512] _pagemap;
 
 union PML * current_pml = (union PML *)&init_page_region[0];
+
+void * mmu_map_from_physical(uintptr_t frameaddress) {
+	return (void*)(frameaddress | 0xffffff8000000000UL);
+}
 
 /**
  * Find the physical address at a given virtual address.
@@ -136,20 +151,20 @@ uintptr_t mmu_map_to_physical(uintptr_t virtAddr) {
 	/* Get the PML4 entry for this address */
 	if (!root[pml4_entry].bits.present) return (uintptr_t)-1;
 
-	union PML * pdp = (union PML *)((uintptr_t)0xFFFFffff00000000UL | (root[pml4_entry].bits.page << 12));
+	union PML * pdp = mmu_map_from_physical((uintptr_t)root[pml4_entry].bits.page << 12);
 
 	if (!pdp[pdp_entry].bits.present) return (uintptr_t)-2;
-	if (pdp[pdp_entry].bits.size) return (pdp[pdp_entry].bits.page << 12) | (virtAddr & 0x3fffffff);
+	if (pdp[pdp_entry].bits.size) return ((uintptr_t)pdp[pdp_entry].bits.page << 12) | (virtAddr & 0x3fffffff);
 
-	union PML * pd = (union PML *)((uintptr_t)0xFFFFffff00000000UL | (pdp[pdp_entry].bits.page << 12));
+	union PML * pd = mmu_map_from_physical((uintptr_t)pdp[pdp_entry].bits.page << 12);
 
 	if (!pd[pd_entry].bits.present) return (uintptr_t)-3;
-	if (pd[pd_entry].bits.size) return (pd[pd_entry].bits.page << 12) | (virtAddr & 0x1FFFFF);
+	if (pd[pd_entry].bits.size) return ((uintptr_t)pd[pd_entry].bits.page << 12) | (virtAddr & 0x1FFFFF);
 
-	union PML * pt = (union PML *)((uintptr_t)0xFFFFffff00000000UL | (pd[pd_entry].bits.page << 12));
+	union PML * pt = mmu_map_from_physical((uintptr_t)pd[pd_entry].bits.page << 12);
 
 	if (!pt[pt_entry].bits.present) return (uintptr_t)-4;
-	return (pt[pt_entry].bits.page << 12) | (virtAddr & 0xFFF);
+	return ((uintptr_t)pt[pt_entry].bits.page << 12) | (virtAddr & 0xFFF);
 }
 
 union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
@@ -164,26 +179,26 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 
 	/* Get the PML4 entry for this address */
 	if (!root[pml4_entry].bits.present) {
-		if (!(flags & MMU_GET_MAKE)) return NULL;
+		if (!(flags & MMU_GET_MAKE)) goto _noentry;
 		spin_lock(frame_alloc_lock);
 		uintptr_t newPage = mmu_first_frame() << 12;
 		mmu_frame_set(newPage);
 		spin_unlock(frame_alloc_lock);
 		/* zero it */
-		memset((void*)(0xFFFFffff00000000UL | newPage), 0, 4096);
+		memset(mmu_map_from_physical(newPage), 0, 4096);
 		root[pml4_entry].raw = (newPage) | 0x07;
 	}
 
-	union PML * pdp = (union PML *)((uintptr_t)0xFFFFffff00000000UL | (root[pml4_entry].bits.page << 12));
+	union PML * pdp = mmu_map_from_physical((uintptr_t)root[pml4_entry].bits.page << 12);
 
 	if (!pdp[pdp_entry].bits.present) {
-		if (!(flags & MMU_GET_MAKE)) return NULL;
+		if (!(flags & MMU_GET_MAKE)) goto _noentry;
 		spin_lock(frame_alloc_lock);
 		uintptr_t newPage = mmu_first_frame() << 12;
 		mmu_frame_set(newPage);
 		spin_unlock(frame_alloc_lock);
 		/* zero it */
-		memset((void*)(0xFFFFffff00000000UL | newPage), 0, 4096);
+		memset(mmu_map_from_physical(newPage), 0, 4096);
 		pdp[pdp_entry].raw = (newPage) | 0x07;
 	}
 
@@ -192,16 +207,16 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 		return NULL;
 	}
 
-	union PML * pd = (union PML *)((uintptr_t)0xFFFFffff00000000UL | (pdp[pdp_entry].bits.page << 12));
+	union PML * pd = mmu_map_from_physical((uintptr_t)pdp[pdp_entry].bits.page << 12);
 
 	if (!pd[pd_entry].bits.present) {
-		if (!(flags & MMU_GET_MAKE)) return NULL;
+		if (!(flags & MMU_GET_MAKE)) goto _noentry;
 		spin_lock(frame_alloc_lock);
 		uintptr_t newPage = mmu_first_frame() << 12;
 		mmu_frame_set(newPage);
 		spin_unlock(frame_alloc_lock);
 		/* zero it */
-		memset((void*)(0xFFFFffff00000000UL | newPage), 0, 4096);
+		memset(mmu_map_from_physical(newPage), 0, 4096);
 		pd[pd_entry].raw = (newPage) | 0x07;
 	}
 
@@ -210,8 +225,12 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 		return NULL;
 	}
 
-	union PML * pt = (union PML *)((uintptr_t)0xFFFFffff00000000UL | (pd[pd_entry].bits.page << 12));
+	union PML * pt = mmu_map_from_physical((uintptr_t)pd[pd_entry].bits.page << 12);
 	return (union PML *)&pt[pt_entry];
+
+_noentry:
+	printf("no entry for requested page\n");
+	return NULL;
 }
 
 union PML * mmu_clone(union PML * from) {
@@ -223,7 +242,7 @@ union PML * mmu_clone(union PML * from) {
 	uintptr_t newPage = mmu_first_frame() << 12;
 	mmu_frame_set(newPage);
 	spin_unlock(frame_alloc_lock);
-	union PML * pml4_out = (union PML*)(0xFFFFffff00000000UL | newPage);
+	union PML * pml4_out = mmu_map_from_physical(newPage);
 
 	/* Zero bottom half */
 	memset(&pml4_out[0], 0, 256 * sizeof(union PML));
@@ -234,51 +253,51 @@ union PML * mmu_clone(union PML * from) {
 	/* Copy PDPs */
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
-			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
 			spin_lock(frame_alloc_lock);
 			uintptr_t newPage = mmu_first_frame() << 12;
 			mmu_frame_set(newPage);
 			spin_unlock(frame_alloc_lock);
-			union PML * pdp_out = (union PML*)(0xFFFFffff00000000UL | newPage);
+			union PML * pdp_out = mmu_map_from_physical(newPage);
 			memset(pdp_out, 0, 512 * sizeof(union PML));
 			pml4_out[i].raw = (newPage) | 0x07;
 
 			/* Copy the PDs */
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
-					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					union PML * pd_in = mmu_map_from_physical((uintptr_t)pdp_in[j].bits.page << 12);
 					spin_lock(frame_alloc_lock);
 					uintptr_t newPage = mmu_first_frame() << 12;
 					mmu_frame_set(newPage);
 					spin_unlock(frame_alloc_lock);
-					union PML * pd_out = (union PML*)(0xFFFFffff00000000UL | newPage);
+					union PML * pd_out = mmu_map_from_physical(newPage);
 					memset(pd_out, 0, 512 * sizeof(union PML));
 					pdp_out[j].raw = (newPage) | 0x07;
 
 					/* Now copy the PTs */
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
-							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							union PML * pt_in = mmu_map_from_physical((uintptr_t)pd_in[k].bits.page << 12);
 							spin_lock(frame_alloc_lock);
 							uintptr_t newPage = mmu_first_frame() << 12;
 							mmu_frame_set(newPage);
 							spin_unlock(frame_alloc_lock);
-							union PML * pt_out = (union PML*)(0xFFFFffff00000000UL | newPage);
+							union PML * pt_out = mmu_map_from_physical(newPage);
 							memset(pt_out, 0, 512 * sizeof(union PML));
 							pd_out[k].raw = (newPage) | 0x07;
 
 							/* Now, finally, copy pages */
 							for (size_t l = 0; l < 512; ++l) {
 								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
-								if (address >= 0x200000000 && address <= 0x400000000) continue;
+								if (address >= 0x100000000 && address <= 0x400000000) continue;
 								if (pt_in[l].bits.present) {
 									if (pt_in[l].bits.user) {
-										char * page_in = (char*)(0xFFFFffff00000000UL | (pt_in[l].bits.page << 12));
+										char * page_in = mmu_map_from_physical((uintptr_t)pt_in[l].bits.page << 12);
 										spin_lock(frame_alloc_lock);
 										uintptr_t newPage = mmu_first_frame() << 12;
 										mmu_frame_set(newPage);
 										spin_unlock(frame_alloc_lock);
-										char * page_out = (char *)(0xFFFFffff00000000UL | newPage);
+										char * page_out = mmu_map_from_physical(newPage);
 										memcpy(page_out,page_in,4096);
 										pt_out[l].bits.page = newPage >> 12;
 										pt_out[l].bits.present = 1;
@@ -332,13 +351,13 @@ size_t mmu_count_user(union PML * from) {
 
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
-			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
-					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					union PML * pd_in = mmu_map_from_physical((uintptr_t)pdp_in[j].bits.page << 12);
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
-							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							union PML * pt_in = mmu_map_from_physical((uintptr_t)pd_in[k].bits.page << 12);
 							for (size_t l = 0; l < 512; ++l) {
 								/* Calculate final address to skip SHM */
 								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
@@ -363,13 +382,13 @@ size_t mmu_count_shm(union PML * from) {
 
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
-			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
-					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					union PML * pd_in = mmu_map_from_physical((uintptr_t)pdp_in[j].bits.page << 12);
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
-							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							union PML * pt_in = mmu_map_from_physical((uintptr_t)pd_in[k].bits.page << 12);
 							for (size_t l = 0; l < 512; ++l) {
 								/* Calculate final address to skip SHM */
 								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
@@ -415,29 +434,29 @@ void mmu_free(union PML * from) {
 
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
-			union PML * pdp_in = (union PML*)(0xFFFFffff00000000UL | (from[i].bits.page << 12));
+			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
 			for (size_t j = 0; j < 512; ++j) {
 				if (pdp_in[j].bits.present) {
-					union PML * pd_in = (union PML*)(0xFFFFffff00000000UL | (pdp_in[j].bits.page << 12));
+					union PML * pd_in = mmu_map_from_physical((uintptr_t)pdp_in[j].bits.page << 12);
 					for (size_t k = 0; k < 512; ++k) {
 						if (pd_in[k].bits.present) {
-							union PML * pt_in = (union PML*)(0xFFFFffff00000000UL | (pd_in[k].bits.page << 12));
+							union PML * pt_in = mmu_map_from_physical((uintptr_t)pd_in[k].bits.page << 12);
 							for (size_t l = 0; l < 512; ++l) {
 								uintptr_t address = ((i << (9 * 3 + 12)) | (j << (9*2 + 12)) | (k << (9 + 12)) | (l << 12));
 								if (address >= 0x200000000 && address <= 0x400000000) continue;
 								if (pt_in[l].bits.present) {
 									if (pt_in[l].bits.user) {
-										mmu_frame_clear(pt_in[l].bits.page << 12);
+										mmu_frame_clear((uintptr_t)pt_in[l].bits.page << 12);
 									}
 								}
 							}
-							mmu_frame_clear(pd_in[k].bits.page << 12);
+							mmu_frame_clear((uintptr_t)pd_in[k].bits.page << 12);
 						}
 					}
-					mmu_frame_clear(pdp_in[j].bits.page << 12);
+					mmu_frame_clear((uintptr_t)pdp_in[j].bits.page << 12);
 				}
 			}
-			mmu_frame_clear(from[i].bits.page << 12);
+			mmu_frame_clear((uintptr_t)from[i].bits.page << 12);
 		}
 	}
 
@@ -445,11 +464,11 @@ void mmu_free(union PML * from) {
 }
 
 union PML * mmu_get_kernel_directory(void) {
-	return (union PML*)((uintptr_t)&init_page_region[0] | 0xFFFFffff00000000UL);
+	return mmu_map_from_physical((uintptr_t)&init_page_region[0]);
 }
 
 void mmu_set_directory(union PML * new_pml) {
-	if (!new_pml) new_pml = (union PML*)((uintptr_t)&init_page_region[0] | 0xFFFFffff00000000UL);
+	if (!new_pml) new_pml = mmu_map_from_physical((uintptr_t)&init_page_region[0]);
 	current_pml = new_pml;
 
 	asm volatile (
@@ -475,11 +494,12 @@ void mmu_init(size_t memsize, uintptr_t firstFreePage) {
 	init_page_region[0][511].raw = (uintptr_t)&high_base_pml | 0x03;
 	init_page_region[0][510].raw = (uintptr_t)&heap_base_pml | 0x03;
 
-	/* Identity map -4GB in the boot PML using 1GB pages */
-	high_base_pml[508].raw = (uintptr_t)0x00000000 | 0x83;
-	high_base_pml[509].raw = (uintptr_t)0x40000000 | 0x83;
-	high_base_pml[510].raw = (uintptr_t)0x80000000 | 0x83;
-	high_base_pml[511].raw = (uintptr_t)0xC0000000 | 0x83;
+	/* Identity map from -128GB in the boot PML using 1GB pages */
+	high_base_pml[0].raw = (uintptr_t)0x00000000 | 0x83;
+	high_base_pml[1].raw = (uintptr_t)0x40000000 | 0x83;
+	high_base_pml[2].raw = (uintptr_t)0x80000000 | 0x83;
+	high_base_pml[3].raw = (uintptr_t)0xC0000000 | 0x83;
+	high_base_pml[4].raw = (uintptr_t)0x100000000 | 0x83;
 
 	/* Map low base PDP */
 	low_base_pmls[0][0].raw = (uintptr_t)&low_base_pmls[1] | 0x07;
@@ -526,7 +546,7 @@ void mmu_init(size_t memsize, uintptr_t firstFreePage) {
 	}
 
 	asm volatile ("" : : : "memory");
-	current_pml = (union PML*)((uintptr_t)current_pml | 0xFFFFffff00000000UL);
+	current_pml = mmu_map_from_physical((uintptr_t)current_pml);
 	asm volatile ("" : : : "memory");
 
 	/* We are now in the new stuff. */

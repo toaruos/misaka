@@ -16,10 +16,7 @@
 #include <kernel/vfs.h>
 #include <kernel/process.h>
 #include <kernel/mmu.h>
-
-extern void arch_set_kernel_stack(uintptr_t);
-extern void arch_enter_critical(void);
-extern void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[], uintptr_t stack);
+#include <kernel/misc.h>
 
 static Elf64_Shdr * elf_getSection(Elf64_Header * this, Elf64_Word index) {
 	return (Elf64_Shdr*)((uintptr_t)this + this->e_shoff + index * this->e_shentsize);

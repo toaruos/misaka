@@ -27,9 +27,10 @@
 #include <kernel/pci.h>
 #include <kernel/procfs.h>
 #include <kernel/hashmap.h>
-
-extern uint64_t now(void);
-extern list_t * process_list;
+#include <kernel/time.h>
+#include <kernel/syscall.h>
+#include <kernel/mmu.h>
+#include <kernel/misc.h>
 
 #define PROCFS_STANDARD_ENTRIES (sizeof(std_entries) / sizeof(struct procfs_entry))
 #define PROCFS_PROCDIR_ENTRIES  (sizeof(procdir_entries) / sizeof(struct procfs_entry))
@@ -97,20 +98,6 @@ static uint64_t proc_cmdline_func(fs_node_t *node, uint64_t offset, uint64_t siz
 	memcpy(buffer, buf + offset, size);
 	return size;
 }
-
-extern size_t mmu_count_user(union PML * from);
-extern size_t mmu_count_shm(union PML * from);
-extern size_t mmu_total_memory(void);
-extern size_t mmu_used_memory(void);
-
-extern long arch_syscall_number(struct regs * r);
-extern long arch_syscall_arg0(struct regs * r);
-extern long arch_syscall_arg1(struct regs * r);
-extern long arch_syscall_arg2(struct regs * r);
-extern long arch_syscall_arg3(struct regs * r);
-extern long arch_syscall_arg4(struct regs * r);
-extern long arch_stack_pointer(struct regs * r);
-extern long arch_user_ip(struct regs * r);
 
 static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[2048];
@@ -299,7 +286,6 @@ static uint64_t cpuinfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 		memcpy(model_name, brand, 48);
 	}
 
-	extern size_t arch_cpu_mhz(void);
 	size_t _mhz = arch_cpu_mhz();
 
 	size_t _bsize = snprintf(buf, 1000,
@@ -316,8 +302,6 @@ static uint64_t cpuinfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 	memcpy(buffer, buf + offset, size);
 	return size;
 }
-
-extern void * sbrk(size_t);
 
 static uint64_t meminfo_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
@@ -339,6 +323,7 @@ static uint64_t meminfo_func(fs_node_t *node, uint64_t offset, uint64_t size, ui
 	return size;
 }
 
+#ifdef __x86_64__
 static uint64_t pat_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
 
@@ -392,8 +377,8 @@ static uint64_t pat_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_
 	memcpy(buffer, buf + offset, size);
 	return size;
 }
+#endif
 
-extern void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds);
 static uint64_t uptime_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
 	unsigned long timer_ticks, timer_subticks;
@@ -408,7 +393,6 @@ static uint64_t uptime_func(fs_node_t *node, uint64_t offset, uint64_t size, uin
 	return size;
 }
 
-extern const char * arch_get_cmdline(void);
 static uint64_t cmdline_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char buf[1024];
 	const char * cmdline = arch_get_cmdline();
@@ -577,7 +561,6 @@ static uint64_t filesystems_func(fs_node_t *node, uint64_t offset, uint64_t size
 	return size;
 }
 
-extern const char * arch_get_loader(void);
 static uint64_t loader_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
 	char * buf = malloc(512);
 
@@ -595,15 +578,17 @@ static uint64_t loader_func(fs_node_t *node, uint64_t offset, uint64_t size, uin
 	return size;
 }
 
+#ifdef __x86_64__
+#include <kernel/arch/x86_64/irq.h>
+#include <kernel/arch/x86_64/ports.h>
 static uint64_t irq_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
-#if 0
 	char * buf = malloc(4096);
 	unsigned int soffset = 0;
 
 	for (int i = 0; i < 16; ++i) {
 		soffset += snprintf(&buf[soffset], 100, "irq %d: ", i);
 		for (int j = 0; j < 4; ++j) {
-			char * t = get_irq_handler(i, j);
+			const char * t = get_irq_handler(i, j);
 			if (!t) break;
 			soffset += snprintf(&buf[soffset], 100, "%s%s", j ? "," : "", t);
 		}
@@ -612,13 +597,13 @@ static uint64_t irq_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_
 
 	outportb(0x20, 0x0b);
 	outportb(0xa0, 0x0b);
-	soffset += snprintf(&buf[soffset], 100, "isr=0x%4x\n", (inportb(0xA0) << 8) | inportb(0x20));
+	soffset += snprintf(&buf[soffset], 100, "isr=0x%04x\n", (inportb(0xA0) << 8) | inportb(0x20));
 
 	outportb(0x20, 0x0a);
 	outportb(0xa0, 0x0a);
-	soffset += snprintf(&buf[soffset], 100, "irr=0x%4x\n", (inportb(0xA0) << 8) | inportb(0x20));
+	soffset += snprintf(&buf[soffset], 100, "irr=0x%04x\n", (inportb(0xA0) << 8) | inportb(0x20));
 
-	soffset += snprintf(&buf[soffset], 100, "imr=0x%4x\n", (inportb(0xA1) << 8) | inportb(0x21));
+	soffset += snprintf(&buf[soffset], 100, "imr=0x%04x\n", (inportb(0xA1) << 8) | inportb(0x21));
 
 	size_t _bsize = strlen(buf);
 	if (offset > _bsize) {
@@ -630,8 +615,6 @@ static uint64_t irq_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_
 	memcpy(buffer, buf + offset, size);
 	free(buf);
 	return size;
-#endif
-	return 0;
 }
 
 /**
@@ -692,6 +675,7 @@ static uint64_t pci_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_
 	free(b.buffer);
 	return size;
 }
+#endif
 
 static struct procfs_entry std_entries[] = {
 	{-1, "cpuinfo",  cpuinfo_func},
@@ -704,9 +688,11 @@ static struct procfs_entry std_entries[] = {
 	{-8, "modules",  modules_func},
 	{-9, "filesystems", filesystems_func},
 	{-10,"loader",   loader_func},
+#ifdef __x86_64__
 	{-11,"irq",      irq_func},
 	{-12,"pat",      pat_func},
 	{-13,"pci",      pci_func},
+#endif
 };
 
 static list_t * extended_entries = NULL;

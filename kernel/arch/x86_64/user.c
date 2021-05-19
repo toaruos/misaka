@@ -42,6 +42,7 @@ void arch_enter_signal_handler(uintptr_t entrypoint, int signum) {
 		"iretq"
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
 	    "D"(signum));
+	__builtin_unreachable();
 }
 
 __attribute__((naked))
@@ -98,7 +99,7 @@ void arch_fatal(void) {
 long arch_reboot(void) {
 	/* load a null page as an IDT */
 	uintptr_t frame = mmu_allocate_a_frame();
-	uintptr_t * idt = (uintptr_t*)((frame << 12) | 0xFFFFffff00000000UL);
+	uintptr_t * idt = mmu_map_from_physical(frame << 12);
 	memset(idt, 0, 0x1000);
 	asm volatile (
 		"lidt (%0)"

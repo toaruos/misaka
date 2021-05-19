@@ -24,6 +24,7 @@
 #include <kernel/pty.h>
 #include <kernel/arch/x86_64/regs.h>
 #include <kernel/arch/x86_64/ports.h>
+#include <kernel/arch/x86_64/irq.h>
 
 #define SERIAL_PORT_A 0x3F8
 #define SERIAL_PORT_B 0x2F8
@@ -32,8 +33,6 @@
 
 #define SERIAL_IRQ_AC 4
 #define SERIAL_IRQ_BD 3
-
-extern void irq_ack(size_t irq_no);
 
 static pty_t * _serial_port_pty_a = NULL;
 static pty_t * _serial_port_pty_b = NULL;
@@ -152,12 +151,12 @@ static fs_node_t * serial_device_create(int port) {
 
 	if (port == SERIAL_PORT_A || port == SERIAL_PORT_C) {
 		if (!have_installed_ac) {
-			//irq_install_handler(SERIAL_IRQ_AC, serial_handler_ac, "serial ac");
+			irq_install_handler(SERIAL_IRQ_AC, serial_handler_ac, "serial ac");
 			have_installed_ac = 1;
 		}
 	} else {
 		if (!have_installed_bd) {
-			//irq_install_handler(SERIAL_IRQ_BD, serial_handler_bd, "serial bd");
+			irq_install_handler(SERIAL_IRQ_BD, serial_handler_bd, "serial bd");
 			have_installed_bd = 1;
 		}
 	}

@@ -15,35 +15,12 @@
 #include <kernel/pty.h>
 #include <kernel/spinlock.h>
 #include <kernel/signal.h>
-
-extern long arch_reboot(void);
-extern unsigned long arch_syscall_number(struct regs * r);
-extern void arch_syscall_return(struct regs * r, long retval);
-extern long arch_syscall_arg0(struct regs * r);
-extern long arch_syscall_arg1(struct regs * r);
-extern long arch_syscall_arg2(struct regs * r);
-extern long arch_syscall_arg3(struct regs * r);
-extern long arch_syscall_arg4(struct regs * r);
-extern void arch_set_tls_base(uintptr_t tlsbase);
+#include <kernel/time.h>
+#include <kernel/syscall.h>
+#include <kernel/misc.h>
 
 static char   hostname[256];
 static size_t hostname_len = 0;
-
-#define FD_INRANGE(FD) \
-	((FD) < (int)current_process->fds->length && (FD) >= 0)
-#define FD_ENTRY(FD) \
-	(current_process->fds->entries[(FD)])
-#define FD_CHECK(FD) \
-	(FD_INRANGE(FD) && FD_ENTRY(FD))
-#define FD_OFFSET(FD) \
-	(current_process->fds->offsets[(FD)])
-#define FD_MODE(FD) \
-	(current_process->fds->modes[(FD)])
-
-#define PTR_INRANGE(PTR) \
-	((uintptr_t)(PTR) > current_process->image.entry && ((uintptr_t)(PTR) < 0x8000000000000000))
-#define PTR_VALIDATE(PTR) \
-	ptr_validate((void *)(PTR), __func__)
 
 void ptr_validate(void * ptr, const char * syscall) {
 	if (ptr && !PTR_INRANGE(ptr)) {
@@ -115,7 +92,10 @@ static long sys_sysfunc(long fn, char ** args) {
 			volatile process_t * volatile proc = current_process;
 			if (proc->group != 0) proc = process_from_pid(proc->group);
 			spin_lock(proc->image.lock);
-			for (uintptr_t i = (uintptr_t)args[0]; i < (uintptr_t)args[0] + (size_t)args[1]; i += 0x1000) {
+			/* Align inputs */
+			uintptr_t start = ((uintptr_t)args[0]) & 0xFFFFffffFFFFf000UL;
+			uintptr_t end   = ((uintptr_t)args[0] + (size_t)args[1] + 0xFFF) & 0xFFFFffffFFFFf000UL;
+			for (uintptr_t i = start; i < end; i += 0x1000) {
 				union PML * page = mmu_get_page(i, MMU_GET_MAKE);
 				mmu_frame_allocate(page, MMU_FLAG_WRITABLE);
 				mmu_invalidate(i);
@@ -160,8 +140,6 @@ static long sys_sysfunc(long fn, char ** args) {
 			return -EINVAL;
 	}
 }
-
-extern void task_exit(int retval);
 
 __attribute__((noreturn))
 static long sys_exit(long exitcode) {
@@ -657,7 +635,6 @@ static long sys_unlink(char * file) {
 	return unlink_fs(file);
 }
 
-extern int exec(const char * path, int argc, char *const argv[], char *const env[], int interp_depth);
 static long sys_execve(const char * filename, char *const argv[], char *const envp[]) {
 	PTR_VALIDATE(filename);
 	PTR_VALIDATE(argv);
@@ -701,19 +678,16 @@ static long sys_execve(const char * filename, char *const argv[], char *const en
 	return exec(filename, argc, argv_, envp_, 0);
 }
 
-extern pid_t fork(void);
 static long sys_fork(void) {
 	return fork();
 }
 
-extern pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg);
 static long sys_clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	if (!new_stack || !PTR_INRANGE(new_stack)) return -EINVAL;
 	if (!thread_func || !PTR_INRANGE(thread_func)) return -EINVAL;
 	return (int)clone(new_stack, thread_func, arg);
 }
 
-extern int waitpid(int pid, int * status, int options);
 static long sys_waitpid(int pid, int * status, int options) {
 	if (status && !PTR_INRANGE(status)) return -EINVAL;
 	return waitpid(pid, status, options);
@@ -724,7 +698,6 @@ static long sys_yield(void) {
 	return 1;
 }
 
-extern void relative_time(unsigned long seconds, unsigned long subseconds, unsigned long * out_seconds, unsigned long * out_subseconds);
 static long sys_sleepabs(unsigned long seconds, unsigned long subseconds) {
 	/* Mark us as asleep until <some time period> */
 	sleep_until((process_t *)current_process, seconds, subseconds);
@@ -890,6 +863,17 @@ static long sys_reboot(void) {
 	return arch_reboot();
 }
 
+extern long net_socket();
+extern long net_setsockopt();
+extern long net_bind();
+extern long net_accept();
+extern long net_listen();
+extern long net_connect();
+extern long net_getsockopt();
+extern long net_recv();
+extern long net_send();
+extern long net_shutdown();
+
 static long (*syscalls[])() = {
 	/* System Call Table */
 	[SYS_EXT]          = sys_exit,
@@ -946,9 +930,20 @@ static long (*syscalls[])() = {
 	[SYS_SIGNAL]       = sys_signal,
 	[SYS_KILL]         = sys_kill,
 	[SYS_REBOOT]       = sys_reboot,
+
+	[SYS_SOCKET]       = net_socket,
+	[SYS_SETSOCKOPT]   = net_setsockopt,
+	[SYS_BIND]         = net_bind,
+	[SYS_ACCEPT]       = net_accept,
+	[SYS_LISTEN]       = net_listen,
+	[SYS_CONNECT]      = net_connect,
+	[SYS_GETSOCKOPT]   = net_getsockopt,
+	[SYS_RECV]         = net_recv,
+	[SYS_SEND]         = net_send,
+	[SYS_SHUTDOWN]     = net_shutdown,
 };
 
-static size_t num_syscalls = sizeof(syscalls) / sizeof(*syscalls);
+static long num_syscalls = sizeof(syscalls) / sizeof(*syscalls);
 typedef long (*scall_func)();
 
 void syscall_handler(struct regs * r) {

@@ -1,8 +1,12 @@
 #pragma once
 #include <stdint.h>
 #include <kernel/arch/x86_64/pml.h>
-#define MMU_FLAG_KERNEL    0x01
-#define MMU_FLAG_WRITABLE  0x02
+#define MMU_FLAG_KERNEL       0x01
+#define MMU_FLAG_WRITABLE     0x02
+#define MMU_FLAG_NOCACHE      0x04
+#define MMU_FLAG_WRITETHROUGH 0x08
+#define MMU_FLAG_SPEC         0x10
+#define MMU_FLAG_WC           (MMU_FLAG_NOCACHE | MMU_FLAG_WRITETHROUGH | MMU_FLAG_SPEC)
 
 #define MMU_GET_MAKE 0x01
 
@@ -23,4 +27,14 @@ union PML * mmu_clone(union PML * from);
 void mmu_init(size_t memsize, uintptr_t firstFreePage);
 void mmu_invalidate(uintptr_t addr);
 uintptr_t mmu_allocate_a_frame(void);
+uintptr_t mmu_allocate_n_frames(int n);
+union PML * mmu_get_kernel_directory(void);
 void mmu_set_kernel_heap(uintptr_t heap_start);
+void * mmu_map_from_physical(uintptr_t frameaddress);
+
+size_t mmu_count_user(union PML * from);
+size_t mmu_count_shm(union PML * from);
+size_t mmu_total_memory(void);
+size_t mmu_used_memory(void);
+
+void * sbrk(size_t);

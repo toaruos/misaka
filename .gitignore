@@ -15,11 +15,13 @@
 *.pcap
 .gdb_history
 /ramdisk.tar
+/ramdisk.igz
 /misaka-kernel.64
 /misaka-kernel
 /kernel/symbols.S
 /util/build
 /util/local
+/util/cross
 /base/bin/*
 /base/usr/bin/*
 /base/usr/lib/*

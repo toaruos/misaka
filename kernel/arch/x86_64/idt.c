@@ -2,10 +2,10 @@
 #include <kernel/string.h>
 #include <kernel/printf.h>
 #include <kernel/vfs.h>
-#include <kernel/pipe.h>
 #include <kernel/version.h>
 #include <kernel/process.h>
 #include <kernel/signal.h>
+#include <kernel/misc.h>
 
 #include <sys/time.h>
 #include <sys/utsname.h>
@@ -13,35 +13,10 @@
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/pml.h>
 #include <kernel/arch/x86_64/regs.h>
-
-/**
- * Interrupt descriptor table
- */
-typedef struct {
-	uint16_t base_low;
-	uint16_t selector;
-
-	uint8_t zero;
-	uint8_t flags;
-
-	uint16_t base_mid;
-	uint32_t base_high;
-	uint32_t pad;
-} __attribute__((packed)) idt_entry_t;
-
-struct idt_pointer {
-	uint16_t  limit;
-	uintptr_t base;
-} __attribute__((packed));
+#include <kernel/arch/x86_64/irq.h>
 
 static struct idt_pointer idtp;
 static idt_entry_t idt[256];
-
-extern void arch_enter_critical(void);
-extern void arch_exit_critical(void);
-extern void idt_load(void *);
-
-typedef struct regs * (*interrupt_handler_t)(struct regs *);
 
 void idt_set_gate(uint8_t num, interrupt_handler_t handler, uint16_t selector, uint8_t flags) {
 	uintptr_t base = (uintptr_t)handler;
@@ -53,56 +28,6 @@ void idt_set_gate(uint8_t num, interrupt_handler_t handler, uint16_t selector, u
 	idt[num].pad = 0;
 	idt[num].flags = flags | 0x60;
 }
-
-extern struct regs * _isr0(struct regs*);
-extern struct regs * _isr1(struct regs*);
-extern struct regs * _isr2(struct regs*);
-extern struct regs * _isr3(struct regs*);
-extern struct regs * _isr4(struct regs*);
-extern struct regs * _isr5(struct regs*);
-extern struct regs * _isr6(struct regs*);
-extern struct regs * _isr7(struct regs*);
-extern struct regs * _isr8(struct regs*);
-extern struct regs * _isr9(struct regs*);
-extern struct regs * _isr10(struct regs*);
-extern struct regs * _isr11(struct regs*);
-extern struct regs * _isr12(struct regs*);
-extern struct regs * _isr13(struct regs*);
-extern struct regs * _isr14(struct regs*);
-extern struct regs * _isr15(struct regs*);
-extern struct regs * _isr16(struct regs*);
-extern struct regs * _isr17(struct regs*);
-extern struct regs * _isr18(struct regs*);
-extern struct regs * _isr19(struct regs*);
-extern struct regs * _isr20(struct regs*);
-extern struct regs * _isr21(struct regs*);
-extern struct regs * _isr22(struct regs*);
-extern struct regs * _isr23(struct regs*);
-extern struct regs * _isr24(struct regs*);
-extern struct regs * _isr25(struct regs*);
-extern struct regs * _isr26(struct regs*);
-extern struct regs * _isr27(struct regs*);
-extern struct regs * _isr28(struct regs*);
-extern struct regs * _isr29(struct regs*);
-extern struct regs * _isr30(struct regs*);
-extern struct regs * _isr31(struct regs*);
-extern struct regs * _irq0(struct regs*);
-extern struct regs * _irq1(struct regs*);
-extern struct regs * _irq2(struct regs*);
-extern struct regs * _irq3(struct regs*);
-extern struct regs * _irq4(struct regs*);
-extern struct regs * _irq5(struct regs*);
-extern struct regs * _irq6(struct regs*);
-extern struct regs * _irq7(struct regs*);
-extern struct regs * _irq8(struct regs*);
-extern struct regs * _irq9(struct regs*);
-extern struct regs * _irq10(struct regs*);
-extern struct regs * _irq11(struct regs*);
-extern struct regs * _irq12(struct regs*);
-extern struct regs * _irq13(struct regs*);
-extern struct regs * _irq14(struct regs*);
-extern struct regs * _irq15(struct regs*);
-extern struct regs * _isr127(struct regs*);
 
 void idt_install(void) {
 	idtp.limit = sizeof(idt);
@@ -221,40 +146,35 @@ static const char *exception_messages[32] = {
 	"Reserved"
 };
 
-extern void irq_ack(size_t irq_no);
-extern void cmos_time_stuff(void);
+#define IRQ_CHAIN_SIZE  16
+#define IRQ_CHAIN_DEPTH 4
+static irq_handler_chain_t irq_routines[IRQ_CHAIN_SIZE * IRQ_CHAIN_DEPTH] = { NULL };
+static const char * _irq_handler_descriptions[IRQ_CHAIN_SIZE * IRQ_CHAIN_DEPTH] = { NULL };
 
-#define KEY_DEVICE  0x60
-#define KEY_PENDING 0x64
-#define KEY_IRQ     1
-
-static fs_node_t * keyboard_pipe;
-static void keyboard_wait(void) {
-	while(inportb(KEY_PENDING) & 2);
+const char * get_irq_handler(int irq, int chain) {
+	if (irq >= IRQ_CHAIN_SIZE) return NULL;
+	if (chain >= IRQ_CHAIN_DEPTH) return NULL;
+	return _irq_handler_descriptions[IRQ_CHAIN_SIZE * chain + irq];
 }
-static int keyboard_handler(struct regs *r) {
-	unsigned char scancode;
-	if (inportb(KEY_PENDING) & 0x01) {
-		scancode = inportb(KEY_DEVICE);
 
-		write_fs(keyboard_pipe, 0, 1, (uint8_t []){scancode});
+void irq_install_handler(size_t irq, irq_handler_chain_t handler, const char * desc) {
+	arch_enter_critical();
+	for (size_t i = 0; i < IRQ_CHAIN_DEPTH; i++) {
+		if (irq_routines[i * IRQ_CHAIN_SIZE + irq])
+			continue;
+		irq_routines[i * IRQ_CHAIN_SIZE + irq] = handler;
+		_irq_handler_descriptions[i * IRQ_CHAIN_SIZE + irq ] = desc;
+		break;
 	}
-
-	irq_ack(KEY_IRQ);
-	return 1;
+	arch_exit_critical();
 }
 
-void keyboard_install(void) {
-	keyboard_pipe = make_pipe(128);
-	keyboard_pipe->flags = FS_CHARDEVICE;
-	vfs_mount("/dev/kbd", keyboard_pipe);
+void irq_uninstall_handler(size_t irq) {
+	arch_enter_critical();
+	for (size_t i = 0; i < IRQ_CHAIN_DEPTH; i++)
+		irq_routines[i * IRQ_CHAIN_SIZE + irq] = NULL;
+	arch_exit_critical();
 }
-
-extern void task_exit(int);
-
-extern int serial_handler_ac(struct regs *r);
-extern int serial_handler_bd(struct regs *r);
-extern int ac97_irq_handler(struct regs * regs);
 
 struct regs * isr_handler(struct regs * r) {
 	current_process->interrupt_registers = r;
@@ -278,6 +198,10 @@ struct regs * isr_handler(struct regs * r) {
 			}
 			printf("Page fault in pid=%d (%s) at %#zx\n", (int)current_process->id, current_process->name, faulting_address);
 			dump_regs(r);
+			if (current_process->flags & PROC_FLAG_IS_TASKLET) {
+				printf("Segmentation fault in kernel worker thread, halting.\n");
+				arch_fatal();
+			}
 			send_signal(current_process->id, SIGSEGV, 1);
 			break;
 		}
@@ -303,41 +227,8 @@ struct regs * isr_handler(struct regs * r) {
 			asm volatile("sti");
 			return r;
 		}
-		case 32: /* Generally the PIT */
-			/* FIXME:
-			 *    We need to port over the IRQ chaining stuff from toaru32
-			 *    for quite a lot of our hardware to work
-			 **/
-			irq_ack(0);
-			if (!current_process) break;
-			cmos_time_stuff();
-			break;
-		case 33: {
-			keyboard_handler(r);
-			break;
-		}
-		case 35: {
-			serial_handler_bd(r);
-			break;
-		}
-		case 36: {
-			serial_handler_ac(r);
-			break;
-		}
 		case 39: {
 			/* Spurious interrupt */
-			break;
-		}
-		case 43: {
-			extern int ac97_irq_handler(struct regs * regs);
-			ac97_irq_handler(r);
-			irq_ack(11);
-			break;
-		}
-		case 44: {
-			extern int mouse_handler(struct regs *r);
-			mouse_handler(r);
-			irq_ack(12);
 			break;
 		}
 		default: {
@@ -349,14 +240,24 @@ struct regs * isr_handler(struct regs * r) {
 				printf("Killing %d from unhandled %s\n", current_process->id, exception_messages[r->int_no]);
 				send_signal(current_process->id, SIGILL, 1);
 			} else {
+				for (size_t i = 0; i < IRQ_CHAIN_DEPTH; i++) {
+					irq_handler_chain_t handler = irq_routines[i * IRQ_CHAIN_SIZE + (r->int_no - 32)];
+					if (!handler) break;
+					if (handler(r)) {
+						goto done;
+					}
+				}
 				irq_ack(r->int_no - 32);
 				#if 0
 				printf("Unhandled interrupt: %lu\n", r->int_no - 32);
 				dump_regs(r);
 				#endif
+				break;
 			}
 		}
 	}
+
+done:
 
 	if (current_process == kernel_idle_task && process_queue->head) {
 		/* If this is kidle and we got here, instead of finishing the interrupt
