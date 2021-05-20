@@ -1,4 +1,5 @@
 #include <kernel/printf.h>
+#include <kernel/process.h>
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/irq.h>
 #include <kernel/arch/x86_64/regs.h>
@@ -28,8 +29,6 @@
 		             "2:"); \
 	} while (0)
 
-static volatile int sync_depth = 0;
-
 #define SYNC_CLI() asm volatile("cli")
 #define SYNC_STI() asm volatile("sti")
 
@@ -42,20 +41,19 @@ void arch_enter_critical(void) {
 		: "=A"(rflags)
 	);
 	if (rflags & (1 << 9)) {
-		/* FIXME: This needs to be per-cpu, so it should ref %gs? */
-		sync_depth = 1;
+		this_core->sync_depth = 1;
 	} else {
-		sync_depth++;
+		this_core->sync_depth++;
 	}
 }
 
 void arch_exit_critical(void) {
-	if (sync_depth <= 1) {
+	if (this_core->sync_depth <= 1) {
 		SYNC_STI();
-		sync_depth = 0;
+		this_core->sync_depth = 0;
 		return;
 	}
-	sync_depth--;
+	this_core->sync_depth--;
 }
 
 static void irq_remap(void) {

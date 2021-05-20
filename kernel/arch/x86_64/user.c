@@ -30,7 +30,7 @@ void arch_enter_signal_handler(uintptr_t entrypoint, int signum) {
 	ret.ss = 0x20 | 0x03;
 	ret.rip = entrypoint;
 	ret.rflags = (1 << 21) | (1 << 9);
-	ret.rsp = (current_process->syscall_registers->rsp - 128 - 8) & 0xFFFFFFFFFFFFFFF0; /* ensure considerable alignment */
+	ret.rsp = (this_core->current_process->syscall_registers->rsp - 128 - 8) & 0xFFFFFFFFFFFFFFF0; /* ensure considerable alignment */
 	*(uintptr_t*)ret.rsp = 0x00000008DEADBEEF; /* arbitrarily chosen stack return sentinel IP */
 
 	asm volatile(

@@ -44,31 +44,8 @@ list_t * process_list;  /* Stores all existing processes. Mostly used for sanity
 list_t * process_queue; /* Scheduler ready queue. This the round-robin source. The head is the next process to run. */
 list_t * sleep_queue;   /* Ordered list of processes waiting to be awoken by timeouts. The head is the earliest thread to awaken. */
 
-/**
- * @brief The running process on this core.
- *
- * The current_process is a pointer to the process struct for
- * the process, userspace-thread, or kernel tasklet currently
- * executing. Once the scheduler is active, this should always
- * be set. If a core is not currently doing, its current_process
- * should be the core's idle task.
- *
- * Because a process's data can be modified by nested interrupt
- * contexts, we mark them as volatile to avoid making assumptions
- * based on register-stored cached values.
- */
-volatile process_t * current_process = NULL;
-
-/**
- * @brief Idle loop.
- *
- * This is a special kernel tasklet that sits in a loop
- * waiting for an interrupt from a preemption source or hardware
- * device. Its context should never be saved, it should never
- * be added to a sleep queue, and it should be scheduled whenever
- * there is nothing else to do.
- */
-process_t * kernel_idle_task = NULL;
+struct ProcessorLocal processor_local_data[32] = {0};
+struct ProcessorLocal __seg_gs * this_core = 0;
 
 /* The following locks protect access to the process tree, scheduler queue,
  * sleeping, and the very special wait queue... */
@@ -106,30 +83,30 @@ void switch_next(void) {
 	/* Get the next available process, discarded anything in the queue
 	 * marked as finished. */
 	do {
-		current_process = next_ready_process();
-	} while (current_process->flags & PROC_FLAG_FINISHED);
+		this_core->current_process = next_ready_process();
+	} while (this_core->current_process->flags & PROC_FLAG_FINISHED);
 
 	/* Restore paging and task switch context. */
-	mmu_set_directory(current_process->thread.page_directory->directory);
-	arch_set_kernel_stack(current_process->image.stack);
+	mmu_set_directory(this_core->current_process->thread.page_directory->directory);
+	arch_set_kernel_stack(this_core->current_process->image.stack);
 
-	if (current_process->flags & PROC_FLAG_STARTED) {
+	if (this_core->current_process->flags & PROC_FLAG_STARTED) {
 		/* If this process has a signal pending, we save its current context - including
 		 * the entire kernel stack - before resuming switch_task. */
-		if (!current_process->signal_kstack) {
-			if (current_process->signal_queue->length > 0) {
-				current_process->signal_kstack = malloc(KERNEL_STACK_SIZE);
-				memcpy(current_process->signal_kstack, (void*)(current_process->image.stack - KERNEL_STACK_SIZE), KERNEL_STACK_SIZE);
-				memcpy((thread_t*)&current_process->signal_state, (thread_t*)&current_process->thread, sizeof(thread_t));
+		if (!this_core->current_process->signal_kstack) {
+			if (this_core->current_process->signal_queue->length > 0) {
+				this_core->current_process->signal_kstack = malloc(KERNEL_STACK_SIZE);
+				memcpy(this_core->current_process->signal_kstack, (void*)(this_core->current_process->image.stack - KERNEL_STACK_SIZE), KERNEL_STACK_SIZE);
+				memcpy((thread_t*)&this_core->current_process->signal_state, (thread_t*)&this_core->current_process->thread, sizeof(thread_t));
 			}
 		}
 	}
 
 	/* Mark the process as running and started. */
-	current_process->flags |= PROC_FLAG_RUNNING | PROC_FLAG_STARTED;
+	this_core->current_process->flags |= PROC_FLAG_RUNNING | PROC_FLAG_STARTED;
 
 	/* Restore the execution context of this process's kernel thread. */
-	arch_restore_context(&current_process->thread);
+	arch_restore_context(&this_core->current_process->thread);
 	__builtin_unreachable();
 }
 
@@ -148,13 +125,13 @@ extern void * _ret_from_preempt_source;
 void switch_task(uint8_t reschedule) {
 
 	/* switch_task() called but the scheduler isn't enabled? Resume... this is probably a bug. */
-	if (!current_process) return;
+	if (!this_core->current_process) return;
 
 	/* We don't want to be interrupted in the middle of a task switch, so block interrupts
 	 * until we get back from arch_save_context the second time around. */
 	arch_enter_critical();
 
-	if (current_process == kernel_idle_task && __builtin_return_address(0) != &_ret_from_preempt_source) {
+	if (this_core->current_process == this_core->kernel_idle_task && __builtin_return_address(0) != &_ret_from_preempt_source) {
 		printf("Context switch from kernel_idle_task triggered from somewhere other than pre-emption source. Halting.\n");
 		printf("This generally means that a driver responding to interrupts has attempted to yield in its interrupt context.\n");
 		printf("Ensure that all device drivers which respond to interrupts do so with non-blocking data structures.\n");
@@ -165,25 +142,25 @@ void switch_task(uint8_t reschedule) {
 	/* If a process got to switch_task but was not marked as running, it must be exiting and we don't
 	 * want to waste time saving context for it. Also, kidle is always resumed from the top of its
 	 * loop function, so we don't save any context for it either. */
-	if (!(current_process->flags & PROC_FLAG_RUNNING) || (current_process == kernel_idle_task)) {
+	if (!(this_core->current_process->flags & PROC_FLAG_RUNNING) || (this_core->current_process == this_core->kernel_idle_task)) {
 		switch_next();
 		return;
 	}
 
-	arch_save_floating((process_t*)current_process);
+	arch_save_floating((process_t*)this_core->current_process);
 
 	/* 'setjmp' - save the execution context. When this call returns '1' we are back
 	 * from a task switch and have been awoken if we were sleeping. */
-	if (arch_save_context(&current_process->thread) == 1) {
-		arch_restore_floating((process_t*)current_process);
+	if (arch_save_context(&this_core->current_process->thread) == 1) {
+		arch_restore_floating((process_t*)this_core->current_process);
 
 		fix_signal_stacks();
-		if (!(current_process->flags & PROC_FLAG_FINISHED)) {
-			if (current_process->signal_queue->length > 0) {
-				node_t * node = list_dequeue(current_process->signal_queue);
+		if (!(this_core->current_process->flags & PROC_FLAG_FINISHED)) {
+			if (this_core->current_process->signal_queue->length > 0) {
+				node_t * node = list_dequeue(this_core->current_process->signal_queue);
 				signal_t * sig = node->value;
 				free(node);
-				handle_signal((process_t*)current_process,sig);
+				handle_signal((process_t*)this_core->current_process,sig);
 			}
 		}
 
@@ -193,7 +170,7 @@ void switch_task(uint8_t reschedule) {
 	}
 
 	/* We mark the thread as not running so it shows as such in `ps`, mostly. */
-	current_process->flags &= ~(PROC_FLAG_RUNNING);
+	this_core->current_process->flags &= ~(PROC_FLAG_RUNNING);
 
 	/* If this is a normal yield, we reschedule.
 	 * XXX: Is this going to work okay with SMP? I think this whole thing
@@ -201,7 +178,7 @@ void switch_task(uint8_t reschedule) {
 	 *      thread into a schedule queue previously but a different core
 	 *      picks it up before we saved the thread context or the FPU state... */
 	if (reschedule) {
-		make_process_ready((process_t*)current_process);
+		make_process_ready((process_t*)this_core->current_process);
 	}
 
 	/* @ref switch_next() does not return. */
@@ -300,8 +277,6 @@ pid_t get_next_pid(void) {
 	return _next_pid++;
 }
 
-extern union PML * current_pml;
-
 /**
  * @brief The idle task.
  *
@@ -354,7 +329,7 @@ process_t * spawn_kidle(void) {
 	gettimeofday(&idle->start, NULL);
 	idle->thread.page_directory = malloc(sizeof(page_directory_t));
 	idle->thread.page_directory->refcount = 1;
-	idle->thread.page_directory->directory = mmu_clone(current_pml);
+	idle->thread.page_directory->directory = mmu_clone(this_core->current_pml);
 	return idle;
 }
 
@@ -408,7 +383,7 @@ process_t * spawn_init(void) {
 
 	init->thread.page_directory = malloc(sizeof(page_directory_t));
 	init->thread.page_directory->refcount = 1;
-	init->thread.page_directory->directory = current_pml;
+	init->thread.page_directory->directory = this_core->current_pml;
 	init->description = strdup("[init]");
 	list_insert(process_list, (void*)init);
 
@@ -569,7 +544,7 @@ void make_process_ready(volatile process_t * proc) {
  */
 process_t * next_ready_process(void) {
 	if (!process_queue->head) {
-		return kernel_idle_task;
+		return this_core->kernel_idle_task;
 	}
 
 	if (process_queue->head->owner != process_queue) {
@@ -649,16 +624,16 @@ int wakeup_queue_interrupted(list_t * queue) {
  * @returns 1 if the wait was interrupted (eg. the event did not occur); 0 otherwise.
  */
 int sleep_on(list_t * queue) {
-	if (current_process->sleep_node.owner) {
+	if (this_core->current_process->sleep_node.owner) {
 		switch_task(0);
 		return 0;
 	}
-	current_process->flags &= ~(PROC_FLAG_SLEEP_INT);
+	this_core->current_process->flags &= ~(PROC_FLAG_SLEEP_INT);
 	spin_lock(wait_lock_tmp);
-	list_append(queue, (node_t*)&current_process->sleep_node);
+	list_append(queue, (node_t*)&this_core->current_process->sleep_node);
 	spin_unlock(wait_lock_tmp);
 	switch_task(0);
-	return !!(current_process->flags & PROC_FLAG_SLEEP_INT);
+	return !!(this_core->current_process->flags & PROC_FLAG_SLEEP_INT);
 }
 
 /**
@@ -715,7 +690,7 @@ void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
  * sleep will not be resumed by the kernel.
  */
 void sleep_until(process_t * process, unsigned long seconds, unsigned long subseconds) {
-	if (current_process->sleep_node.owner) {
+	if (this_core->current_process->sleep_node.owner) {
 		/* Can't sleep, sleeping already */
 		return;
 	}
@@ -783,8 +758,8 @@ long process_move_fd(process_t * proc, long src, long dest) {
 }
 
 void tasking_start(void) {
-	current_process = spawn_init();
-	kernel_idle_task = spawn_kidle();
+	this_core->current_process = spawn_init();
+	this_core->kernel_idle_task = spawn_kidle();
 }
 
 static int wait_candidate(volatile process_t * parent, int pid, int options, volatile process_t * proc) {
@@ -816,7 +791,7 @@ void reap_process(process_t * proc) {
 }
 
 int waitpid(int pid, int * status, int options) {
-	volatile process_t * volatile proc = (process_t*)current_process;
+	volatile process_t * volatile proc = (process_t*)this_core->current_process;
 	if (proc->group) {
 		proc = process_from_pid(proc->group);
 	}
@@ -993,46 +968,46 @@ process_t * process_get_parent(process_t * process) {
 }
 
 void task_exit(int retval) {
-	current_process->status = retval;
-	current_process->flags |= PROC_FLAG_FINISHED;
-	list_free(current_process->wait_queue);
-	free(current_process->wait_queue);
-	list_free(current_process->signal_queue);
-	free(current_process->signal_queue);
-	free(current_process->wd_name);
-	if (current_process->node_waits) {
-		list_free(current_process->node_waits);
-		free(current_process->node_waits);
-		current_process->node_waits = NULL;
+	this_core->current_process->status = retval;
+	this_core->current_process->flags |= PROC_FLAG_FINISHED;
+	list_free(this_core->current_process->wait_queue);
+	free(this_core->current_process->wait_queue);
+	list_free(this_core->current_process->signal_queue);
+	free(this_core->current_process->signal_queue);
+	free(this_core->current_process->wd_name);
+	if (this_core->current_process->node_waits) {
+		list_free(this_core->current_process->node_waits);
+		free(this_core->current_process->node_waits);
+		this_core->current_process->node_waits = NULL;
 	}
-	shm_release_all((process_t*)current_process);
-	free(current_process->shm_mappings);
+	shm_release_all((process_t*)this_core->current_process);
+	free(this_core->current_process->shm_mappings);
 
-	if (current_process->signal_kstack) {
-		free(current_process->signal_kstack);
+	if (this_core->current_process->signal_kstack) {
+		free(this_core->current_process->signal_kstack);
 	}
 
-	process_release_directory(current_process->thread.page_directory);
+	process_release_directory(this_core->current_process->thread.page_directory);
 
-	if (current_process->fds) {
-		current_process->fds->refs--;
-		if (current_process->fds->refs == 0) {
-			for (uint32_t i = 0; i < current_process->fds->length; ++i) {
-				if (current_process->fds->entries[i]) {
-					close_fs(current_process->fds->entries[i]);
-					current_process->fds->entries[i] = NULL;
+	if (this_core->current_process->fds) {
+		this_core->current_process->fds->refs--;
+		if (this_core->current_process->fds->refs == 0) {
+			for (uint32_t i = 0; i < this_core->current_process->fds->length; ++i) {
+				if (this_core->current_process->fds->entries[i]) {
+					close_fs(this_core->current_process->fds->entries[i]);
+					this_core->current_process->fds->entries[i] = NULL;
 				}
 			}
-			free(current_process->fds->entries);
-			free(current_process->fds->offsets);
-			free(current_process->fds->modes);
-			free(current_process->fds);
-			current_process->fds = NULL;
-			free((void *)(current_process->image.stack - KERNEL_STACK_SIZE));
+			free(this_core->current_process->fds->entries);
+			free(this_core->current_process->fds->offsets);
+			free(this_core->current_process->fds->modes);
+			free(this_core->current_process->fds);
+			this_core->current_process->fds = NULL;
+			free((void *)(this_core->current_process->image.stack - KERNEL_STACK_SIZE));
 		}
 	}
 
-	process_t * parent = process_get_parent((process_t *)current_process);
+	process_t * parent = process_get_parent((process_t *)this_core->current_process);
 	if (parent && !(parent->flags & PROC_FLAG_FINISHED)) {
 		send_signal(parent->group, SIGCHLD, 1);
 		wakeup_queue(parent->wait_queue);
@@ -1046,7 +1021,7 @@ void task_exit(int retval) {
 pid_t fork(void) {
 	arch_enter_critical();
 	uintptr_t sp, bp;
-	process_t * parent = (process_t*)current_process;
+	process_t * parent = (process_t*)this_core->current_process;
 	union PML * directory = mmu_clone(parent->thread.page_directory->directory);
 	process_t * new_proc = spawn_process(parent, 0);
 	new_proc->thread.page_directory = malloc(sizeof(page_directory_t));
@@ -1076,23 +1051,23 @@ pid_t fork(void) {
 pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	arch_enter_critical();
 	uintptr_t sp, bp;
-	process_t * parent = (process_t *)current_process;
-	process_t * new_proc = spawn_process(current_process, 1);
-	new_proc->thread.page_directory = current_process->thread.page_directory;
+	process_t * parent = (process_t *)this_core->current_process;
+	process_t * new_proc = spawn_process(this_core->current_process, 1);
+	new_proc->thread.page_directory = this_core->current_process->thread.page_directory;
 	new_proc->thread.page_directory->refcount++;
 
 	struct regs r;
-	memcpy(&r, current_process->syscall_registers, sizeof(struct regs));
+	memcpy(&r, this_core->current_process->syscall_registers, sizeof(struct regs));
 	new_proc->syscall_registers = &r;
 	sp = new_proc->image.stack;
 	bp = sp;
 
 	/* Set the gid */
-	if (current_process->group) {
-		new_proc->group = current_process->group;
+	if (this_core->current_process->group) {
+		new_proc->group = this_core->current_process->group;
 	} else {
 		/* We are the session leader */
-		new_proc->group = current_process->id;
+		new_proc->group = this_core->current_process->id;
 	}
 
 
@@ -1105,7 +1080,7 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	PUSH(sp, struct regs, r);
 	new_proc->thread.context.sp = sp;
 	new_proc->thread.context.bp = bp;
-	new_proc->thread.context.tls_base = current_process->thread.context.tls_base;
+	new_proc->thread.context.tls_base = this_core->current_process->thread.context.tls_base;
 	new_proc->thread.context.ip = (uintptr_t)&arch_resume_user;
 	if (parent->flags & PROC_FLAG_IS_TASKLET) new_proc->flags |= PROC_FLAG_IS_TASKLET;
 	make_process_ready(new_proc);
@@ -1157,7 +1132,7 @@ process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * na
 	proc->tree_entry = entry;
 
 	spin_lock(tree_lock);
-	tree_node_insert_child_node(process_tree, current_process->tree_entry, entry);
+	tree_node_insert_child_node(process_tree, this_core->current_process->tree_entry, entry);
 	list_insert(process_list, (void*)proc);
 	spin_unlock(tree_lock);
 

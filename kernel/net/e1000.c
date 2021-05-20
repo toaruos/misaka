@@ -370,7 +370,7 @@ static void e1000_init(void * data) {
 
 	unsigned long s, ss;
 	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)current_process, s, ss);
+	sleep_until((process_t *)this_core->current_process, s, ss);
 	switch_task(0);
 
 	uint32_t initial_bar = pci_read_field(e1000_device_pci, PCI_BAR0, 4);
@@ -393,21 +393,21 @@ static void e1000_init(void * data) {
 	write_command(E1000_REG_CTRL, ctrl | (0x80000000));
 	read_command(E1000_REG_STATUS);
 	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)current_process, s, ss);
+	sleep_until((process_t *)this_core->current_process, s, ss);
 	switch_task(0);
 
 	/* reset mac */
 	write_command(E1000_REG_CTRL, ctrl | (0x04000000));
 	read_command(E1000_REG_STATUS);
 	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)current_process, s, ss);
+	sleep_until((process_t *)this_core->current_process, s, ss);
 	switch_task(0);
 
 	/* Reload EEPROM */
 	write_command(E1000_REG_CTRL, ctrl | (0x00002000));
 	read_command(E1000_REG_STATUS);
 	relative_time(0, 20000, &s, &ss);
-	sleep_until((process_t *)current_process, s, ss);
+	sleep_until((process_t *)this_core->current_process, s, ss);
 	switch_task(0);
 
 
@@ -416,7 +416,7 @@ static void e1000_init(void * data) {
 
 	/* wait */
 	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)current_process, s, ss);
+	sleep_until((process_t *)this_core->current_process, s, ss);
 	switch_task(0);
 
 	uint32_t status = read_command(E1000_REG_CTRL);
@@ -439,7 +439,7 @@ static void e1000_init(void * data) {
 	write_command(E1000_REG_CTRL, status);
 
 	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)current_process, s, ss);
+	sleep_until((process_t *)this_core->current_process, s, ss);
 	switch_task(0);
 
 	net_queue = list_create("e1000 net queue", NULL);
@@ -475,7 +475,7 @@ static void e1000_init(void * data) {
 	write_command(0x00D0,(1 << 2) | (1 << 6) | (1 << 7) | (1 << 1) | (1 << 0));
 
 	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)current_process, s, ss);
+	sleep_until((process_t *)this_core->current_process, s, ss);
 	switch_task(0);
 
 	link_is_up = (read_command(E1000_REG_STATUS) & (1 << 1));

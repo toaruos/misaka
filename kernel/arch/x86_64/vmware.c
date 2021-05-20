@@ -406,7 +406,7 @@ static int attempt_scale(void) {
 			} else {
 				unsigned long s, ss;
 				relative_time(0, 10000, &s, &ss);
-				sleep_until((process_t *)current_process, s, ss);
+				sleep_until((process_t *)this_core->current_process, s, ss);
 				switch_task(0);
 			}
 			if ((i = msg_send(c, buf, 0)) < 0) { return 1; }
@@ -460,7 +460,7 @@ static void vmware_resize(void * data, char * name) {
 		attempt_scale();
 		unsigned long s, ss;
 		relative_time(1, 0, &s, &ss);
-		sleep_until((process_t *)current_process, s, ss);
+		sleep_until((process_t *)this_core->current_process, s, ss);
 		switch_task(0);
 	}
 }

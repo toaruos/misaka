@@ -65,6 +65,11 @@ extern char _ap_bootstrap_end[];
 extern char _ap_bootstrap_gdtp[];
 extern size_t arch_cpu_mhz(void);
 extern void gdt_copy_to_trampoline(int ap, char * trampoline);
+extern void arch_set_core_base(uintptr_t base);
+extern void fpu_initialize(void);
+extern void idt_install(void);
+extern process_t * spawn_kidle(void);
+extern union PML init_page_region[];
 
 uintptr_t _ap_stack_base = 0;
 static volatile int _ap_startup_flag = 0;
@@ -85,12 +90,26 @@ static void short_delay(unsigned long amount) {
 void ap_main(void) {
 	uint32_t ebx;
 	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
-	printf("Hello, world! I am AP %d\n", ebx >> 24);
+	arch_set_core_base((uintptr_t)&processor_local_data[ebx >> 24]);
+	printf("Hello, world! I am AP %d; my gsbase is %p\n", ebx >> 24, (void*)&processor_local_data[ebx >> 24]);
+
+	/* Load the IDT */
+	idt_install();
+	fpu_initialize();
+
+	/* Set our pml pointers */
+	this_core->current_pml = &init_page_region[0];
+
+	/* Spawn our kidle, make it our current process. */
+	this_core->kernel_idle_task = spawn_kidle();
+	this_core->current_process = this_core->kernel_idle_task;
+
+	printf("Ready?\n");
+
+	/* Inform BSP it can continue. */
 	_ap_startup_flag = 1;
-	while (1) {
-		/* AP will just sit here for now... */
-		asm volatile ("hlt");
-	}
+
+	switch_next();
 }
 
 static void lapic_send_ipi(uintptr_t lapic_final, int i, uint32_t val) {

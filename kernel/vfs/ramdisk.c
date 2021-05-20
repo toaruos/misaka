@@ -72,7 +72,7 @@ static void close_ramdisk(fs_node_t * node) {
 static int ioctl_ramdisk(fs_node_t * node, int request, void * argp) {
 	switch (request) {
 		case 0x4001:
-			if (current_process->user != 0) {
+			if (this_core->current_process->user != 0) {
 				return -EPERM;
 			} else {
 				/* Clear all of the memory used by this ramdisk */

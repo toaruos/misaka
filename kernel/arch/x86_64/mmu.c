@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <kernel/string.h>
 #include <kernel/printf.h>
+#include <kernel/process.h>
 #include <kernel/spinlock.h>
 #include <kernel/arch/x86_64/pml.h>
 #include <kernel/arch/x86_64/mmu.h>
@@ -129,8 +130,6 @@ union PML heap_base_pd[512] _pagemap;
 union PML heap_base_pt[512] _pagemap;
 union PML low_base_pmls[34][512] _pagemap;
 
-union PML * current_pml = (union PML *)&init_page_region[0];
-
 void * mmu_map_from_physical(uintptr_t frameaddress) {
 	return (void*)(frameaddress | 0xffffff8000000000UL);
 }
@@ -146,7 +145,7 @@ uintptr_t mmu_map_to_physical(uintptr_t virtAddr) {
 	unsigned int pd_entry   = (pageAddr >> 9)  & 0x1FF;
 	unsigned int pt_entry   = (pageAddr) & 0x1FF;
 
-	union PML * root = current_pml;
+	union PML * root = this_core->current_pml;
 
 	/* Get the PML4 entry for this address */
 	if (!root[pml4_entry].bits.present) return (uintptr_t)-1;
@@ -175,7 +174,7 @@ union PML * mmu_get_page(uintptr_t virtAddr, int flags) {
 	unsigned int pd_entry   = (pageAddr >> 9)  & 0x1FF;
 	unsigned int pt_entry   = (pageAddr) & 0x1FF;
 
-	union PML * root = current_pml;
+	union PML * root = this_core->current_pml;
 
 	/* Get the PML4 entry for this address */
 	if (!root[pml4_entry].bits.present) {
@@ -235,7 +234,7 @@ _noentry:
 
 union PML * mmu_clone(union PML * from) {
 	/* Clone the current PMLs... */
-	if (!from) from = current_pml;
+	if (!from) from = this_core->current_pml;
 
 	/* First get a page for ourselves. */
 	spin_lock(frame_alloc_lock);
@@ -469,7 +468,7 @@ union PML * mmu_get_kernel_directory(void) {
 
 void mmu_set_directory(union PML * new_pml) {
 	if (!new_pml) new_pml = mmu_map_from_physical((uintptr_t)&init_page_region[0]);
-	current_pml = new_pml;
+	this_core->current_pml = new_pml;
 
 	asm volatile (
 		"movq %0, %%cr3"
@@ -489,6 +488,7 @@ extern char end[];
  * @brief Switch from the boot-time 1GiB-page identity map to 4KiB pages.
  */
 void mmu_init(size_t memsize, uintptr_t firstFreePage) {
+	this_core->current_pml = (union PML *)&init_page_region[0];
 
 	/* Map the high base PDP */
 	init_page_region[0][511].raw = (uintptr_t)&high_base_pml | 0x03;
@@ -546,7 +546,7 @@ void mmu_init(size_t memsize, uintptr_t firstFreePage) {
 	}
 
 	asm volatile ("" : : : "memory");
-	current_pml = mmu_map_from_physical((uintptr_t)current_pml);
+	this_core->current_pml = mmu_map_from_physical((uintptr_t)this_core->current_pml);
 	asm volatile ("" : : : "memory");
 
 	/* We are now in the new stuff. */

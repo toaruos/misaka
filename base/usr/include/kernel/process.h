@@ -115,8 +115,38 @@ typedef struct {
 	int is_fswait;
 } sleeper_t;
 
-extern volatile process_t * current_process;
-extern process_t * kernel_idle_task;
+struct ProcessorLocal {
+	/**
+	 * @brief The running process on this core.
+	 *
+	 * The current_process is a pointer to the process struct for
+	 * the process, userspace-thread, or kernel tasklet currently
+	 * executing. Once the scheduler is active, this should always
+	 * be set. If a core is not currently doing, its current_process
+	 * should be the core's idle task.
+	 *
+	 * Because a process's data can be modified by nested interrupt
+	 * contexts, we mark them as volatile to avoid making assumptions
+	 * based on register-stored cached values.
+	 */
+	volatile process_t * current_process;
+	/**
+	 * @brief Idle loop.
+	 *
+	 * This is a special kernel tasklet that sits in a loop
+	 * waiting for an interrupt from a preemption source or hardware
+	 * device. Its context should never be saved, it should never
+	 * be added to a sleep queue, and it should be scheduled whenever
+	 * there is nothing else to do.
+	 */
+	process_t * kernel_idle_task;
+	union PML * current_pml;
+	volatile int sync_depth;
+};
+
+extern struct ProcessorLocal processor_local_data[32];
+extern struct ProcessorLocal __seg_gs * this_core;
+
 extern unsigned long process_append_fd(process_t * proc, fs_node_t * node);
 extern long process_move_fd(process_t * proc, long src, long dest);
 extern void initialize_process_tree(void);

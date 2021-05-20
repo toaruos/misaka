@@ -12,6 +12,7 @@
 #include <kernel/printf.h>
 #include <kernel/pci.h>
 #include <kernel/hashmap.h>
+#include <kernel/process.h>
 #include <kernel/vfs.h>
 #include <kernel/mmu.h>
 #include <kernel/video.h>
@@ -142,7 +143,7 @@ static void pat_initialize(void) {
  * code will be messing with the FPU anyway and we'd probably just
  * waste time with all the interrupts turning it off and on...
  */
-static void fpu_initialize(void) {
+void fpu_initialize(void) {
 	asm volatile (
 		"clts\n"
 		"mov %%cr0, %%rax\n"
@@ -183,6 +184,10 @@ const char * arch_get_loader(void) {
 	}
 }
 
+void arch_set_core_base(uintptr_t base) {
+	asm volatile ("wrmsr" : : "c"(0xc0000101), "d"((uint32_t)(base >> 32)), "a"((uint32_t)(base & 0xFFFFFFFF)));
+}
+
 /**
  * @brief x86-64 multiboot C entrypoint.
  *
@@ -193,11 +198,16 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	 * as soon as we can call printf(), which is as soon as we get to long mode. */
 	early_log_initialize();
 
+	/* Initialize GS base */
+	arch_set_core_base((uintptr_t)&processor_local_data[0]);
+	this_core = 0; /* Always NULL, as that's the offset of the processor-local stuff */
+
 	/* Time the TSC and get the initial boot time from the RTC. */
 	arch_clock_initialize();
 
 	/* Parse multiboot data so we can get memory map, modules, command line, etc. */
 	multiboot_initialize(mboot);
+
 
 	/* memCount and maxAddress come from multiboot data */
 	mmu_init(memCount, maxAddress);
@@ -212,10 +222,10 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	idt_install();
 	fpu_initialize();
 
-	acpi_initialize();
-
 	/* Early generic stuff */
 	generic_startup();
+
+	acpi_initialize();
 
 	/* Scheduler is running, so we can set up drivers. */
 	framebuffer_initialize();

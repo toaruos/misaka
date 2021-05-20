@@ -25,14 +25,14 @@ static size_t hostname_len = 0;
 void ptr_validate(void * ptr, const char * syscall) {
 	if (ptr && !PTR_INRANGE(ptr)) {
 		printf("invalid pointer passed to %s (%p < %p)\n",
-			syscall, ptr, (void*)current_process->image.entry);
+			syscall, ptr, (void*)this_core->current_process->image.entry);
 		while (1) {}
 	}
 }
 
 static long sys_sbrk(ssize_t size) {
 	if (size & 0xFFF) return -EINVAL;
-	volatile process_t * volatile proc = current_process;
+	volatile process_t * volatile proc = this_core->current_process;
 	if (proc->group != 0) {
 		proc = process_from_pid(proc->group);
 	}
@@ -80,7 +80,7 @@ static long sys_sysfunc(long fn, char ** args) {
 			return -EINVAL;
 		/* Begin unpriv */
 		case TOARU_SYS_FUNC_SETHEAP: {
-			volatile process_t * volatile proc = current_process;
+			volatile process_t * volatile proc = this_core->current_process;
 			if (proc->group != 0) proc = process_from_pid(proc->group);
 			spin_lock(proc->image.lock);
 			proc->image.heap = (uintptr_t)args[0];
@@ -89,7 +89,7 @@ static long sys_sysfunc(long fn, char ** args) {
 		}
 		case TOARU_SYS_FUNC_MMAP: {
 			/* FIXME: This whole thing should be removed, tbh */
-			volatile process_t * volatile proc = current_process;
+			volatile process_t * volatile proc = this_core->current_process;
 			if (proc->group != 0) proc = process_from_pid(proc->group);
 			spin_lock(proc->image.lock);
 			/* Align inputs */
@@ -113,13 +113,13 @@ static long sys_sysfunc(long fn, char ** args) {
 				count++;
 				arg++;
 			}
-			current_process->cmdline = malloc(sizeof(char*)*(count+1));
+			this_core->current_process->cmdline = malloc(sizeof(char*)*(count+1));
 			int i = 0;
 			while (i < count) {
-				current_process->cmdline[i] = strdup(args[i]);
+				this_core->current_process->cmdline[i] = strdup(args[i]);
 				i++;
 			}
-			current_process->cmdline[i] = NULL;
+			this_core->current_process->cmdline[i] = NULL;
 			return 0;
 		}
 		case TOARU_SYS_FUNC_DEBUGPRINT:
@@ -132,8 +132,8 @@ static long sys_sysfunc(long fn, char ** args) {
 			return -EINVAL;
 		case TOARU_SYS_FUNC_SETGSBASE:
 			PTR_VALIDATE(args);
-			current_process->thread.context.tls_base = (uintptr_t)args[0];
-			arch_set_tls_base(current_process->thread.context.tls_base);
+			this_core->current_process->thread.context.tls_base = (uintptr_t)args[0];
+			arch_set_tls_base(this_core->current_process->thread.context.tls_base);
 			return 0;
 		default:
 			printf("Bad system function: %ld\n", fn);
@@ -318,7 +318,7 @@ static long sys_open(const char * file, long flags, long mode) {
 		close_fs(node);
 		return -EISDIR;
 	}
-	int fd = process_append_fd((process_t *)current_process, node);
+	int fd = process_append_fd((process_t *)this_core->current_process, node);
 	FD_MODE(fd) = access_bits;
 	if (flags & O_APPEND) {
 		FD_OFFSET(fd) = node->length;
@@ -413,7 +413,7 @@ static long sys_chmod(char * file, long mode) {
 	fs_node_t * fn = kopen(file, 0);
 	if (fn) {
 		/* Can group members change bits? I think it's only owners. */
-		if (current_process->user != 0 && current_process->user != fn->uid) {
+		if (this_core->current_process->user != 0 && this_core->current_process->user != fn->uid) {
 			close_fs(fn);
 			return -EACCES;
 		}
@@ -430,7 +430,7 @@ static long sys_chown(char * file, uid_t uid, uid_t gid) {
 	fs_node_t * fn = kopen(file, 0);
 	if (fn) {
 		/* TODO: Owners can change groups... */
-		if (current_process->user != 0) {
+		if (this_core->current_process->user != 0) {
 			close_fs(fn);
 			return -EACCES;
 		}
@@ -449,17 +449,17 @@ static long sys_gettimeofday(struct timeval * tv, void * tz) {
 }
 
 static long sys_getuid(void) {
-	return (long)current_process->real_user;
+	return (long)this_core->current_process->real_user;
 }
 
 static long sys_geteuid(void) {
-	return (long)current_process->user;
+	return (long)this_core->current_process->user;
 }
 
 static long sys_setuid(uid_t new_uid) {
-	if (current_process->user == USER_ROOT_UID) {
-		current_process->user = new_uid;
-		current_process->real_user = new_uid;
+	if (this_core->current_process->user == USER_ROOT_UID) {
+		this_core->current_process->user = new_uid;
+		this_core->current_process->real_user = new_uid;
 		return 0;
 	}
 	return -EPERM;
@@ -467,20 +467,20 @@ static long sys_setuid(uid_t new_uid) {
 
 static long sys_getpid(void) {
 	/* The user actually wants the pid of the originating thread (which can be us). */
-	return current_process->group ? (long)current_process->group : (long)current_process->id;
+	return this_core->current_process->group ? (long)this_core->current_process->group : (long)this_core->current_process->id;
 }
 
 static long sys_gettid(void) {
-	return (long)current_process->id;
+	return (long)this_core->current_process->id;
 }
 
 static long sys_setsid(void) {
-	if (current_process->job == current_process->group) {
+	if (this_core->current_process->job == this_core->current_process->group) {
 		return -EPERM;
 	}
-	current_process->session = current_process->group;
-	current_process->job = current_process->group;
-	return current_process->session;
+	this_core->current_process->session = this_core->current_process->group;
+	this_core->current_process->job = this_core->current_process->group;
+	return this_core->current_process->session;
 }
 
 static long sys_setpgid(pid_t pid, pid_t pgid) {
@@ -489,7 +489,7 @@ static long sys_setpgid(pid_t pid, pid_t pgid) {
 	}
 	process_t * proc = NULL;
 	if (pid == 0) {
-		proc = (process_t*)current_process;
+		proc = (process_t*)this_core->current_process;
 	} else {
 		proc = process_from_pid(pid);
 	}
@@ -497,7 +497,7 @@ static long sys_setpgid(pid_t pid, pid_t pgid) {
 	if (!proc) {
 		return -ESRCH;
 	}
-	if (proc->session != current_process->session || proc->session == proc->group) {
+	if (proc->session != this_core->current_process->session || proc->session == proc->group) {
 		return -EPERM;
 	}
 
@@ -518,7 +518,7 @@ static long sys_setpgid(pid_t pid, pid_t pgid) {
 static long sys_getpgid(pid_t pid) {
 	process_t * proc;
 	if (pid == 0) {
-		proc = (process_t*)current_process;
+		proc = (process_t*)this_core->current_process;
 	} else {
 		proc = NULL; process_from_pid(pid);
 	}
@@ -554,7 +554,7 @@ static long sys_uname(struct utsname * name) {
 
 static long sys_chdir(char * newdir) {
 	PTR_VALIDATE(newdir);
-	char * path = canonicalize_path(current_process->wd_name, newdir);
+	char * path = canonicalize_path(this_core->current_process->wd_name, newdir);
 	fs_node_t * chd = kopen(path, 0);
 	if (chd) {
 		if ((chd->flags & FS_DIRECTORY) == 0) {
@@ -566,9 +566,9 @@ static long sys_chdir(char * newdir) {
 			return -EACCES;
 		}
 		close_fs(chd);
-		free(current_process->wd_name);
-		current_process->wd_name = malloc(strlen(path) + 1);
-		memcpy(current_process->wd_name, path, strlen(path) + 1);
+		free(this_core->current_process->wd_name);
+		this_core->current_process->wd_name = malloc(strlen(path) + 1);
+		memcpy(this_core->current_process->wd_name, path, strlen(path) + 1);
 		return 0;
 	} else {
 		return -ENOENT;
@@ -578,18 +578,18 @@ static long sys_chdir(char * newdir) {
 static long sys_getcwd(char * buf, size_t size) {
 	if (buf) {
 		PTR_VALIDATE(buf);
-		size_t len = strlen(current_process->wd_name) + 1;
-		return (long)memcpy(buf, current_process->wd_name, size < len ? size : len);
+		size_t len = strlen(this_core->current_process->wd_name) + 1;
+		return (long)memcpy(buf, this_core->current_process->wd_name, size < len ? size : len);
 	}
 	return 0;
 }
 
 static long sys_dup2(int old, int new) {
-	return process_move_fd((process_t *)current_process, old, new);
+	return process_move_fd((process_t *)this_core->current_process, old, new);
 }
 
 static long sys_sethostname(char * new_hostname) {
-	if (current_process->user == USER_ROOT_UID) {
+	if (this_core->current_process->user == USER_ROOT_UID) {
 		PTR_VALIDATE(new_hostname);
 		size_t len = strlen(new_hostname) + 1;
 		if (len > 256) {
@@ -614,7 +614,7 @@ static long sys_mount(char * arg, char * mountpoint, char * type, unsigned long 
 	(void)flags;
 	(void)data;
 
-	if (current_process->user != USER_ROOT_UID) {
+	if (this_core->current_process->user != USER_ROOT_UID) {
 		return -EPERM;
 	}
 
@@ -626,7 +626,7 @@ static long sys_mount(char * arg, char * mountpoint, char * type, unsigned long 
 }
 
 static long sys_umask(long mode) {
-	current_process->mask = mode & 0777;
+	this_core->current_process->mask = mode & 0777;
 	return 0;
 }
 
@@ -674,7 +674,7 @@ static long sys_execve(const char * filename, char *const argv[], char *const en
 	}
 
 	// shm_release_all
-	current_process->cmdline = argv_;
+	this_core->current_process->cmdline = argv_;
 	return exec(filename, argc, argv_, envp_, 0);
 }
 
@@ -700,7 +700,7 @@ static long sys_yield(void) {
 
 static long sys_sleepabs(unsigned long seconds, unsigned long subseconds) {
 	/* Mark us as asleep until <some time period> */
-	sleep_until((process_t *)current_process, seconds, subseconds);
+	sleep_until((process_t *)this_core->current_process, seconds, subseconds);
 
 	/* Switch without adding us to the queue */
 	//printf("process %p (pid=%d) entering sleep until %ld.%06ld\n", current_process, current_process->id, seconds, subseconds);
@@ -735,8 +735,8 @@ static long sys_pipe(int pipes[2]) {
 	open_fs(outpipes[0], 0);
 	open_fs(outpipes[1], 0);
 
-	pipes[0] = process_append_fd((process_t *)current_process, outpipes[0]);
-	pipes[1] = process_append_fd((process_t *)current_process, outpipes[1]);
+	pipes[0] = process_append_fd((process_t *)this_core->current_process, outpipes[0]);
+	pipes[1] = process_append_fd((process_t *)this_core->current_process, outpipes[1]);
 	FD_MODE(pipes[0]) = 03;
 	FD_MODE(pipes[1]) = 03;
 	return 0;
@@ -746,8 +746,8 @@ static long sys_signal(long signum, uintptr_t handler) {
 	if (signum > NUMSIGNALS) {
 		return -EINVAL;
 	}
-	uintptr_t old = current_process->signals[signum];
-	current_process->signals[signum] = handler;
+	uintptr_t old = this_core->current_process->signals[signum];
+	this_core->current_process->signals[signum] = handler;
 	return old;
 }
 
@@ -762,7 +762,7 @@ static long sys_fswait(int c, int fds[]) {
 	}
 	nodes[c] = NULL;
 
-	int result = process_wait_nodes((process_t *)current_process, nodes, -1);
+	int result = process_wait_nodes((process_t *)this_core->current_process, nodes, -1);
 	free(nodes);
 	return result;
 }
@@ -778,7 +778,7 @@ static long sys_fswait_timeout(int c, int fds[], int timeout) {
 	}
 	nodes[c] = NULL;
 
-	int result = process_wait_nodes((process_t *)current_process, nodes, timeout);
+	int result = process_wait_nodes((process_t *)this_core->current_process, nodes, timeout);
 	free(nodes);
 	return result;
 }
@@ -832,8 +832,8 @@ static long sys_openpty(int * master, int * slave, char * name, void * _ign0, vo
 	pty_create(size, &fs_master, &fs_slave);
 
 	/* Append the master and slave to the calling process */
-	*master = process_append_fd((process_t *)current_process, fs_master);
-	*slave  = process_append_fd((process_t *)current_process, fs_slave);
+	*master = process_append_fd((process_t *)this_core->current_process, fs_master);
+	*slave  = process_append_fd((process_t *)this_core->current_process, fs_slave);
 
 	FD_MODE(*master) = 03;
 	FD_MODE(*slave) = 03;
@@ -849,14 +849,14 @@ static long sys_kill(pid_t process, int signal) {
 	if (process < -1) {
 		return group_send_signal(-process, signal, 0);
 	} else if (process == 0) {
-		return group_send_signal(current_process->job, signal, 0);
+		return group_send_signal(this_core->current_process->job, signal, 0);
 	} else {
 		return send_signal(process, signal, 0);
 	}
 }
 
 static long sys_reboot(void) {
-	if (current_process->user != USER_ROOT_UID) {
+	if (this_core->current_process->user != USER_ROOT_UID) {
 		return -EPERM;
 	}
 
@@ -954,7 +954,7 @@ void syscall_handler(struct regs * r) {
 	}
 
 	scall_func func = syscalls[arch_syscall_number(r)];
-	current_process->syscall_registers = r;
+	this_core->current_process->syscall_registers = r;
 	arch_syscall_return(r, func(
 		arch_syscall_arg0(r), arch_syscall_arg1(r), arch_syscall_arg2(r),
 		arch_syscall_arg3(r), arch_syscall_arg4(r)));

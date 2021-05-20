@@ -82,8 +82,8 @@ static int symlink_tmpfs(fs_node_t * parent, char * target, char * name) {
 	t->target = strdup(target);
 
 	t->mask = 0777;
-	t->uid = current_process->user;
-	t->gid = current_process->user;
+	t->uid = this_core->current_process->user;
+	t->gid = this_core->current_process->user;
 
 	spin_lock(tmpfs_lock);
 	list_insert(d->files, t);
@@ -449,8 +449,8 @@ static int create_tmpfs(fs_node_t *parent, char *name, uint16_t permission) {
 
 	struct tmpfs_file * t = tmpfs_file_new(name);
 	t->mask = permission;
-	t->uid = current_process->user;
-	t->gid = current_process->user;
+	t->uid = this_core->current_process->user;
+	t->gid = this_core->current_process->user;
 
 	spin_lock(tmpfs_lock);
 	list_insert(d->files, t);
@@ -477,8 +477,8 @@ static int mkdir_tmpfs(fs_node_t * parent, char * name, uint16_t permission) {
 
 	struct tmpfs_dir * out = tmpfs_dir_new(name, d);
 	out->mask = permission;
-	out->uid  = current_process->user;
-	out->gid  = current_process->user;
+	out->uid  = this_core->current_process->user;
+	out->gid  = this_core->current_process->user;
 
 	spin_lock(tmpfs_lock);
 	list_insert(d->files, out);

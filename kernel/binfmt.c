@@ -114,8 +114,8 @@ int exec(const char * path, int argc, char *const argv[], char *const env[], int
 	unsigned char head[4];
 	read_fs(file, 0, 4, head);
 
-	current_process->name = strdup(path);
-	gettimeofday((struct timeval*)&current_process->start, NULL);
+	this_core->current_process->name = strdup(path);
+	gettimeofday((struct timeval*)&this_core->current_process->start, NULL);
 
 	for (unsigned int i = 0; i < sizeof(fmts) / sizeof(exec_def_t); ++i) {
 		if (matches(fmts[i].bytes, head, fmts[i].match)) {
@@ -138,11 +138,11 @@ int system(const char * path, int argc, char *const argv[], char *const envin[])
 	}
 	argv_[argc] = NULL;
 	char * env[] = {NULL};
-	current_process->thread.page_directory = malloc(sizeof(page_directory_t));
-	current_process->thread.page_directory->directory = mmu_clone(NULL); /* base PML? for exec? */
-	current_process->thread.page_directory->refcount = 1;
-	mmu_set_directory(current_process->thread.page_directory->directory);
-	current_process->cmdline = (char**)argv_;
+	this_core->current_process->thread.page_directory = malloc(sizeof(page_directory_t));
+	this_core->current_process->thread.page_directory->directory = mmu_clone(NULL); /* base PML? for exec? */
+	this_core->current_process->thread.page_directory->refcount = 1;
+	mmu_set_directory(this_core->current_process->thread.page_directory->directory);
+	this_core->current_process->cmdline = (char**)argv_;
 	exec(path,argc,argv_,envin ? envin : env,0);
 	return -EINVAL;
 }

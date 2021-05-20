@@ -238,7 +238,7 @@ static size_t chunk_size (shm_chunk_t * chunk) {
 
 void * shm_obtain (char * path, size_t * size) {
 	spin_lock(bsl);
-	volatile process_t * volatile proc = current_process;
+	volatile process_t * volatile proc = this_core->current_process;
 
 	if (proc->group != 0) {
 		proc = process_from_pid(proc->group);
@@ -278,7 +278,7 @@ void * shm_obtain (char * path, size_t * size) {
 
 int shm_release (char * path) {
 	spin_lock(bsl);
-	process_t * proc = (process_t *)current_process;
+	process_t * proc = (process_t *)this_core->current_process;
 
 	if (proc->group != 0) {
 		proc = process_from_pid(proc->group);

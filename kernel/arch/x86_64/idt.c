@@ -177,12 +177,12 @@ void irq_uninstall_handler(size_t irq) {
 }
 
 struct regs * isr_handler(struct regs * r) {
-	current_process->interrupt_registers = r;
+	this_core->current_process->interrupt_registers = r;
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
 			uintptr_t faulting_address;
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
-			if (!current_process) {
+			if (!this_core->current_process) {
 				printf("Page fault in early startup at %#zx\n", faulting_address);
 				dump_regs(r);
 				break;
@@ -196,22 +196,22 @@ struct regs * isr_handler(struct regs * r) {
 				return_from_signal_handler();
 				break;
 			}
-			printf("Page fault in pid=%d (%s) at %#zx\n", (int)current_process->id, current_process->name, faulting_address);
+			printf("Page fault in pid=%d (%s) at %#zx\n", (int)this_core->current_process->id, this_core->current_process->name, faulting_address);
 			dump_regs(r);
-			if (current_process->flags & PROC_FLAG_IS_TASKLET) {
+			if (this_core->current_process->flags & PROC_FLAG_IS_TASKLET) {
 				printf("Segmentation fault in kernel worker thread, halting.\n");
 				arch_fatal();
 			}
-			send_signal(current_process->id, SIGSEGV, 1);
+			send_signal(this_core->current_process->id, SIGSEGV, 1);
 			break;
 		}
 		case 13: /* GPF */ {
-			if (!current_process) {
+			if (!this_core->current_process) {
 				printf("GPF in early startup\n");
 				dump_regs(r);
 				break;
 			}
-			send_signal(current_process->id, SIGSEGV, 1);
+			send_signal(this_core->current_process->id, SIGSEGV, 1);
 			break;
 		}
 		case 8: /* Double fault */ {
@@ -233,12 +233,12 @@ struct regs * isr_handler(struct regs * r) {
 		}
 		default: {
 			if (r->int_no < 32) {
-				if (!current_process) {
+				if (!this_core->current_process) {
 					printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
 					break;
 				}
-				printf("Killing %d from unhandled %s\n", current_process->id, exception_messages[r->int_no]);
-				send_signal(current_process->id, SIGILL, 1);
+				printf("Killing %d from unhandled %s\n", this_core->current_process->id, exception_messages[r->int_no]);
+				send_signal(this_core->current_process->id, SIGILL, 1);
 			} else {
 				for (size_t i = 0; i < IRQ_CHAIN_DEPTH; i++) {
 					irq_handler_chain_t handler = irq_routines[i * IRQ_CHAIN_SIZE + (r->int_no - 32)];
@@ -259,7 +259,7 @@ struct regs * isr_handler(struct regs * r) {
 
 done:
 
-	if (current_process == kernel_idle_task && process_queue->head) {
+	if (this_core->current_process == this_core->kernel_idle_task && process_queue->head) {
 		/* If this is kidle and we got here, instead of finishing the interrupt
 		 * we can just switch task and there will probably be something else
 		 * to run that was awoken by the interrupt. */

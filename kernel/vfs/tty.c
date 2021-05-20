@@ -278,7 +278,7 @@ int pty_ioctl(pty_t * pty, int request, void * argp) {
 			return 0;
 		case IOCTLTTYLOGIN:
 			/* Set the user id of the login user */
-			if (current_process->user != 0) return -EPERM;
+			if (this_core->current_process->user != 0) return -EPERM;
 			if (!argp) return -EINVAL;
 			validate(argp);
 			pty->slave->uid = *(int*)argp;
@@ -444,7 +444,7 @@ fs_node_t * pty_master_create(pty_t * pty) {
 
 	fnode->name[0] = '\0';
 	snprintf(fnode->name, 100, "pty master");
-	fnode->uid   = current_process->user;
+	fnode->uid   = this_core->current_process->user;
 	fnode->gid   = 0;
 	fnode->mask  = 0666;
 	fnode->flags = FS_PIPE;
@@ -473,7 +473,7 @@ fs_node_t * pty_slave_create(pty_t * pty) {
 
 	fnode->name[0] = '\0';
 	snprintf(fnode->name, 100, "pty slave");
-	fnode->uid   = current_process->user;
+	fnode->uid   = this_core->current_process->user;
 	fnode->gid   = 0;
 	fnode->mask  = 0620;
 	fnode->flags = FS_CHARDEVICE;
@@ -505,9 +505,9 @@ static int isatty(fs_node_t * node) {
 static int readlink_dev_tty(fs_node_t * node, char * buf, size_t size) {
 	pty_t * pty = NULL;
 
-	for (unsigned int i = 0; i < ((current_process->fds->length < 3) ? current_process->fds->length : 3); ++i) {
-		if (isatty(current_process->fds->entries[i])) {
-			pty = (pty_t *)current_process->fds->entries[i]->device;
+	for (unsigned int i = 0; i < ((this_core->current_process->fds->length < 3) ? this_core->current_process->fds->length : 3); ++i) {
+		if (isatty(this_core->current_process->fds->entries[i])) {
+			pty = (pty_t *)this_core->current_process->fds->entries[i]->device;
 			break;
 		}
 	}

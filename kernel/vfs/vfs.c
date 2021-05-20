@@ -42,7 +42,7 @@ hashmap_t * fs_types = NULL;
 int has_permission(fs_node_t * node, int permission_bit) {
 	if (!node) return 0;
 
-	if (current_process->user == 0 && permission_bit != 01) { /* even root needs exec to exec */
+	if (this_core->current_process->user == 0 && permission_bit != 01) { /* even root needs exec to exec */
 		return 1;
 	}
 
@@ -52,7 +52,7 @@ int has_permission(fs_node_t * node, int permission_bit) {
 	//uint8_t group_perm = (permissions >> 3) & 07;
 	uint8_t other_perm = (permissions) & 07;
 
-	if (current_process->user == node->uid) {
+	if (this_core->current_process->user == node->uid) {
 		return (permission_bit & user_perm);
 		/* TODO group permissions? */
 	} else {
@@ -337,7 +337,7 @@ int ioctl_fs(fs_node_t *node, int request, void * argp) {
 
 int create_file_fs(char *name, uint16_t permission) {
 	fs_node_t * parent;
-	char *cwd = (char *)(current_process->wd_name);
+	char *cwd = (char *)(this_core->current_process->wd_name);
 	char *path = canonicalize_path(cwd, name);
 
 	char * parent_path = malloc(strlen(path) + 5);
@@ -387,7 +387,7 @@ int create_file_fs(char *name, uint16_t permission) {
 
 int unlink_fs(char * name) {
 	fs_node_t * parent;
-	char *cwd = (char *)(current_process->wd_name);
+	char *cwd = (char *)(this_core->current_process->wd_name);
 	char *path = canonicalize_path(cwd, name);
 
 	char * parent_path = malloc(strlen(path) + 5);
@@ -436,7 +436,7 @@ int unlink_fs(char * name) {
 
 int mkdir_fs(char *name, uint16_t permission) {
 	fs_node_t * parent;
-	char *cwd = (char *)(current_process->wd_name);
+	char *cwd = (char *)(this_core->current_process->wd_name);
 	char *path = canonicalize_path(cwd, name);
 
 	if (!name || !strlen(name)) {
@@ -514,7 +514,7 @@ fs_node_t *clone_fs(fs_node_t *source) {
 
 int symlink_fs(char * target, char * name) {
 	fs_node_t * parent;
-	char *cwd = (char *)(current_process->wd_name);
+	char *cwd = (char *)(this_core->current_process->wd_name);
 	char *path = canonicalize_path(cwd, name);
 
 	char * parent_path = malloc(strlen(path) + 5);
@@ -1098,6 +1098,6 @@ fs_node_t *kopen_recur(const char *filename, uint64_t flags, uint64_t symlink_de
 fs_node_t *kopen(const char *filename, uint64_t flags) {
 	debug_print(NOTICE, "kopen(%s)", filename);
 
-	return kopen_recur(filename, flags, 0, (char *)(current_process->wd_name));
+	return kopen_recur(filename, flags, 0, (char *)(this_core->current_process->wd_name));
 }
 

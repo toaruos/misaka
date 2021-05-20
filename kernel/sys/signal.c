@@ -91,10 +91,10 @@ void handle_signal(process_t * proc, signal_t * sig) {
 			task_exit(((128 + signum) << 8) | signum);
 			__builtin_unreachable();
 		} else if (dowhat == 3) {
-			current_process->flags |= PROC_FLAG_SUSPENDED;
-			current_process->status = 0x7F;
+			this_core->current_process->flags |= PROC_FLAG_SUSPENDED;
+			this_core->current_process->status = 0x7F;
 
-			process_t * parent = process_get_parent((process_t *)current_process);
+			process_t * parent = process_get_parent((process_t *)this_core->current_process);
 
 			if (parent && !(parent->flags & PROC_FLAG_FINISHED)) {
 				wakeup_queue(parent->wait_queue);
@@ -125,7 +125,7 @@ void return_from_signal_handler(void) {
 	}
 
 	spin_lock(sig_lock);
-	list_insert(rets_from_sig, (process_t *)current_process);
+	list_insert(rets_from_sig, (process_t *)this_core->current_process);
 	spin_unlock(sig_lock);
 
 	switch_next();
@@ -144,7 +144,7 @@ void fix_signal_stacks(void) {
 			}
 			process_t * p = n->value;
 			free(n);
-			if (p == current_process) {
+			if (p == this_core->current_process) {
 				redo_me = 1;
 				continue;
 			}
@@ -162,7 +162,7 @@ void fix_signal_stacks(void) {
 	}
 	if (redo_me) {
 		spin_lock(sig_lock);
-		list_insert(rets_from_sig, (process_t *)current_process);
+		list_insert(rets_from_sig, (process_t *)this_core->current_process);
 		spin_unlock(sig_lock);
 		switch_next();
 	}
@@ -176,8 +176,8 @@ int send_signal(pid_t process, int signal, int force_root) {
 		return -ESRCH;
 	}
 
-	if (!force_root && receiver->user != current_process->user && current_process->user != USER_ROOT_UID) {
-		if (!(signal == SIGCONT && receiver->session == current_process->session)) {
+	if (!force_root && receiver->user != this_core->current_process->user && this_core->current_process->user != USER_ROOT_UID) {
+		if (!(signal == SIGCONT && receiver->session == this_core->current_process->session)) {
 			return -EPERM;
 		}
 	}
@@ -226,7 +226,7 @@ int send_signal(pid_t process, int signal, int force_root) {
 
 	list_insert(receiver->signal_queue, sig);
 
-	if (receiver == current_process) {
+	if (receiver == this_core->current_process) {
 		/* Forces us to be rescheduled and enter signal handler */
 		if (receiver->signal_kstack) {
 			switch_next();
@@ -247,7 +247,7 @@ int group_send_signal(pid_t group, int signal, int force_root) {
 		process_t * proc = node->value;
 		if (proc->group == proc->id && proc->job == group) {
 			/* Only thread group leaders */
-			if (proc->group == current_process->group) {
+			if (proc->group == this_core->current_process->group) {
 				kill_self = 1;
 			} else {
 				if (send_signal(proc->group, signal, force_root) == 0) {
@@ -258,7 +258,7 @@ int group_send_signal(pid_t group, int signal, int force_root) {
 	}
 
 	if (kill_self) {
-		if (send_signal(current_process->group, signal, force_root) == 0) {
+		if (send_signal(this_core->current_process->group, signal, force_root) == 0) {
 			killed_something = 1;
 		}
 	}

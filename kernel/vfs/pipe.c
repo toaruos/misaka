@@ -99,7 +99,7 @@ uint64_t read_pipe(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buf
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
 
 	if (pipe->dead) {
-		send_signal(current_process->id, SIGPIPE, 1);
+		send_signal(this_core->current_process->id, SIGPIPE, 1);
 		return 0;
 	}
 
@@ -127,7 +127,7 @@ uint64_t write_pipe(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *bu
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
 
 	if (pipe->dead) {
-		send_signal(current_process->id, SIGPIPE, 1);
+		send_signal(this_core->current_process->id, SIGPIPE, 1);
 		return 0;
 	}
 

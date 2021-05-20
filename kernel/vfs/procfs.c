@@ -794,7 +794,7 @@ static struct dirent * readdir_procfs_root(fs_node_t *node, uint64_t index) {
 static int readlink_self(fs_node_t * node, char * buf, size_t size) {
 	char tmp[30];
 	size_t req;
-	snprintf(tmp, 100, "/proc/%d", current_process->id);
+	snprintf(tmp, 100, "/proc/%d", this_core->current_process->id);
 	req = strlen(tmp) + 1;
 
 	if (size < req) {

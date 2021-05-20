@@ -93,7 +93,7 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 
 	if (file->mask & 0x800) {
 		/* setuid */
-		current_process->user = file->uid;
+		this_core->current_process->user = file->uid;
 	}
 
 	/* First check if it is dynamic and needs an interpreter */
@@ -106,7 +106,7 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 			const char * args[nargc+1]; /* oh yeah, great, a stack-allocated dynamic array... wonderful... */
 			args[0] = "ld.so";
 			args[1] = "-e";
-			args[2] = strdup(current_process->name);
+			args[2] = strdup(this_core->current_process->name);
 			int j = 3;
 			for (int i = 0; i < argc; ++i, ++j) {
 				args[j] = argv[i];
@@ -122,11 +122,11 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	uintptr_t heapBase = 0;
 
 	mmu_set_directory(NULL);
-	process_release_directory(current_process->thread.page_directory);
-	current_process->thread.page_directory = malloc(sizeof(page_directory_t));
-	current_process->thread.page_directory->refcount = 1;
-	current_process->thread.page_directory->directory = mmu_clone(NULL);
-	mmu_set_directory(current_process->thread.page_directory->directory);
+	process_release_directory(this_core->current_process->thread.page_directory);
+	this_core->current_process->thread.page_directory = malloc(sizeof(page_directory_t));
+	this_core->current_process->thread.page_directory->refcount = 1;
+	this_core->current_process->thread.page_directory->directory = mmu_clone(NULL);
+	mmu_set_directory(this_core->current_process->thread.page_directory->directory);
 
 	for (int i = 0; i < header.e_phnum; ++i) {
 		Elf64_Phdr phdr;
@@ -154,8 +154,8 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 		/* TODO: Should also be setting up TLS PHDRs. */
 	}
 
-	current_process->image.heap  = (heapBase + 0xFFF) & (~0xFFF);
-	current_process->image.entry = header.e_entry;
+	this_core->current_process->image.heap  = (heapBase + 0xFFF) & (~0xFFF);
+	this_core->current_process->image.entry = header.e_entry;
 
 	close_fs(file);
 
@@ -207,9 +207,9 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	}
 
 	PUSH(uintptr_t, 0);
-	PUSH(uintptr_t, current_process->user);
+	PUSH(uintptr_t, this_core->current_process->user);
 	PUSH(uintptr_t, 11); /* AT_UID */
-	PUSH(uintptr_t, current_process->real_user);
+	PUSH(uintptr_t, this_core->current_process->real_user);
 	PUSH(uintptr_t, 12); /* AT_EUID */
 	PUSH(uintptr_t, 0);
 
@@ -226,7 +226,7 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	PUSH(uintptr_t, argc);
 
 	arch_enter_critical();
-	arch_set_kernel_stack(current_process->image.stack);
+	arch_set_kernel_stack(this_core->current_process->image.stack);
 	arch_enter_user(header.e_entry, argc, _argv, _envp, userstack);
 
 	return -EINVAL;

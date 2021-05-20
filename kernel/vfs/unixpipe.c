@@ -61,7 +61,7 @@ static uint64_t write_unixpipe(fs_node_t * node, uint64_t offset, uint64_t size,
 	while (written < size) {
 		if (self->read_closed) {
 			/* SIGPIPE to current process */
-			send_signal(current_process->id, SIGPIPE, 1);
+			send_signal(this_core->current_process->id, SIGPIPE, 1);
 
 			return written;
 		}

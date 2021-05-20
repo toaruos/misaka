@@ -99,7 +99,7 @@ static int ioctl_vid(fs_node_t * node, int request, void * argp) {
 			return 0;
 		case IO_VID_SIGNAL:
 			/* ioctl to register for a signal (vid device change? idk) on display change */
-			display_change_recipient = current_process->id;
+			display_change_recipient = this_core->current_process->id;
 			return 0;
 		case IO_VID_SET:
 			/* Initiate mode setting */
@@ -111,7 +111,7 @@ static int ioctl_vid(fs_node_t * node, int request, void * argp) {
 			memcpy(argp, lfb_driver_name, strlen(lfb_driver_name));
 			return 0;
 		case IO_VID_REINIT:
-			if (current_process->user != 0) {
+			if (this_core->current_process->user != 0) {
 				return -EPERM;
 			}
 			validate(argp);

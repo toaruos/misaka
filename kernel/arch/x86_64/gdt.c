@@ -98,8 +98,9 @@ void gdt_copy_to_trampoline(int ap, char * trampoline) {
 }
 
 void arch_set_kernel_stack(uintptr_t stack) {
-	/* FIXME needs to be local AP's GDT... */
-	gdt[0].tss.rsp[0] = stack;
+	uint32_t ebx;
+	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
+	gdt[ebx >> 24].tss.rsp[0] = stack;
 }
 
 void arch_set_tls_base(uintptr_t tlsbase) {

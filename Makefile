@@ -12,10 +12,10 @@ AR = ${TARGET}-ar
 AS = ${TARGET}-as
 OC = ${TARGET}-objcopy
 
-KERNEL_CFLAGS  = -ffreestanding -O2 -std=c11 -g -static
+KERNEL_CFLAGS  = -ffreestanding -O2 -std=gnu11 -g -static
 
 # Arch-specific arguments
-KERNEL_CFLAGS += -mno-red-zone -fno-omit-frame-pointer
+KERNEL_CFLAGS += -mno-red-zone -fno-omit-frame-pointer -mfsgsbase
 KERNEL_CFLAGS += -mgeneral-regs-only -z max-page-size=0x1000 -nostdlib
 
 # Warnings

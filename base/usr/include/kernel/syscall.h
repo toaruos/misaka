@@ -3,18 +3,18 @@
 #include <kernel/process.h>
 
 #define FD_INRANGE(FD) \
-	((FD) < (int)current_process->fds->length && (FD) >= 0)
+	((FD) < (int)this_core->current_process->fds->length && (FD) >= 0)
 #define FD_ENTRY(FD) \
-	(current_process->fds->entries[(FD)])
+	(this_core->current_process->fds->entries[(FD)])
 #define FD_CHECK(FD) \
 	(FD_INRANGE(FD) && FD_ENTRY(FD))
 #define FD_OFFSET(FD) \
-	(current_process->fds->offsets[(FD)])
+	(this_core->current_process->fds->offsets[(FD)])
 #define FD_MODE(FD) \
-	(current_process->fds->modes[(FD)])
+	(this_core->current_process->fds->modes[(FD)])
 
 #define PTR_INRANGE(PTR) \
-	((uintptr_t)(PTR) > current_process->image.entry && ((uintptr_t)(PTR) < 0x8000000000000000))
+	((uintptr_t)(PTR) > this_core->current_process->image.entry && ((uintptr_t)(PTR) < 0x8000000000000000))
 #define PTR_VALIDATE(PTR) \
 	ptr_validate((void *)(PTR), __func__)
 extern void ptr_validate(void * ptr, const char * syscall);
