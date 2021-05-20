@@ -431,6 +431,7 @@ void mmu_free(union PML * from) {
 		return;
 	}
 
+	spin_lock(frame_alloc_lock);
 	for (size_t i = 0; i < 256; ++i) {
 		if (from[i].bits.present) {
 			union PML * pdp_in = mmu_map_from_physical((uintptr_t)from[i].bits.page << 12);
@@ -460,6 +461,7 @@ void mmu_free(union PML * from) {
 	}
 
 	mmu_frame_clear((((uintptr_t)from) & 0xFFFFFFFF));
+	spin_unlock(frame_alloc_lock);
 }
 
 union PML * mmu_get_kernel_directory(void) {
