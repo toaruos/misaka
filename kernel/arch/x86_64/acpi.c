@@ -112,7 +112,8 @@ void ap_main(void) {
 	switch_next();
 }
 
-static void lapic_send_ipi(uintptr_t lapic_final, int i, uint32_t val) {
+uintptr_t lapic_final = 0xffffff1fd0000000;
+void lapic_send_ipi(int i, uint32_t val) {
 	*((volatile uint32_t*)(lapic_final + 0x310)) = (i << 24);
 	asm volatile ("":::"memory");
 	*((volatile uint32_t*)(lapic_final + 0x300)) = val;
@@ -173,7 +174,6 @@ void acpi_initialize(void) {
 	if (!lapic_base || cores <= 1) return;
 
 	/* Allocate a virtual address with which we can poke the lapic */
-	uintptr_t lapic_final = 0xffffff1fd0000000;
 	union PML * p = mmu_get_page(lapic_final, MMU_GET_MAKE);
 	mmu_frame_map_address(p, MMU_FLAG_KERNEL | MMU_FLAG_WRITABLE | MMU_FLAG_NOCACHE | MMU_FLAG_WRITETHROUGH, lapic_base);
 	mmu_invalidate(lapic_final);
@@ -191,11 +191,11 @@ void acpi_initialize(void) {
 		_ap_stack_base = (uintptr_t)valloc(KERNEL_STACK_SIZE)+ KERNEL_STACK_SIZE;
 
 		/* Send INIT */
-		lapic_send_ipi(lapic_final, i, 0x4500);
+		lapic_send_ipi(i, 0x4500);
 		short_delay(5000UL);
 
 		/* Send SIPI */
-		lapic_send_ipi(lapic_final, i, 0x4601);
+		lapic_send_ipi(i, 0x4601);
 
 		/* Wait for AP to signal it is ready before starting next AP */
 		do { asm volatile ("pause" : : : "memory"); } while (!_ap_startup_flag);
