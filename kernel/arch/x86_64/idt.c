@@ -177,13 +177,15 @@ void irq_uninstall_handler(size_t irq) {
 }
 
 struct regs * isr_handler(struct regs * r) {
+	uintptr_t ebx;
+	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
 	this_core->current_process->interrupt_registers = r;
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
 			uintptr_t faulting_address;
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
 			if (!this_core->current_process) {
-				printf("Page fault in early startup at %#zx\n", faulting_address);
+				printf("Page fault in early startup at %#zx (%zd)\n", faulting_address, ebx >> 24);
 				dump_regs(r);
 				break;
 			}
@@ -196,7 +198,7 @@ struct regs * isr_handler(struct regs * r) {
 				return_from_signal_handler();
 				break;
 			}
-			printf("Page fault in pid=%d (%s) at %#zx\n", (int)this_core->current_process->id, this_core->current_process->name, faulting_address);
+			printf("Page fault in pid=%d (%s; cpu=%zd) at %#zx\n", (int)this_core->current_process->id, this_core->current_process->name, ebx >> 24, faulting_address);
 			dump_regs(r);
 			if (this_core->current_process->flags & PROC_FLAG_IS_TASKLET) {
 				printf("Segmentation fault in kernel worker thread, halting.\n");

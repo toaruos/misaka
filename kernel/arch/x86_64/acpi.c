@@ -49,6 +49,8 @@ void __ap_bootstrap(void) {
 		"mov $0x10, %%ax\n"
 		"mov %%ax, %%ds\n"
 		"mov %%ax, %%ss\n"
+		"mov $0x2b, %%ax\n"
+		"ltr %%ax\n"
 		".extern _ap_stack_base\n"
 		"mov _ap_stack_base,%%esp\n"
 		".extern ap_main\n"
@@ -68,7 +70,7 @@ extern void gdt_copy_to_trampoline(int ap, char * trampoline);
 extern void arch_set_core_base(uintptr_t base);
 extern void fpu_initialize(void);
 extern void idt_install(void);
-extern process_t * spawn_kidle(void);
+extern process_t * spawn_kidle(int);
 extern union PML init_page_region[];
 
 uintptr_t _ap_stack_base = 0;
@@ -101,7 +103,7 @@ void ap_main(void) {
 	this_core->current_pml = &init_page_region[0];
 
 	/* Spawn our kidle, make it our current process. */
-	this_core->kernel_idle_task = spawn_kidle();
+	this_core->kernel_idle_task = spawn_kidle(0);
 	this_core->current_process = this_core->kernel_idle_task;
 
 	printf("Ready?\n");

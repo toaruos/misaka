@@ -53,6 +53,7 @@ static spin_lock_t tree_lock = { 0 };
 static spin_lock_t process_queue_lock = { 0 };
 static spin_lock_t wait_lock_tmp = { 0 };
 static spin_lock_t sleep_lock = { 0 };
+static spin_lock_t talking = { 0 };
 
 /**
  * @brief Restore the context of the next available process's kernel thread.
@@ -79,7 +80,6 @@ static spin_lock_t sleep_lock = { 0 };
  * @returns never.
  */
 void switch_next(void) {
-
 	/* Get the next available process, discarded anything in the queue
 	 * marked as finished. */
 	do {
@@ -290,6 +290,12 @@ static void _kidle(void) {
 	}
 }
 
+static void _kburn(void) {
+	while (1) {
+		if (((volatile list_t *)process_queue)->head) switch_next();
+	}
+}
+
 /**
  * @brief Release a process's paging data.
  *
@@ -309,7 +315,7 @@ void process_release_directory(page_directory_t * dir) {
 	}
 }
 
-process_t * spawn_kidle(void) {
+process_t * spawn_kidle(int bsp) {
 	process_t * idle = calloc(1,sizeof(process_t));
 	idle->id = -1;
 	idle->name = strdup("[kidle]");
@@ -317,7 +323,7 @@ process_t * spawn_kidle(void) {
 	idle->image.stack = (uintptr_t)valloc(KERNEL_STACK_SIZE)+ KERNEL_STACK_SIZE;
 
 	/* TODO arch_initialize_context(uintptr_t) ? */
-	idle->thread.context.ip = (uintptr_t)&_kidle;
+	idle->thread.context.ip = bsp ? (uintptr_t)&_kidle : (uintptr_t)&_kburn;
 	idle->thread.context.sp = idle->image.stack;
 	idle->thread.context.bp = idle->image.stack;
 
@@ -543,7 +549,9 @@ void make_process_ready(volatile process_t * proc) {
  * TODO This needs more locking for SMP...
  */
 process_t * next_ready_process(void) {
+	spin_lock(process_queue_lock);
 	if (!process_queue->head) {
+		spin_unlock(process_queue_lock);
 		return this_core->kernel_idle_task;
 	}
 
@@ -555,6 +563,7 @@ process_t * next_ready_process(void) {
 
 	node_t * np = list_dequeue(process_queue);
 	process_t * next = np->value;
+	spin_unlock(process_queue_lock);
 	return next;
 }
 
@@ -759,7 +768,7 @@ long process_move_fd(process_t * proc, long src, long dest) {
 
 void tasking_start(void) {
 	this_core->current_process = spawn_init();
-	this_core->kernel_idle_task = spawn_kidle();
+	this_core->kernel_idle_task = spawn_kidle(1);
 }
 
 static int wait_candidate(volatile process_t * parent, int pid, int options, volatile process_t * proc) {
