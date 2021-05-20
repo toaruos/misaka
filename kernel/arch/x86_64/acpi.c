@@ -70,6 +70,7 @@ extern void gdt_copy_to_trampoline(int ap, char * trampoline);
 extern void arch_set_core_base(uintptr_t base);
 extern void fpu_initialize(void);
 extern void idt_install(void);
+extern void pat_initialize(void);
 extern process_t * spawn_kidle(int);
 extern union PML init_page_region[];
 
@@ -98,6 +99,7 @@ void ap_main(void) {
 	/* Load the IDT */
 	idt_install();
 	fpu_initialize();
+	pat_initialize();
 
 	/* Set our pml pointers */
 	this_core->current_pml = &init_page_region[0];

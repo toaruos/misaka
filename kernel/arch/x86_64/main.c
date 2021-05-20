@@ -122,7 +122,7 @@ static void symbols_install(void) {
  *        already sane - we should probably initialize all
  *        of the entries ourselves.
  */
-static void pat_initialize(void) {
+void pat_initialize(void) {
 	asm volatile (
 		"mov $0x277, %%ecx\n" /* IA32_MSR_PAT */
 		"rdmsr\n"
