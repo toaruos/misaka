@@ -223,7 +223,7 @@ int send_signal(pid_t process, int signal, int force_root) {
 	} else {
 		spin_unlock(receiver->sched_lock);
 	}
-	if (!process_is_ready(receiver)) {
+	if (!process_is_ready(receiver) && !(receiver->flags & PROC_FLAG_RUNNING)) {
 		make_process_ready(receiver);
 	}
 

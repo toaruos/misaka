@@ -80,6 +80,9 @@ static spin_lock_t talking = { 0 };
  * @returns never.
  */
 void switch_next(void) {
+	/* Mark the current thread as not running */
+	this_core->current_process->flags &= ~(PROC_FLAG_RUNNING);
+
 	/* Get the next available process, discarded anything in the queue
 	 * marked as finished. */
 	do {
@@ -110,7 +113,7 @@ void switch_next(void) {
 	}
 
 	/* Mark the process as running and started. */
-	this_core->current_process->flags |= PROC_FLAG_RUNNING | PROC_FLAG_STARTED;
+	this_core->current_process->flags |= PROC_FLAG_STARTED;
 
 	/* Restore the execution context of this process's kernel thread. */
 	arch_restore_context(&this_core->current_process->thread);
@@ -169,9 +172,6 @@ void switch_task(uint8_t reschedule) {
 
 		return;
 	}
-
-	/* We mark the thread as not running so it shows as such in `ps`, mostly. */
-	this_core->current_process->flags &= ~(PROC_FLAG_RUNNING);
 
 	/* If this is a normal yield, we reschedule.
 	 * XXX: Is this going to work okay with SMP? I think this whole thing
@@ -518,9 +518,7 @@ void make_process_ready(volatile process_t * proc) {
 		} else {
 			/* This was blocked on a semaphore we can interrupt. */
 			proc->flags |= PROC_FLAG_SLEEP_INT;
-			spin_lock(wait_lock_tmp);
 			list_delete((list_t*)proc->sleep_node.owner, (node_t*)&proc->sleep_node);
-			spin_unlock(wait_lock_tmp);
 		}
 	}
 
@@ -567,6 +565,7 @@ process_t * next_ready_process(void) {
 
 	node_t * np = list_dequeue(process_queue);
 	process_t * next = np->value;
+	next->flags |= PROC_FLAG_RUNNING;
 
 	asm volatile ("":::"memory");
 	spin_unlock(process_queue_lock);
@@ -595,15 +594,15 @@ process_t * next_ready_process(void) {
  */
 int wakeup_queue(list_t * queue) {
 	int awoken_processes = 0;
+	spin_lock(wait_lock_tmp);
 	while (queue->length > 0) {
-		spin_lock(wait_lock_tmp);
 		node_t * node = list_pop(queue);
-		spin_unlock(wait_lock_tmp);
 		if (!(((process_t *)node->value)->flags & PROC_FLAG_FINISHED)) {
 			make_process_ready(node->value);
 		}
 		awoken_processes++;
 	}
+	spin_unlock(wait_lock_tmp);
 	return awoken_processes;
 }
 
@@ -619,10 +618,9 @@ int wakeup_queue(list_t * queue) {
  */
 int wakeup_queue_interrupted(list_t * queue) {
 	int awoken_processes = 0;
+	spin_lock(wait_lock_tmp);
 	while (queue->length > 0) {
-		spin_lock(wait_lock_tmp);
 		node_t * node = list_pop(queue);
-		spin_unlock(wait_lock_tmp);
 		if (!(((process_t *)node->value)->flags & PROC_FLAG_FINISHED)) {
 			process_t * proc = node->value;
 			proc->flags |= PROC_FLAG_SLEEP_INT;
@@ -630,6 +628,7 @@ int wakeup_queue_interrupted(list_t * queue) {
 		}
 		awoken_processes++;
 	}
+	spin_unlock(wait_lock_tmp);
 	return awoken_processes;
 }
 
@@ -681,8 +680,12 @@ void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
 				process_t * process = proc->process;
 				process->sleep_node.owner = NULL;
 				process->timed_sleep_node = NULL;
-				if (!process_is_ready(process)) {
+				if (!process_is_ready(process) && !(process->flags & PROC_FLAG_RUNNING)) {
+					spin_unlock(sleep_lock);
+					spin_lock(wait_lock_tmp);
 					make_process_ready(process);
+					spin_unlock(wait_lock_tmp);
+					spin_lock(sleep_lock);
 				}
 			}
 			free(proc);
@@ -939,7 +942,9 @@ int process_awaken_from_fswait(process_t * process, int index) {
 		}
 	}
 	process->timeout_node = NULL;
+	spin_lock(wait_lock_tmp);
 	make_process_ready(process);
+	spin_unlock(wait_lock_tmp);
 	spin_unlock(process->sched_lock);
 	return 0;
 }

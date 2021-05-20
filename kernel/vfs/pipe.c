@@ -84,12 +84,14 @@ static inline void pipe_increment_write_by(pipe_device_t * pipe, size_t amount) 
 }
 
 static void pipe_alert_waiters(pipe_device_t * pipe) {
+	spin_lock(pipe->alert_lock);
 	while (pipe->alert_waiters->head) {
 		node_t * node = list_dequeue(pipe->alert_waiters);
 		process_t * p = node->value;
 		process_alert_node(p, pipe);
 		free(node);
 	}
+	spin_unlock(pipe->alert_lock);
 }
 
 uint64_t read_pipe(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
@@ -197,10 +199,15 @@ static int pipe_check(fs_node_t * node) {
 static int pipe_wait(fs_node_t * node, void * process) {
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
 
+	spin_lock(pipe->alert_lock);
 	if (!list_find(pipe->alert_waiters, process)) {
 		list_insert(pipe->alert_waiters, process);
 	}
+	spin_unlock(pipe->alert_lock);
+
+	spin_lock(pipe->wait_lock);
 	list_insert(((process_t *)process)->node_waits, pipe);
+	spin_unlock(pipe->wait_lock);
 
 	return 0;
 }

@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <kernel/vfs.h>
 #include <kernel/list.h>
+#include <kernel/spinlock.h>
 
 typedef struct _pipe_device {
 	uint8_t * buffer;
@@ -21,6 +22,9 @@ typedef struct _pipe_device {
 	list_t * wait_queue_writers;
 	int dead;
 	list_t * alert_waiters;
+
+	spin_lock_t alert_lock;
+	spin_lock_t wait_lock;
 } pipe_device_t;
 
 fs_node_t * make_pipe(size_t size);
