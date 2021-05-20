@@ -578,6 +578,11 @@ void * sbrk(size_t bytes) {
 		return heapStart;
 	}
 
+	if (bytes > 0xF00000) {
+		printf("Suspiciously large size requested.\n");
+		while (1) {};
+	}
+
 	spin_lock(kheap_lock);
 	void * out = heapStart;
 	if ((uintptr_t)heapStart >= 0x800000000) {

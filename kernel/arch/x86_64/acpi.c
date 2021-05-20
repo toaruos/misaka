@@ -94,7 +94,7 @@ void ap_main(void) {
 	uint32_t ebx;
 	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
 	arch_set_core_base((uintptr_t)&processor_local_data[ebx >> 24]);
-	printf("Hello, world! I am AP %d; my gsbase is %p\n", ebx >> 24, (void*)&processor_local_data[ebx >> 24]);
+	//printf("Hello, world! I am AP %d; my gsbase is %p\n", ebx >> 24, (void*)&processor_local_data[ebx >> 24]);
 
 	/* Load the IDT */
 	idt_install();
@@ -107,8 +107,6 @@ void ap_main(void) {
 	/* Spawn our kidle, make it our current process. */
 	this_core->kernel_idle_task = spawn_kidle(0);
 	this_core->current_process = this_core->kernel_idle_task;
-
-	printf("Ready?\n");
 
 	/* Inform BSP it can continue. */
 	_ap_startup_flag = 1;

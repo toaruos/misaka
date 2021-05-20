@@ -5,6 +5,7 @@
 #include <kernel/vfs.h>
 #include <kernel/tree.h>
 #include <kernel/list.h>
+#include <kernel/spinlock.h>
 #include <kernel/arch/x86_64/pml.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -104,6 +105,8 @@ typedef struct process {
 	thread_t thread;
 	thread_t signal_state;
 	image_t image;
+
+	spin_lock_t sched_lock;
 
 	uintptr_t signals[NUMSIGNALS+1];
 } process_t;

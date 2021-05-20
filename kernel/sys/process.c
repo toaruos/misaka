@@ -90,6 +90,13 @@ void switch_next(void) {
 	mmu_set_directory(this_core->current_process->thread.page_directory->directory);
 	arch_set_kernel_stack(this_core->current_process->image.stack);
 
+	if ((this_core->current_process->flags & PROC_FLAG_FINISHED) ||  (!this_core->current_process->signal_queue)) {
+		printf("Should not have this process...\n");
+		if (this_core->current_process->flags & PROC_FLAG_FINISHED) printf("It is marked finished.\n");
+		if (!this_core->current_process->signal_queue) printf("It doesn't have a signal queue.\n");
+		arch_fatal();
+	}
+
 	if (this_core->current_process->flags & PROC_FLAG_STARTED) {
 		/* If this process has a signal pending, we save its current context - including
 		 * the entire kernel stack - before resuming switch_task. */
@@ -127,10 +134,6 @@ void switch_task(uint8_t reschedule) {
 	/* switch_task() called but the scheduler isn't enabled? Resume... this is probably a bug. */
 	if (!this_core->current_process) return;
 
-	/* We don't want to be interrupted in the middle of a task switch, so block interrupts
-	 * until we get back from arch_save_context the second time around. */
-	arch_enter_critical();
-
 	if (this_core->current_process == this_core->kernel_idle_task && __builtin_return_address(0) != &_ret_from_preempt_source) {
 		printf("Context switch from kernel_idle_task triggered from somewhere other than pre-emption source. Halting.\n");
 		printf("This generally means that a driver responding to interrupts has attempted to yield in its interrupt context.\n");
@@ -164,8 +167,6 @@ void switch_task(uint8_t reschedule) {
 			}
 		}
 
-		/* Re-enable interrupts before returning to outer context */
-		arch_exit_critical();
 		return;
 	}
 
@@ -508,11 +509,9 @@ void make_process_ready(volatile process_t * proc) {
 		if (proc->sleep_node.owner == sleep_queue) {
 			/* The sleep queue is slightly special... */
 			if (proc->timed_sleep_node) {
-				arch_enter_critical();
 				spin_lock(sleep_lock);
 				list_delete(sleep_queue, proc->timed_sleep_node);
 				spin_unlock(sleep_lock);
-				arch_exit_critical();
 				proc->sleep_node.owner = NULL;
 				free(proc->timed_sleep_node->value);
 			}
@@ -536,7 +535,9 @@ void make_process_ready(volatile process_t * proc) {
 	}
 
 	spin_lock(process_queue_lock);
+	asm volatile ("":::"memory");
 	list_append(process_queue, (node_t*)&proc->sched_node);
+	asm volatile ("":::"memory");
 	spin_unlock(process_queue_lock);
 }
 
@@ -550,7 +551,10 @@ void make_process_ready(volatile process_t * proc) {
  */
 process_t * next_ready_process(void) {
 	spin_lock(process_queue_lock);
+	asm volatile ("":::"memory");
+
 	if (!process_queue->head) {
+		asm volatile ("":::"memory");
 		spin_unlock(process_queue_lock);
 		return this_core->kernel_idle_task;
 	}
@@ -563,7 +567,11 @@ process_t * next_ready_process(void) {
 
 	node_t * np = list_dequeue(process_queue);
 	process_t * next = np->value;
+
+	asm volatile ("":::"memory");
 	spin_unlock(process_queue_lock);
+	asm volatile ("":::"memory");
+
 	return next;
 }
 
@@ -661,7 +669,6 @@ int process_is_ready(process_t * proc) {
  * as timed out before the process is rescheduled.
  */
 void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
-	arch_enter_critical();
 	spin_lock(sleep_lock);
 	if (sleep_queue->length) {
 		sleeper_t * proc = ((sleeper_t *)sleep_queue->head->value);
@@ -688,7 +695,6 @@ void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
 		}
 	}
 	spin_unlock(sleep_lock);
-	arch_exit_critical();
 }
 
 /**
@@ -699,14 +705,14 @@ void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
  * sleep will not be resumed by the kernel.
  */
 void sleep_until(process_t * process, unsigned long seconds, unsigned long subseconds) {
+	spin_lock(sleep_lock);
 	if (this_core->current_process->sleep_node.owner) {
+		spin_unlock(sleep_lock);
 		/* Can't sleep, sleeping already */
 		return;
 	}
 	process->sleep_node.owner = sleep_queue;
 
-	arch_enter_critical();
-	spin_lock(sleep_lock);
 	node_t * before = NULL;
 	foreach(node, sleep_queue) {
 		sleeper_t * candidate = ((sleeper_t *)node->value);
@@ -726,7 +732,6 @@ void sleep_until(process_t * process, unsigned long seconds, unsigned long subse
 	proc->is_fswait = 0;
 	process->timed_sleep_node = list_insert_after(sleep_queue, before, proc);
 	spin_unlock(sleep_lock);
-	arch_exit_critical();
 }
 
 uint8_t process_compare(void * proc_v, void * pid_v) {
@@ -892,7 +897,6 @@ int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
 		unsigned long s, ss;
 		relative_time(0, timeout * 1000, &s, &ss);
 
-		arch_enter_critical();
 		spin_lock(sleep_lock);
 		node_t * before = NULL;
 		foreach(node, sleep_queue) {
@@ -910,7 +914,6 @@ int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
 		list_insert(((process_t *)process)->node_waits, proc);
 		process->timeout_node = list_insert_after(sleep_queue, before, proc);
 		spin_unlock(sleep_lock);
-		arch_exit_critical();
 	} else {
 		process->timeout_node = NULL;
 	}
@@ -937,6 +940,7 @@ int process_awaken_from_fswait(process_t * process, int index) {
 	}
 	process->timeout_node = NULL;
 	make_process_ready(process);
+	spin_unlock(process->sched_lock);
 	return 0;
 }
 
@@ -947,7 +951,10 @@ int process_alert_node(process_t * process, void * value) {
 		return 0;
 	}
 
+	spin_lock(process->sched_lock);
+
 	if (!process->node_waits) {
+		spin_unlock(process->sched_lock);
 		return 0; /* Possibly already returned. Wait for another call. */
 	}
 
@@ -959,6 +966,7 @@ int process_alert_node(process_t * process, void * value) {
 		index++;
 	}
 
+	spin_unlock(process->sched_lock);
 	return -1;
 }
 
@@ -1028,7 +1036,6 @@ void task_exit(int retval) {
 							*((type *) stack) = item
 
 pid_t fork(void) {
-	arch_enter_critical();
 	uintptr_t sp, bp;
 	process_t * parent = (process_t*)this_core->current_process;
 	union PML * directory = mmu_clone(parent->thread.page_directory->directory);
@@ -1053,12 +1060,10 @@ pid_t fork(void) {
 	new_proc->thread.context.ip = (uintptr_t)&arch_resume_user;
 	if (parent->flags & PROC_FLAG_IS_TASKLET) new_proc->flags |= PROC_FLAG_IS_TASKLET;
 	make_process_ready(new_proc);
-	arch_exit_critical();
 	return new_proc->id;
 }
 
 pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
-	arch_enter_critical();
 	uintptr_t sp, bp;
 	process_t * parent = (process_t *)this_core->current_process;
 	process_t * new_proc = spawn_process(this_core->current_process, 1);
@@ -1093,12 +1098,10 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	new_proc->thread.context.ip = (uintptr_t)&arch_resume_user;
 	if (parent->flags & PROC_FLAG_IS_TASKLET) new_proc->flags |= PROC_FLAG_IS_TASKLET;
 	make_process_ready(new_proc);
-	arch_exit_critical();
 	return new_proc->id;
 }
 
 process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * name, void * argp) {
-	arch_enter_critical();
 	process_t * proc = calloc(1,sizeof(process_t));
 
 	proc->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
@@ -1147,6 +1150,5 @@ process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * na
 
 	make_process_ready(proc);
 
-	arch_exit_critical();
 	return proc;
 }

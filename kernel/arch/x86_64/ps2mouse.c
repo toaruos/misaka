@@ -169,7 +169,6 @@ static int ioctl_mouse(fs_node_t * node, int request, void * argp) {
 
 void mouse_install(void) {
 	uint8_t status, result;
-	arch_enter_critical();
 
 	while ((inportb(0x64) & 1)) {
 		inportb(0x60);
@@ -226,7 +225,6 @@ void mouse_install(void) {
 	mouse_read();
 
 	irq_install_handler(MOUSE_IRQ, mouse_handler, "ps2 mouse");
-	arch_exit_critical();
 
 	uint8_t tmp = inportb(0x61);
 	outportb(0x61, tmp | 0x80);

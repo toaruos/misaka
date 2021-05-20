@@ -84,13 +84,11 @@ static inline void pipe_increment_write_by(pipe_device_t * pipe, size_t amount) 
 }
 
 static void pipe_alert_waiters(pipe_device_t * pipe) {
-	if (pipe->alert_waiters) {
-		while (pipe->alert_waiters->head) {
-			node_t * node = list_dequeue(pipe->alert_waiters);
-			process_t * p = node->value;
-			process_alert_node(p, pipe);
-			free(node);
-		}
+	while (pipe->alert_waiters->head) {
+		node_t * node = list_dequeue(pipe->alert_waiters);
+		process_t * p = node->value;
+		process_alert_node(p, pipe);
+		free(node);
 	}
 }
 
@@ -199,10 +197,6 @@ static int pipe_check(fs_node_t * node) {
 static int pipe_wait(fs_node_t * node, void * process) {
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
 
-	if (!pipe->alert_waiters) {
-		pipe->alert_waiters = list_create("pipe alert waiters",pipe);
-	}
-
 	if (!list_find(pipe->alert_waiters, process)) {
 		list_insert(pipe->alert_waiters, process);
 	}
@@ -254,6 +248,7 @@ fs_node_t * make_pipe(size_t size) {
 
 	pipe->wait_queue_writers = list_create("pipe writers",pipe);
 	pipe->wait_queue_readers = list_create("pip readers",pipe);
+	pipe->alert_waiters = list_create("pipe alert waiters",pipe);
 
 	return fnode;
 }

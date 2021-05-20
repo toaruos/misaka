@@ -29,33 +29,6 @@
 		             "2:"); \
 	} while (0)
 
-#define SYNC_CLI() asm volatile("cli")
-#define SYNC_STI() asm volatile("sti")
-
-void arch_enter_critical(void) {
-	uint64_t rflags;
-	asm volatile (
-		"pushfq\n"
-		"popq %0\n"
-		"cli\n"
-		: "=A"(rflags)
-	);
-	if (rflags & (1 << 9)) {
-		this_core->sync_depth = 1;
-	} else {
-		this_core->sync_depth++;
-	}
-}
-
-void arch_exit_critical(void) {
-	if (this_core->sync_depth <= 1) {
-		SYNC_STI();
-		this_core->sync_depth = 0;
-		return;
-	}
-	this_core->sync_depth--;
-}
-
 static void irq_remap(void) {
 	/* Cascade initialization */
 	outportb(PIC1_COMMAND, ICW1_INIT|ICW1_ICW4); PIC_WAIT();

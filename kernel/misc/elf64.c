@@ -225,7 +225,6 @@ int elf_exec(const char * path, fs_node_t * file, int argc, const char *const ar
 	char ** _argv = (char**)userstack;
 	PUSH(uintptr_t, argc);
 
-	arch_enter_critical();
 	arch_set_kernel_stack(this_core->current_process->image.stack);
 	arch_enter_user(header.e_entry, argc, _argv, _envp, userstack);
 

@@ -158,7 +158,6 @@ const char * get_irq_handler(int irq, int chain) {
 }
 
 void irq_install_handler(size_t irq, irq_handler_chain_t handler, const char * desc) {
-	arch_enter_critical();
 	for (size_t i = 0; i < IRQ_CHAIN_DEPTH; i++) {
 		if (irq_routines[i * IRQ_CHAIN_SIZE + irq])
 			continue;
@@ -166,20 +165,28 @@ void irq_install_handler(size_t irq, irq_handler_chain_t handler, const char * d
 		_irq_handler_descriptions[i * IRQ_CHAIN_SIZE + irq ] = desc;
 		break;
 	}
-	arch_exit_critical();
 }
 
 void irq_uninstall_handler(size_t irq) {
-	arch_enter_critical();
 	for (size_t i = 0; i < IRQ_CHAIN_DEPTH; i++)
 		irq_routines[i * IRQ_CHAIN_SIZE + irq] = NULL;
-	arch_exit_critical();
 }
 
 struct regs * isr_handler(struct regs * r) {
 	uintptr_t ebx;
 	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
+
+	uint32_t base_high, base_low;
+	asm volatile ("rdmsr" : "=d"(base_high), "=a"(base_low) : "c"(0xc0000101));
+
+	if (base_high || ((uintptr_t)base_low < (uintptr_t)&processor_local_data[0]) || ((uintptr_t)base_low > (uintptr_t)&processor_local_data[33])) {
+		printf("Bad GS segment in kernel.\n");
+		dump_regs(r);
+		while (1) {};
+	}
+
 	this_core->current_process->interrupt_registers = r;
+
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
 			uintptr_t faulting_address;
@@ -202,6 +209,10 @@ struct regs * isr_handler(struct regs * r) {
 			dump_regs(r);
 			if (this_core->current_process->flags & PROC_FLAG_IS_TASKLET) {
 				printf("Segmentation fault in kernel worker thread, halting.\n");
+				arch_fatal();
+			}
+			if (r->cs == 0x08) {
+				printf("Fault in kernel, halting.\n");
 				arch_fatal();
 			}
 			send_signal(this_core->current_process->id, SIGSEGV, 1);
