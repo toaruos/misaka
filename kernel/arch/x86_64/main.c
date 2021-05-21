@@ -164,7 +164,7 @@ void fpu_initialize(void) {
 	: : : "rax");
 }
 
-static struct multiboot * mboot_struct = NULL;
+struct multiboot * mboot_struct = NULL;
 
 /**
  * x86-64: The kernel commandline is retrieved from the multiboot struct.

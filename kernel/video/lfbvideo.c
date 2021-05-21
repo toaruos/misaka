@@ -277,27 +277,15 @@ static void graphics_install_bochs(uint16_t resolution_x, uint16_t resolution_y)
 	finalize_graphics("bochs");
 }
 
-struct multiboot * mboot_ptr = NULL;
+extern struct multiboot * mboot_struct;
 
 static void graphics_install_preset(uint16_t w, uint16_t h) {
 	/* Extract framebuffer information from multiboot */
-	lfb_vid_memory = mmu_map_from_physical(mboot_ptr->framebuffer_addr);
-	lfb_resolution_x = mboot_ptr->framebuffer_width;
-	lfb_resolution_y = mboot_ptr->framebuffer_height;
-	lfb_resolution_s = mboot_ptr->framebuffer_pitch;
+	lfb_vid_memory = mmu_map_from_physical(mboot_struct->framebuffer_addr);
+	lfb_resolution_x = mboot_struct->framebuffer_width;
+	lfb_resolution_y = mboot_struct->framebuffer_height;
+	lfb_resolution_s = mboot_struct->framebuffer_pitch;
 	lfb_resolution_b = 32;
-
-	//debug_print(WARNING, "Mode was set by bootloader: %dx%d bpp should be 32, framebuffer is at 0x%x", w, h, (uintptr_t)lfb_vid_memory);
-
-	#if 0
-	for (uintptr_t i = (uintptr_t)lfb_vid_memory; i <= (uintptr_t)lfb_vid_memory + w * h * 4; i += 0x1000) {
-		page_t * p = get_page(i, 1, kernel_directory);
-		dma_frame(p, 0, 1, i);
-		p->pat = 1;
-		p->writethrough = 1;
-		p->cachedisable = 1;
-	}
-	#endif
 	finalize_graphics("preset");
 }
 
@@ -478,10 +466,10 @@ static int lfb_init(const char * c) {
 	} else if (!strcmp(argv[0],"vmware")) {
 		/* VMware SVGA */
 		graphics_install_vmware(x,y);
-#if 0
 	} else if (!strcmp(argv[0],"preset")) {
 		/* Set by bootloader (UEFI) */
 		graphics_install_preset(x,y);
+#if 0
 	} else if (!strcmp(argv[0],"kludge")) {
 		/* Old hack to find vid memory from the VGA window */
 		graphics_install_kludge(x,y);
@@ -496,7 +484,7 @@ static int lfb_init(const char * c) {
 
 int framebuffer_initialize(void) {
 	lfb_device = lfb_video_device_create();
-	lfb_init("auto,1440,900");
+	lfb_init("preset,1440,900");
 	vfs_mount("/dev/fb0", lfb_device);
 
 #if 0
