@@ -208,7 +208,6 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	/* Parse multiboot data so we can get memory map, modules, command line, etc. */
 	multiboot_initialize(mboot);
 
-
 	/* memCount and maxAddress come from multiboot data */
 	mmu_init(memCount, maxAddress);
 

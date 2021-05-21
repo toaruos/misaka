@@ -129,6 +129,7 @@ union PML heap_base_pml[512] _pagemap;
 union PML heap_base_pd[512] _pagemap;
 union PML heap_base_pt[512] _pagemap;
 union PML low_base_pmls[34][512] _pagemap;
+union PML twom_high_pds[4][512] _pagemap;
 
 void * mmu_map_from_physical(uintptr_t frameaddress) {
 	return (void*)(frameaddress | 0xffffff8000000000UL);
@@ -496,12 +497,18 @@ void mmu_init(size_t memsize, uintptr_t firstFreePage) {
 	init_page_region[0][511].raw = (uintptr_t)&high_base_pml | 0x03;
 	init_page_region[0][510].raw = (uintptr_t)&heap_base_pml | 0x03;
 
-	/* Identity map from -128GB in the boot PML using 1GB pages */
-	high_base_pml[0].raw = (uintptr_t)0x00000000 | 0x83;
-	high_base_pml[1].raw = (uintptr_t)0x40000000 | 0x83;
-	high_base_pml[2].raw = (uintptr_t)0x80000000 | 0x83;
-	high_base_pml[3].raw = (uintptr_t)0xC0000000 | 0x83;
-	high_base_pml[4].raw = (uintptr_t)0x100000000 | 0x83;
+	/* Identity map from -128GB in the boot PML using 2MiB pages */
+	high_base_pml[0].raw = (uintptr_t)&twom_high_pds[0] | 0x03;
+	high_base_pml[1].raw = (uintptr_t)&twom_high_pds[1] | 0x03;
+	high_base_pml[2].raw = (uintptr_t)&twom_high_pds[2] | 0x03;
+	high_base_pml[3].raw = (uintptr_t)&twom_high_pds[3] | 0x03;
+
+	for (uintptr_t i = 0; i < 512; i += 1) {
+		twom_high_pds[0][i].raw = (0x00000000 + i * 0x200000) | 0x83;
+		twom_high_pds[1][i].raw = (0x40000000 + i * 0x200000) | 0x83;
+		twom_high_pds[2][i].raw = (0x80000000 + i * 0x200000) | 0x83;
+		twom_high_pds[3][i].raw = (0xC0000000 + i * 0x200000) | 0x83;
+	}
 
 	/* Map low base PDP */
 	low_base_pmls[0][0].raw = (uintptr_t)&low_base_pmls[1] | 0x07;

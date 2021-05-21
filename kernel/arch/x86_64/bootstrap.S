@@ -81,15 +81,9 @@ start:
 jmp_to_long:
     .extern init_page_region
 
-    /* Set up initial page region */
+    /* Set up initial page region, which was zero'd for us by the loader */
     mov $init_page_region, %edi
     mov %edi, %cr3
-    xor %eax, %eax
-
-    /* memset(init_page_region, 0, 4096) */
-    mov $4096, %ecx
-    rep stos %eax,%es:(%edi)
-    mov %cr3, %edi
 
     /* PML4[0] = &PDP[0] | (PRESENT, WRITABLE, USER) */
     mov $0x1007, %eax
@@ -97,26 +91,23 @@ jmp_to_long:
     mov %eax, (%edi)
 
     /* PDP[0] = &PD[0] | (PRESENT, WRITABLE, USER) */
-    //add $0x1000, %edi
-    //mov $0x1003, %eax
-    //add %edi, %eax
-    //mov %eax, (%edi)
+    add $0x1000, %edi
+    mov $0x1003, %eax
+    add %edi, %eax
+    mov %eax, (%edi)
 
-    /* PD[0] = &PT[0] | (PRESENT, WRITABLE, USER) */
-    //add $0x1000, %edi
-    //mov $0x1003, %eax
-    //add %edi, %eax
-    //mov %eax, (%edi)
-
-    /* Set 512 page table entries to present */
+    /* Set 32 2MiB pages to map 64MiB of low memory temporarily, which should
+       be enough to get us through our C MMU initialization where we then
+       use 2MiB pages to map all of the 4GiB standard memory space and map
+       a much more restricted subset of the kernel in the lower address space. */
     add $0x1000, %edi
 
     mov $0x87, %ebx
-    mov $4, %ecx
+    mov $32, %ecx
 
 .set_entry:
     mov %ebx, (%edi)
-    add $0x40000000, %ebx
+    add $0x200000, %ebx
     add $8, %edi
     loop .set_entry
 
