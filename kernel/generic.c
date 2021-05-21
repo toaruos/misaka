@@ -1,3 +1,14 @@
+/**
+ * @file  kernel/generic.c
+ * @brief Architecture-neutral startup sequences.
+ *
+ * The generic startup sequence is broken into two parts:
+ * @c generic_startup should be called as soon as the platform
+ * has configured memory and is ready for the VFS and scheduler
+ * to be initialized. @c generic_main should be called after
+ * the platform has set up its own device drivers, loaded any
+ * early filesystems, and is ready to yield control to init.
+ */
 #include <kernel/generic.h>
 #include <kernel/args.h>
 #include <kernel/process.h>
@@ -17,6 +28,7 @@ extern int system(const char * path, int argc, const char ** argv, const char **
 extern void snd_install(void);
 
 void generic_startup(void) {
+	args_parse(arch_get_cmdline());
 	initialize_process_tree();
 	shm_install();
 	vfs_install();
@@ -28,7 +40,6 @@ void generic_startup(void) {
 	procfs_initialize();
 	random_initialize();
 	snd_install();
-	args_parse(arch_get_cmdline());
 	tasking_start();
 }
 

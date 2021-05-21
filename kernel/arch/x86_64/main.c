@@ -19,6 +19,7 @@
 #include <kernel/generic.h>
 #include <kernel/gzip.h>
 #include <kernel/ramdisk.h>
+#include <kernel/args.h>
 
 #include <kernel/arch/x86_64/ports.h>
 #include <kernel/arch/x86_64/idt.h>
@@ -34,7 +35,6 @@ extern char end[];
 extern void gdt_install(void);
 extern void idt_install(void);
 extern void pit_initialize(void);
-extern fs_node_t * lfb_device;
 extern void acpi_initialize(void);
 extern void portio_initialize(void);
 extern void keyboard_install(void);
@@ -167,6 +167,50 @@ void fpu_initialize(void) {
 struct multiboot * mboot_struct = NULL;
 
 /**
+ * @brief Decompress compressed ramdisks and hand them to the ramdisk driver.
+ *
+ * Reads through the list of modules passed by a multiboot-compatible loader
+ * and determines if they are gzip-compressed, decompresses if they are, and
+ * finally hands them to the VFS driver. The VFS ramdisk driver takes control
+ * of linear sets of physical pages, and handles mapping them somewhere to
+ * provide reads in userspace, as well as freeing them if requested.
+ */
+void mount_multiboot_ramdisks(struct multiboot * mboot) {
+	/* ramdisk_mount takes physical pages, it will map them itself. */
+	mboot_mod_t * mods = mmu_map_from_physical(mboot->mods_addr);
+
+	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
+		/* Is this a gzipped data source? */
+		uint8_t * data = mmu_map_from_physical(mods[i].mod_start);
+		if (data[0] == 0x1F && data[1] == 0x8B) {
+			/* Yes - decompress it first */
+			uint32_t decompressedSize = *(uint32_t*)mmu_map_from_physical(mods[i].mod_end - sizeof(uint32_t));
+			size_t pageCount = (((size_t)decompressedSize + 0xFFF) & ~(0xFFF)) >> 12;
+			uintptr_t physicalAddress = mmu_allocate_n_frames(pageCount) << 12;
+			if (physicalAddress == (uintptr_t)-1) {
+				printf("gzip: failed to allocate pages for decompressed payload, skipping\n");
+				continue;
+			}
+			gzip_inputPtr = (void*)data;
+			gzip_outputPtr = mmu_map_from_physical(physicalAddress);
+			/* Do the deed */
+			if (gzip_decompress()) {
+				printf("gzip: failed to decompress payload, skipping\n");
+				continue;
+			}
+			ramdisk_mount(physicalAddress, decompressedSize);
+			/* Free the pages from the original mod */
+			for (size_t j = mods[i].mod_start; j < mods[i].mod_end; j += 0x1000) {
+				mmu_frame_clear(j);
+			}
+		} else {
+			/* No, or it doesn't look like one - mount it directly */
+			ramdisk_mount(mods[i].mod_start, mods[i].mod_end - mods[i].mod_start);
+		}
+	}
+}
+
+/**
  * x86-64: The kernel commandline is retrieved from the multiboot struct.
  */
 const char * arch_get_cmdline(void) {
@@ -184,6 +228,9 @@ const char * arch_get_loader(void) {
 	}
 }
 
+/**
+ * x86-64: The GS register, which is set by a pair of MSRs, tracks kernel stack.
+ */
 void arch_set_core_base(uintptr_t base) {
 	asm volatile ("wrmsr" : : "c"(0xc0000101), "d"((uint32_t)(base >> 32)), "a"((uint32_t)(base & 0xFFFFFFFF)));
 	asm volatile ("wrmsr" : : "c"(0xc0000102), "d"((uint32_t)(base >> 32)), "a"((uint32_t)(base & 0xFFFFFFFF)));
@@ -225,45 +272,27 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	/* Early generic stuff */
 	generic_startup();
 
-	acpi_initialize();
-
-	/* Scheduler is running, so we can set up drivers. */
-	framebuffer_initialize();
-
-	/* ramdisk_mount takes physical pages, it will map them itself. */
-	mboot_mod_t * mods = mmu_map_from_physical(mboot->mods_addr);
-	for (unsigned int i = 0; i < mboot->mods_count; ++i) {
-		/* Is this a gzipped data source? */
-		uint8_t * data = mmu_map_from_physical(mods[i].mod_start);
-		if (data[0] == 0x1F && data[1] == 0x8B) {
-			/* Yes - decompress it first */
-			uint32_t decompressedSize = *(uint32_t*)mmu_map_from_physical(mods[i].mod_end - sizeof(uint32_t));
-			size_t pageCount = (((size_t)decompressedSize + 0xFFF) & ~(0xFFF)) >> 12;
-			uintptr_t physicalAddress = mmu_allocate_n_frames(pageCount) << 12;
-			if (physicalAddress == (uintptr_t)-1) {
-				printf("gzip: failed to allocate pages for decompressed payload, skipping\n");
-				continue;
-			}
-			gzip_inputPtr = (void*)data;
-			gzip_outputPtr = mmu_map_from_physical(physicalAddress);
-			/* Do the deed */
-			if (gzip_decompress()) {
-				printf("gzip: failed to decompress payload, skipping\n");
-				continue;
-			}
-			ramdisk_mount(physicalAddress, decompressedSize);
-			/* Free the pages from the original mod */
-			for (size_t j = mods[i].mod_start; j < mods[i].mod_end; j += 0x1000) {
-				mmu_frame_clear(j);
-			}
-		} else {
-			/* No, or it doesn't look like one - mount it directly */
-			ramdisk_mount(mods[i].mod_start, mods[i].mod_end - mods[i].mod_start);
-		}
+	/* Should we override the TSC timing? */
+	if (args_present("tsc_mhz")) {
+		extern unsigned long tsc_mhz;
+		tsc_mhz = atoi(args_value("tsc_mhz"));
 	}
 
-	/* We set up the pit and interrupt stuff pretty late, after the scheduler is ready. */
+	/* Allow SMP to disabled with an arg */
+	if (!args_present("nosmp")) {
+		acpi_initialize();
+	}
+
+	/* Scheduler is running and we have parsed the kcmdline, initialize video. */
+	framebuffer_initialize();
+
+	/* Decompress and mount all initial ramdisks. */
+	mount_multiboot_ramdisks(mboot);
+
+	/* Set up preempt source */
 	pit_initialize();
+
+	/* Install generic PC device drivers. */
 	keyboard_install();
 	mouse_install();
 	serial_initialize();
@@ -272,13 +301,20 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	/* Special drivers should probably be modules... */
 	extern void ac97_install(void);
 	ac97_install();
-	extern void vmware_initialize(void);
-	vmware_initialize();
-	extern void vbox_initialize(void);
-	vbox_initialize();
+
+	if (!args_present("novmware")) {
+		extern void vmware_initialize(void);
+		vmware_initialize();
+	}
+
+	if (!args_present("novbox")) {
+		extern void vbox_initialize(void);
+		vbox_initialize();
+	}
+
 	extern void e1000_initialize(void);
 	e1000_initialize();
 
-	/* Yield the generic main, which starts /bin/init */
+	/* Yield to the generic main, which starts /bin/init */
 	return generic_main();
 }

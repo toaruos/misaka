@@ -126,7 +126,7 @@ static uint64_t boot_time = 0;
 uint64_t timer_ticks = 0;
 uint64_t timer_subticks = 0;
 
-static unsigned long tsc_mhz = 3500; /* XXX */
+unsigned long tsc_mhz = 3500; /* XXX */
 
 static inline uint64_t read_tsc(void) {
 	uint32_t lo, hi;

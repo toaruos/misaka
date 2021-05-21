@@ -1,3 +1,13 @@
+/**
+ * @file  kernel/video/lfbvideo.c
+ * @brief Shared linear framebuffer drivers for qemu/bochs/vbox, vmware,
+ *        and platforms that can modeset in the bootloader.
+ *
+ * Detects a small set of video devices that can be configured with simple
+ * port writes and provides a runtime modesetting API for them. For other
+ * devices, provides framebuffer mapping and resolution querying for modes
+ * that have been preconfigured by the bootloader.
+ */
 #include <errno.h>
 #include <kernel/types.h>
 #include <kernel/vfs.h>
@@ -11,6 +21,7 @@
 #include <kernel/multiboot.h>
 #include <kernel/procfs.h>
 #include <kernel/mmu.h>
+#include <kernel/args.h>
 
 /* FIXME: Not sure what to do with this; ifdef around it? */
 #include <kernel/arch/x86_64/ports.h>
@@ -177,9 +188,6 @@ static struct procfs_entry framebuffer_entry = {
 static void finalize_graphics(const char * driver) {
 	lfb_driver_name = driver;
 	lfb_device->length  = lfb_resolution_s * lfb_resolution_y; /* Size is framebuffer size in bytes */
-#if 0
-	debug_video_crash = lfb_video_panic;
-#endif
 
 	procfs_install(&framebuffer_entry);
 }
@@ -249,18 +257,6 @@ static void graphics_install_bochs(uint16_t resolution_x, uint16_t resolution_y)
 		return;
 	}
 
-	/* Enable the higher memory */
-#if 0
-	uintptr_t fb_offset = (uintptr_t)lfb_vid_memory;
-	for (uintptr_t i = fb_offset; i <= fb_offset + 0xFF0000; i += 0x1000) {
-		page_t * p = get_page(i, 1, kernel_directory);
-		dma_frame(p, 0, 1, i);
-		p->pat = 1;
-		p->writethrough = 1;
-		p->cachedisable = 1;
-	}
-#endif
-
 	outports(0x1CE, 0x0a);
 	i = inports(0x1CF);
 	if (i > 1) {
@@ -268,11 +264,6 @@ static void graphics_install_bochs(uint16_t resolution_x, uint16_t resolution_y)
 	} else {
 		lfb_memsize = inportl(0x1CF);
 	}
-#if 0
-	for (uintptr_t i = (uintptr_t)lfb_vid_memory; i <= (uintptr_t)lfb_vid_memory + lfb_memsize; i += 0x1000) {
-		dma_frame(get_page(i, 1, kernel_directory), 0, 1, i);
-	}
-#endif
 
 	finalize_graphics("bochs");
 }
@@ -288,49 +279,6 @@ static void graphics_install_preset(uint16_t w, uint16_t h) {
 	lfb_resolution_b = 32;
 	finalize_graphics("preset");
 }
-
-#if 0
-static void graphics_install_kludge(uint16_t w, uint16_t h) {
-	uint32_t * herp = (uint32_t *)0xA0000;
-	herp[0] = 0xA5ADFACE;
-	herp[1] = 0xFAF42943;
-
-	for (int i = 2; i < 1000; i += 2) {
-		herp[i]   = 0xFF00FF00;
-		herp[i+1] = 0x00FF00FF;
-	}
-
-	for (uintptr_t fb_offset = 0xE0000000; fb_offset < 0xFF000000; fb_offset += 0x01000000) {
-		/* Enable the higher memory */
-		for (uintptr_t i = fb_offset; i <= fb_offset + 0xFF0000; i += 0x1000) {
-			dma_frame(get_page(i, 1, kernel_directory), 0, 1, i);
-		}
-
-		/* Go find it */
-		for (uintptr_t x = fb_offset; x < fb_offset + 0xFF0000; x += 0x1000) {
-			if (((uintptr_t *)x)[0] == 0xA5ADFACE && ((uintptr_t *)x)[1] == 0xFAF42943) {
-				lfb_vid_memory = (uint8_t *)x;
-				debug_print(INFO, "Had to futz around, but found video memory at 0x%x", lfb_vid_memory);
-				goto mem_found;
-			}
-		}
-	}
-mem_found:
-	lfb_resolution_x = w;
-	lfb_resolution_y = h;
-	lfb_resolution_s = w * 4;
-	lfb_resolution_b = 32;
-
-	for (uintptr_t i = (uintptr_t)lfb_vid_memory; i <= (uintptr_t)lfb_vid_memory + w * h * 4; i += 0x1000) {
-		page_t * p = get_page(i, 1, kernel_directory);
-		dma_frame(p, 0, 1, i);
-		p->pat = 1;
-		p->writethrough = 1;
-		p->cachedisable = 1;
-	}
-	finalize_graphics("kludge");
-}
-#endif
 
 #define SVGA_IO_BASE (vmware_io)
 #define SVGA_IO_MUL 1
@@ -404,17 +352,6 @@ static void graphics_install_vmware(uint16_t w, uint16_t h) {
 
 	lfb_vid_memory = mmu_map_from_physical(fb_addr);
 
-	uintptr_t fb_offset = (uintptr_t)lfb_vid_memory;
-	for (uintptr_t i = fb_offset; i <= fb_offset + fb_size; i += 0x1000) {
-		#if 0
-		page_t * p = get_page(i, 1, kernel_directory);
-		dma_frame(p, 0, 1, i);
-		p->pat = 1;
-		p->writethrough = 1;
-		p->cachedisable = 1;
-		#endif
-	}
-
 	finalize_graphics("vmware");
 }
 
@@ -469,11 +406,6 @@ static int lfb_init(const char * c) {
 	} else if (!strcmp(argv[0],"preset")) {
 		/* Set by bootloader (UEFI) */
 		graphics_install_preset(x,y);
-#if 0
-	} else if (!strcmp(argv[0],"kludge")) {
-		/* Old hack to find vid memory from the VGA window */
-		graphics_install_kludge(x,y);
-#endif
 	} else {
 		ret_val = 1;
 	}
@@ -484,16 +416,15 @@ static int lfb_init(const char * c) {
 
 int framebuffer_initialize(void) {
 	lfb_device = lfb_video_device_create();
-	lfb_init("preset,1440,900");
-	vfs_mount("/dev/fb0", lfb_device);
 
-#if 0
-	char * c;
-	if ((c = args_value("vid"))) {
-		debug_print(NOTICE, "Video mode requested: %s", c);
-		lfb_init(c);
+	if (args_present("vid")) {
+		lfb_init(args_value("vid"));
+	} else {
+		/* Default to something... */
+		lfb_init("auto,1440,900");
 	}
-#endif
+
+	vfs_mount("/dev/fb0", lfb_device);
 
 	return 0;
 }
