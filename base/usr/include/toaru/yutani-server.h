@@ -304,7 +304,7 @@ typedef struct YutaniGlobals {
 } yutani_globals_t;
 
 struct key_bind {
-	unsigned int owner;
+	uintptr_t owner;
 	int response;
 };
 

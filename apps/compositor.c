@@ -1630,7 +1630,7 @@ static void handle_key_event(yutani_globals_t * yg, struct yutani_msg_key_event 
  * req - bind message
  * owner - client to assign the binding to
  */
-static void add_key_bind(yutani_globals_t * yg, struct yutani_msg_key_bind * req, unsigned int owner) {
+static void add_key_bind(yutani_globals_t * yg, struct yutani_msg_key_bind * req, uintptr_t owner) {
 	uint32_t key_code = (((uint8_t)req->modifiers << 24) | ((uint32_t)req->key & 0xFFFFFF));
 	struct key_bind * bind = hashmap_get(yg->key_binds, (void*)(uintptr_t)key_code);
 
