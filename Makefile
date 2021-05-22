@@ -37,10 +37,14 @@ KERNEL_SOURCES += $(wildcard kernel/arch/${ARCH}/*.S)
 
 MODULES = $(patsubst %.c,%.ko,$(wildcard modules/*.c))
 
+# Configs you can override.
+SMP ?= 1
+RAM ?= 3G
+
 EMU = qemu-system-x86_64
 EMU_ARGS  = -kernel misaka-kernel
-EMU_ARGS += -m 3G
-EMU_ARGS += -smp 4
+EMU_ARGS += -m $(RAM)
+EMU_ARGS += -smp $(SMP)
 EMU_ARGS += -no-reboot
 #EMU_ARGS += -display none
 EMU_ARGS += -serial mon:stdio
@@ -107,7 +111,7 @@ run: system
 	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "root=/dev/ram0 start=live-session migrate" -initrd ramdisk.igz
 
 shell: system
-	${EMU} -m 3G ${EMU_KVM} -kernel misaka-kernel -append "root=/dev/ram0 start=--headless migrate" -initrd ramdisk.igz \
+	${EMU} -m $(RAM) ${EMU_KVM} -kernel misaka-kernel -append "root=/dev/ram0 start=--headless migrate" -initrd ramdisk.igz \
 		-nographic -no-reboot -audiodev none,id=id -serial null -serial mon:stdio \
 		-fw_cfg name=opt/org.toaruos.gettyargs,string="-a local /dev/ttyS1" \
 		-fw_cfg name=opt/org.toaruos.term,string=${TERM}
