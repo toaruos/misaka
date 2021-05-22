@@ -21,10 +21,14 @@ make install-gcc
 
 cd $DIR/../
 make base/lib/libc.so
-make base/lib/libm.so
 
 cd $DIR/build/gcc
 make -j8 all-target-libgcc
 make install-target-libgcc
+
+cd $DIR/../
+make base/lib/libm.so
+
+cd $DIR/build/gcc
 make -j8 all-target-libstdc++-v3
 make install-target-libstdc++-v3
