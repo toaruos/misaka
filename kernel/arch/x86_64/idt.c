@@ -100,7 +100,10 @@ void idt_ap_install(void) {
 	);
 }
 
+static spin_lock_t fault_lock = {0};
+static spin_lock_t dump_lock = {0};
 static void dump_regs(struct regs * r) {
+	spin_lock(dump_lock);
 	printf(
 		"Registers at interrupt:\n"
 		"  $rip=0x%016lx\n"
@@ -116,6 +119,7 @@ static void dump_regs(struct regs * r) {
 		r->r12, r->r13, r->r14, r->r15,
 		r->cs, r->ss, r->rflags, r->int_no, r->err_code
 	);
+	spin_unlock(dump_lock);
 }
 
 extern void syscall_handler(struct regs *);
@@ -182,28 +186,16 @@ void irq_uninstall_handler(size_t irq) {
 }
 
 struct regs * isr_handler(struct regs * r) {
-	uintptr_t ebx;
-	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
-
-	uint32_t base_high, base_low;
-	asm volatile ("rdmsr" : "=d"(base_high), "=a"(base_low) : "c"(0xc0000101));
-
-	if (base_high || ((uintptr_t)base_low < (uintptr_t)&processor_local_data[0]) || ((uintptr_t)base_low > (uintptr_t)&processor_local_data[33])) {
-		printf("Bad GS segment in kernel.\n");
-		dump_regs(r);
-		while (1) {};
-	}
-
 	this_core->current_process->interrupt_registers = r;
 
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
 			uintptr_t faulting_address;
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
-			if (!this_core->current_process) {
-				printf("Page fault in early startup at %#zx (%zd)\n", faulting_address, ebx >> 24);
+			if (!this_core->current_process || r->cs == 0x08) {
+				printf("Page fault in kernel (cpu=%d) at %#zx\n", this_core->cpu_id, faulting_address);
 				dump_regs(r);
-				break;
+				arch_fatal();
 			}
 			if (faulting_address == 0xFFFFB00F) {
 				/* Thread exit */
@@ -214,26 +206,32 @@ struct regs * isr_handler(struct regs * r) {
 				return_from_signal_handler();
 				break;
 			}
-			printf("Page fault in pid=%d (%s; cpu=%zd) at %#zx\n", (int)this_core->current_process->id, this_core->current_process->name, ebx >> 24, faulting_address);
+#ifdef DEBUG_FAULTS
+			spin_lock(fault_lock);
+			printf("Page fault in pid=%d (%s; cpu=%d) at %#zx\n", (int)this_core->current_process->id, this_core->current_process->name, this_core->cpu_id, faulting_address);
 			dump_regs(r);
-			if (this_core->current_process->flags & PROC_FLAG_IS_TASKLET) {
-				printf("Segmentation fault in kernel worker thread, halting.\n");
-				arch_fatal();
-			}
-			if (r->cs == 0x08) {
-				printf("Fault in kernel, halting.\n");
-				arch_fatal();
-			}
+			spin_unlock(fault_lock);
+			arch_fatal();
+#else
 			send_signal(this_core->current_process->id, SIGSEGV, 1);
+#endif
 			break;
 		}
 		case 13: /* GPF */ {
-			if (!this_core->current_process) {
-				printf("GPF in early startup\n");
+			if (!this_core->current_process || r->cs == 0x08) {
+				printf("GPF in kernel (cpu=%d)\n", this_core->cpu_id);
 				dump_regs(r);
-				break;
+				arch_fatal();
 			}
+#ifdef DEBUG_FAULTS
+			spin_lock(fault_lock);
+			printf("GPF in userspace on CPU %d\n", this_core->cpu_id);
+			dump_regs(r);
+			spin_unlock(fault_lock);
+			arch_fatal();
+#else
 			send_signal(this_core->current_process->id, SIGSEGV, 1);
+#endif
 			break;
 		}
 		case 8: /* Double fault */ {
@@ -242,6 +240,7 @@ struct regs * isr_handler(struct regs * r) {
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
 			printf("cr2: 0x%016lx\n", faulting_address);
 			dump_regs(r);
+			arch_fatal();
 			break;
 		}
 		case 127: /* syscall */ {
@@ -255,12 +254,20 @@ struct regs * isr_handler(struct regs * r) {
 		}
 		default: {
 			if (r->int_no < 32) {
-				if (!this_core->current_process) {
-					printf("Unhandled exception: %s\n", exception_messages[r->int_no]);
-					break;
+				if (!this_core->current_process || r->cs == 0x08) {
+					printf("Unhandled %s in kernel (cpu=%d)\n", exception_messages[r->int_no], this_core->cpu_id);
+					dump_regs(r);
+					arch_fatal();
 				}
-				printf("Killing %d from unhandled %s\n", this_core->current_process->id, exception_messages[r->int_no]);
+#ifdef DEBUG_FAULTS
+				spin_lock(fault_lock);
+				printf("Unhandled %s in userspace (cpu=%d)\n", exception_messages[r->int_no], this_core->cpu_id);
+				dump_regs(r);
+				spin_unlock(fault_lock);
+				arch_fatal();
+#else
 				send_signal(this_core->current_process->id, SIGILL, 1);
+#endif
 			} else {
 				for (size_t i = 0; i < IRQ_CHAIN_DEPTH; i++) {
 					irq_handler_chain_t handler = irq_routines[i * IRQ_CHAIN_SIZE + (r->int_no - 32)];
@@ -270,10 +277,6 @@ struct regs * isr_handler(struct regs * r) {
 					}
 				}
 				irq_ack(r->int_no - 32);
-				#if 0
-				printf("Unhandled interrupt: %lu\n", r->int_no - 32);
-				dump_regs(r);
-				#endif
 				break;
 			}
 		}

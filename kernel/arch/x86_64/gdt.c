@@ -6,6 +6,7 @@
 
 #include <kernel/printf.h>
 #include <kernel/string.h>
+#include <kernel/process.h>
 
 /**
  * @brief 64-bit TSS
@@ -98,9 +99,7 @@ void gdt_copy_to_trampoline(int ap, char * trampoline) {
 }
 
 void arch_set_kernel_stack(uintptr_t stack) {
-	uint32_t ebx;
-	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
-	gdt[ebx >> 24].tss.rsp[0] = stack;
+	gdt[this_core->cpu_id].tss.rsp[0] = stack;
 }
 
 void arch_set_tls_base(uintptr_t tlsbase) {

@@ -98,8 +98,12 @@ static void pipe_alert_waiters(pipe_device_t * pipe) {
 	while (pipe->alert_waiters->head) {
 		node_t * node = list_dequeue(pipe->alert_waiters);
 		process_t * p = node->value;
-		process_alert_node(p, pipe);
 		free(node);
+		spin_unlock(pipe->alert_lock);
+
+		process_alert_node(p, pipe);
+
+		spin_lock(pipe->alert_lock);
 	}
 	spin_unlock(pipe->alert_lock);
 }

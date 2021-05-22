@@ -57,6 +57,7 @@ typedef struct file_descriptors {
 	size_t length;
 	size_t capacity;
 	size_t refs;
+	spin_lock_t lock;
 } fd_table_t;
 
 #define PROC_FLAG_IS_TASKLET 0x01
@@ -73,6 +74,7 @@ typedef struct process {
 	pid_t session; /* tty session */
 	int status; /* status code */
 	unsigned int flags; /* finished, started, running, isTasklet */
+	int owner;
 
 	uid_t user;
 	uid_t real_user;
@@ -146,6 +148,7 @@ struct ProcessorLocal {
 	process_t * kernel_idle_task;
 	union PML * current_pml;
 	volatile int sync_depth;
+	int cpu_id;
 };
 
 extern struct ProcessorLocal processor_local_data[32];
@@ -164,7 +167,7 @@ extern process_t * process_from_pid(pid_t pid);
 
 extern void process_delete(process_t * proc);
 extern void make_process_ready(volatile process_t * proc);
-extern process_t * next_ready_process(void);
+extern volatile process_t * next_ready_process(void);
 extern int wakeup_queue(list_t * queue);
 extern int wakeup_queue_interrupted(list_t * queue);
 extern int sleep_on(list_t * queue);

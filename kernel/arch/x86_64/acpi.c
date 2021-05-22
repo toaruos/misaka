@@ -100,6 +100,8 @@ void ap_main(void) {
 	fpu_initialize();
 	pat_initialize();
 
+	this_core->cpu_id = ebx >> 24;
+
 	/* Set our pml pointers */
 	this_core->current_pml = &init_page_region[0];
 

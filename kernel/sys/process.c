@@ -33,6 +33,7 @@
 #include <kernel/signal.h>
 #include <kernel/time.h>
 #include <kernel/misc.h>
+#include <kernel/syscall.h>
 #include <sys/wait.h>
 #include <sys/signal_defs.h>
 
@@ -367,6 +368,7 @@ process_t * spawn_init(void) {
 	init->fds->entries  = malloc(init->fds->capacity * sizeof(fs_node_t *));
 	init->fds->modes    = malloc(init->fds->capacity * sizeof(int));
 	init->fds->offsets  = malloc(init->fds->capacity * sizeof(uint64_t));
+	spin_init(init->fds->lock);
 
 	init->wd_node = clone_fs(fs_root);
 	init->wd_name = strdup("/");
@@ -429,11 +431,15 @@ process_t * spawn_process(volatile process_t * parent, int flags) {
 	proc->image.shm_heap    = 0x200000000; /* FIXME this should be a macro def */
 
 	if (flags & PROC_REUSE_FDS) {
+		spin_lock(parent->fds->lock);
 		proc->fds = parent->fds;
-		proc->fds->refs++; /* FIXME lock? */
+		proc->fds->refs++;
+		spin_unlock(parent->fds->lock);
 	} else {
 		proc->fds = malloc(sizeof(fd_table_t));
+		spin_init(proc->fds->lock);
 		proc->fds->refs = 1;
+		spin_lock(parent->fds->lock);
 		proc->fds->length = parent->fds->length;
 		proc->fds->capacity = parent->fds->capacity;
 		proc->fds->entries = malloc(proc->fds->capacity * sizeof(fs_node_t *));
@@ -444,6 +450,7 @@ process_t * spawn_process(volatile process_t * parent, int flags) {
 			proc->fds->modes[i]   = parent->fds->modes[i];
 			proc->fds->offsets[i] = parent->fds->offsets[i];
 		}
+		spin_unlock(parent->fds->lock);
 	}
 
 	proc->wd_node = clone_fs(parent->wd_node);
@@ -522,7 +529,7 @@ void make_process_ready(volatile process_t * proc) {
 			}
 		} else {
 			/* This was blocked on a semaphore we can interrupt. */
-			proc->flags |= PROC_FLAG_SLEEP_INT;
+			__sync_or_and_fetch(&proc->flags, PROC_FLAG_SLEEP_INT);
 			list_delete((list_t*)proc->sleep_node.owner, (node_t*)&proc->sleep_node);
 		}
 	}
@@ -538,9 +545,7 @@ void make_process_ready(volatile process_t * proc) {
 	}
 
 	spin_lock(process_queue_lock);
-	asm volatile ("":::"memory");
 	list_append(process_queue, (node_t*)&proc->sched_node);
-	asm volatile ("":::"memory");
 	spin_unlock(process_queue_lock);
 }
 
@@ -552,7 +557,7 @@ void make_process_ready(volatile process_t * proc) {
  *
  * TODO This needs more locking for SMP...
  */
-process_t * next_ready_process(void) {
+volatile process_t * next_ready_process(void) {
 	spin_lock(process_queue_lock);
 
 	if (!process_queue->head) {
@@ -561,8 +566,19 @@ process_t * next_ready_process(void) {
 	}
 
 	node_t * np = list_dequeue(process_queue);
-	process_t * next = np->value;
+	if ((uintptr_t)np < 0xFFFFff0000000000UL || (uintptr_t)np > 0xFFFFff0000f00000UL) {
+		printf("Suspicious pointer in queue: %#zx\n", (uintptr_t)np);
+		arch_fatal();
+	}
+	volatile process_t * next = np->value;
+
+	if (next->flags & PROC_FLAG_RUNNING) {
+		printf("Process %d reports already running but was pulled from queue (might be owned by %d, I am %d; I'll wait a bit.)\n", next->id, next->owner, this_core->cpu_id);
+		while (next->flags & PROC_FLAG_RUNNING);
+	}
+
 	__sync_or_and_fetch(&next->flags, PROC_FLAG_RUNNING);
+	next->owner = this_core->cpu_id;
 
 	spin_unlock(process_queue_lock);
 	return next;
@@ -650,7 +666,7 @@ int sleep_on(list_t * queue) {
  * @brief Indicates whether a process is ready to be run but not currently running.
  */
 int process_is_ready(process_t * proc) {
-	return (proc->sched_node.owner != NULL);
+	return (proc->sched_node.owner != NULL && !(proc->flags & PROC_FLAG_RUNNING));
 }
 
 /**
@@ -674,12 +690,10 @@ void wakeup_sleepers(unsigned long seconds, unsigned long subseconds) {
 				process_t * process = proc->process;
 				process->sleep_node.owner = NULL;
 				process->timed_sleep_node = NULL;
-				if (!process_is_ready(process) && !(process->flags & PROC_FLAG_RUNNING)) {
-					spin_unlock(sleep_lock);
+				if (!process_is_ready(process)) {
 					spin_lock(wait_lock_tmp);
 					make_process_ready(process);
 					spin_unlock(wait_lock_tmp);
-					spin_lock(sleep_lock);
 				}
 			}
 			free(proc);
@@ -880,6 +894,7 @@ int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
 
 	n = nodes;
 
+	spin_lock(process->sched_lock);
 	process->node_waits = list_create("process fswaiters",process);
 	if (*n) {
 		do {
@@ -916,6 +931,8 @@ int process_wait_nodes(process_t * process,fs_node_t * nodes[], int timeout) {
 	}
 
 	process->awoken_index = -1;
+	spin_unlock(process->sched_lock);
+
 	/* Wait. */
 	switch_task(0);
 
@@ -1049,9 +1066,7 @@ pid_t fork(void) {
 	sp = new_proc->image.stack;
 	bp = sp;
 
-	/* This is all very arch specific... */
-	/* arch_setup_fork_return? */
-	r.rax = 0; /* make fork return 0 */
+	arch_syscall_return(&r, 0);
 	PUSH(sp, struct regs, r);
 	new_proc->syscall_registers = (void*)sp;
 	new_proc->thread.context.sp = sp;
@@ -1105,7 +1120,7 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * name, void * argp) {
 	process_t * proc = calloc(1,sizeof(process_t));
 
-	proc->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED | PROC_FLAG_RUNNING;
+	proc->flags = PROC_FLAG_IS_TASKLET | PROC_FLAG_STARTED;
 
 	proc->id          = get_next_pid();
 	proc->group       = proc->id;

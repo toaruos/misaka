@@ -7,6 +7,8 @@ const char * arch_get_cmdline(void);
 const char * arch_get_loader(void);
 
 void arch_pause(void);
+
+__attribute__((noreturn))
 void arch_fatal(void);
 
 void arch_set_tls_base(uintptr_t tlsbase);
