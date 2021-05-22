@@ -91,7 +91,7 @@ void handle_signal(process_t * proc, signal_t * sig) {
 			task_exit(((128 + signum) << 8) | signum);
 			__builtin_unreachable();
 		} else if (dowhat == 3) {
-			this_core->current_process->flags |= PROC_FLAG_SUSPENDED;
+			__sync_or_and_fetch(&this_core->current_process->flags, PROC_FLAG_SUSPENDED);
 			this_core->current_process->status = 0x7F;
 
 			process_t * parent = process_get_parent((process_t *)this_core->current_process);
@@ -206,7 +206,7 @@ int send_signal(pid_t process, int signal, int force_root) {
 		if (!(receiver->flags & PROC_FLAG_SUSPENDED)) {
 			return -EINVAL;
 		} else {
-			receiver->flags &= ~(PROC_FLAG_SUSPENDED);
+			__sync_and_and_fetch(&this_core->current_process->flags, ~(PROC_FLAG_SUSPENDED));
 			receiver->status = 0;
 		}
 	}

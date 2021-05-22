@@ -80,7 +80,7 @@ static spin_lock_t talking = { 0 };
  */
 void switch_next(void) {
 	/* Mark the current thread as not running */
-	this_core->current_process->flags &= ~(PROC_FLAG_RUNNING);
+	__sync_and_and_fetch(&this_core->current_process->flags, ~(PROC_FLAG_RUNNING));
 
 	/* Get the next available process, discarded anything in the queue
 	 * marked as finished. */
@@ -113,7 +113,7 @@ void switch_next(void) {
 	}
 
 	/* Mark the process as running and started. */
-	this_core->current_process->flags |= PROC_FLAG_STARTED;
+	__sync_or_and_fetch(&this_core->current_process->flags, PROC_FLAG_STARTED);
 
 	/* Restore the execution context of this process's kernel thread. */
 	arch_restore_context(&this_core->current_process->thread);
@@ -554,28 +554,17 @@ void make_process_ready(volatile process_t * proc) {
  */
 process_t * next_ready_process(void) {
 	spin_lock(process_queue_lock);
-	asm volatile ("":::"memory");
 
 	if (!process_queue->head) {
-		asm volatile ("":::"memory");
 		spin_unlock(process_queue_lock);
 		return this_core->kernel_idle_task;
 	}
 
-	if (process_queue->head->owner != process_queue) {
-		/* I haven't actually seen this happen since the kernel context
-		 * switching was fixed, so it may not be a thing anymore... */
-		printf("Uh oh.\n");
-	}
-
 	node_t * np = list_dequeue(process_queue);
 	process_t * next = np->value;
-	next->flags |= PROC_FLAG_RUNNING;
+	__sync_or_and_fetch(&next->flags, PROC_FLAG_RUNNING);
 
-	asm volatile ("":::"memory");
 	spin_unlock(process_queue_lock);
-	asm volatile ("":::"memory");
-
 	return next;
 }
 
@@ -628,7 +617,7 @@ int wakeup_queue_interrupted(list_t * queue) {
 		node_t * node = list_pop(queue);
 		if (!(((process_t *)node->value)->flags & PROC_FLAG_FINISHED)) {
 			process_t * proc = node->value;
-			proc->flags |= PROC_FLAG_SLEEP_INT;
+			__sync_or_and_fetch(&proc->flags, PROC_FLAG_SLEEP_INT);
 			make_process_ready(proc);
 		}
 		awoken_processes++;
@@ -649,7 +638,7 @@ int sleep_on(list_t * queue) {
 		switch_task(0);
 		return 0;
 	}
-	this_core->current_process->flags &= ~(PROC_FLAG_SLEEP_INT);
+	__sync_and_and_fetch(&this_core->current_process->flags, ~(PROC_FLAG_SLEEP_INT));
 	spin_lock(wait_lock_tmp);
 	list_append(queue, (node_t*)&this_core->current_process->sleep_node);
 	spin_unlock(wait_lock_tmp);
@@ -996,7 +985,7 @@ process_t * process_get_parent(process_t * process) {
 
 void task_exit(int retval) {
 	this_core->current_process->status = retval;
-	this_core->current_process->flags |= PROC_FLAG_FINISHED;
+	__sync_or_and_fetch(&this_core->current_process->flags, PROC_FLAG_FINISHED);
 	list_free(this_core->current_process->wait_queue);
 	free(this_core->current_process->wait_queue);
 	list_free(this_core->current_process->signal_queue);
