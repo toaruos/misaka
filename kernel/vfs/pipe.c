@@ -45,7 +45,10 @@ static inline size_t pipe_unread(pipe_device_t * pipe) {
 
 int pipe_size(fs_node_t * node) {
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
-	return pipe_unread(pipe);
+	spin_lock(pipe->ptr_lock);
+	int out = pipe_unread(pipe);
+	spin_unlock(pipe->ptr_lock);
+	return out;
 }
 
 static inline size_t pipe_available(pipe_device_t * pipe) {
@@ -62,21 +65,28 @@ static inline size_t pipe_available(pipe_device_t * pipe) {
 
 int pipe_unsize(fs_node_t * node) {
 	pipe_device_t * pipe = (pipe_device_t *)node->device;
-	return pipe_available(pipe);
+	spin_lock(pipe->ptr_lock);
+	int out = pipe_available(pipe);
+	spin_unlock(pipe->ptr_lock);
+	return out;
 }
 
 static inline void pipe_increment_read(pipe_device_t * pipe) {
+	spin_lock(pipe->ptr_lock);
 	pipe->read_ptr++;
 	if (pipe->read_ptr == pipe->size) {
 		pipe->read_ptr = 0;
 	}
+	spin_unlock(pipe->ptr_lock);
 }
 
 static inline void pipe_increment_write(pipe_device_t * pipe) {
+	spin_lock(pipe->ptr_lock);
 	pipe->write_ptr++;
 	if (pipe->write_ptr == pipe->size) {
 		pipe->write_ptr = 0;
 	}
+	spin_unlock(pipe->ptr_lock);
 }
 
 static inline void pipe_increment_write_by(pipe_device_t * pipe, size_t amount) {
@@ -252,6 +262,9 @@ fs_node_t * make_pipe(size_t size) {
 
 	spin_init(pipe->lock_read);
 	spin_init(pipe->lock_write);
+	spin_init(pipe->alert_lock);
+	spin_init(pipe->wait_lock);
+	spin_init(pipe->ptr_lock);
 
 	pipe->wait_queue_writers = list_create("pipe writers",pipe);
 	pipe->wait_queue_readers = list_create("pip readers",pipe);

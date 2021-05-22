@@ -98,6 +98,7 @@ void switch_next(void) {
 		if (this_core->current_process->flags & PROC_FLAG_FINISHED) printf("It is marked finished.\n");
 		if (!this_core->current_process->signal_queue) printf("It doesn't have a signal queue.\n");
 		arch_fatal();
+		__builtin_unreachable();
 	}
 
 	if (this_core->current_process->flags & PROC_FLAG_STARTED) {
@@ -309,10 +310,13 @@ static void _kburn(void) {
  *     when a thread exits, and that's always the current thread.
  */
 void process_release_directory(page_directory_t * dir) {
+	spin_lock(dir->lock);
 	dir->refcount--;
 	if (dir->refcount < 1) {
 		mmu_free(dir->directory);
 		free(dir);
+	} else {
+		spin_unlock(dir->lock);
 	}
 }
 
@@ -337,6 +341,7 @@ process_t * spawn_kidle(int bsp) {
 	idle->thread.page_directory = malloc(sizeof(page_directory_t));
 	idle->thread.page_directory->refcount = 1;
 	idle->thread.page_directory->directory = mmu_clone(this_core->current_pml);
+	spin_init(idle->thread.page_directory->lock);
 	return idle;
 }
 
@@ -391,6 +396,7 @@ process_t * spawn_init(void) {
 	init->thread.page_directory = malloc(sizeof(page_directory_t));
 	init->thread.page_directory->refcount = 1;
 	init->thread.page_directory->directory = this_core->current_pml;
+	spin_init(init->thread.page_directory->lock);
 	init->description = strdup("[init]");
 	list_insert(process_list, (void*)init);
 
@@ -1048,10 +1054,10 @@ pid_t fork(void) {
 	new_proc->thread.page_directory = malloc(sizeof(page_directory_t));
 	new_proc->thread.page_directory->refcount = 1;
 	new_proc->thread.page_directory->directory = directory;
+	spin_init(new_proc->thread.page_directory->lock);
 
 	struct regs r;
 	memcpy(&r, parent->syscall_registers, sizeof(struct regs));
-	new_proc->syscall_registers = &r; /* what why here */
 	sp = new_proc->image.stack;
 	bp = sp;
 
@@ -1059,6 +1065,7 @@ pid_t fork(void) {
 	/* arch_setup_fork_return? */
 	r.rax = 0; /* make fork return 0 */
 	PUSH(sp, struct regs, r);
+	new_proc->syscall_registers = (void*)sp;
 	new_proc->thread.context.sp = sp;
 	new_proc->thread.context.bp = bp;
 	new_proc->thread.context.tls_base = parent->thread.context.tls_base;
@@ -1073,11 +1080,12 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 	process_t * parent = (process_t *)this_core->current_process;
 	process_t * new_proc = spawn_process(this_core->current_process, 1);
 	new_proc->thread.page_directory = this_core->current_process->thread.page_directory;
+	spin_lock(new_proc->thread.page_directory->lock);
 	new_proc->thread.page_directory->refcount++;
+	spin_unlock(new_proc->thread.page_directory->lock);
 
 	struct regs r;
-	memcpy(&r, this_core->current_process->syscall_registers, sizeof(struct regs));
-	new_proc->syscall_registers = &r;
+	memcpy(&r, parent->syscall_registers, sizeof(struct regs));
 	sp = new_proc->image.stack;
 	bp = sp;
 
@@ -1089,14 +1097,14 @@ pid_t clone(uintptr_t new_stack, uintptr_t thread_func, uintptr_t arg) {
 		new_proc->group = this_core->current_process->id;
 	}
 
-
 	/* different calling convention */
 	r.rdi = arg;
 	PUSH(new_stack, uintptr_t, (uintptr_t)0xFFFFB00F);
+	PUSH(sp, struct regs, r);
+	new_proc->syscall_registers = (void*)sp;
 	new_proc->syscall_registers->rsp = new_stack;
 	new_proc->syscall_registers->rbp = new_stack;
 	new_proc->syscall_registers->rip = thread_func;
-	PUSH(sp, struct regs, r);
 	new_proc->thread.context.sp = sp;
 	new_proc->thread.context.bp = bp;
 	new_proc->thread.context.tls_base = this_core->current_process->thread.context.tls_base;
@@ -1127,6 +1135,7 @@ process_t * spawn_worker_thread(void (*entrypoint)(void * argp), const char * na
 	proc->thread.page_directory = malloc(sizeof(page_directory_t));
 	proc->thread.page_directory->refcount = 1;
 	proc->thread.page_directory->directory = mmu_clone(mmu_get_kernel_directory());
+	spin_init(proc->thread.page_directory->lock);
 
 	proc->image.stack       = (uintptr_t)valloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
 	PUSH(proc->image.stack, uintptr_t, (uintptr_t)entrypoint);

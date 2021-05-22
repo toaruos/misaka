@@ -18,6 +18,7 @@
 typedef struct {
 	intptr_t refcount;
 	union PML * directory;
+	spin_lock_t lock;
 } page_directory_t;
 
 typedef struct {
