@@ -91,6 +91,15 @@ void idt_install(void) {
 	);
 }
 
+void idt_ap_install(void) {
+	idtp.limit = sizeof(idt);
+	idtp.base  = (uintptr_t)&idt;
+	asm volatile (
+		"lidt %0"
+		: : "m"(idtp)
+	);
+}
+
 static void dump_regs(struct regs * r) {
 	printf(
 		"Registers at interrupt:\n"

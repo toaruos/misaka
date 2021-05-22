@@ -52,7 +52,7 @@ void __ap_bootstrap(void) {
 		"mov $0x2b, %%ax\n"
 		"ltr %%ax\n"
 		".extern _ap_stack_base\n"
-		"mov _ap_stack_base,%%esp\n"
+		"mov _ap_stack_base,%%rsp\n"
 		".extern ap_main\n"
 		"callq ap_main\n"
 
@@ -69,7 +69,7 @@ extern size_t arch_cpu_mhz(void);
 extern void gdt_copy_to_trampoline(int ap, char * trampoline);
 extern void arch_set_core_base(uintptr_t base);
 extern void fpu_initialize(void);
-extern void idt_install(void);
+extern void idt_ap_install(void);
 extern void pat_initialize(void);
 extern process_t * spawn_kidle(int);
 extern union PML init_page_region[];
@@ -92,12 +92,11 @@ static void short_delay(unsigned long amount) {
 /* C entrypoint for APs */
 void ap_main(void) {
 	uint32_t ebx;
-	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1));
+	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1) : "ecx", "edx", "memory");
 	arch_set_core_base((uintptr_t)&processor_local_data[ebx >> 24]);
-	//printf("Hello, world! I am AP %d; my gsbase is %p\n", ebx >> 24, (void*)&processor_local_data[ebx >> 24]);
 
 	/* Load the IDT */
-	idt_install();
+	idt_ap_install();
 	fpu_initialize();
 	pat_initialize();
 
