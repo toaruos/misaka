@@ -248,7 +248,6 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	/* Initialize GS base */
 	arch_set_core_base((uintptr_t)&processor_local_data[0]);
-	this_core = 0; /* Always NULL, as that's the offset of the processor-local stuff */
 
 	/* Time the TSC and get the initial boot time from the RTC. */
 	arch_clock_initialize();

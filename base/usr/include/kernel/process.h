@@ -149,7 +149,13 @@ struct ProcessorLocal {
 };
 
 extern struct ProcessorLocal processor_local_data[32];
-extern struct ProcessorLocal __seg_gs * this_core;
+
+/**
+ * @brief Core-local kernel data.
+ *
+ * x86-64: Marking this as __seg_gs makes it %gs-base-relative.
+ */
+static struct ProcessorLocal __seg_gs * const this_core = 0;
 
 extern unsigned long process_append_fd(process_t * proc, fs_node_t * node);
 extern long process_move_fd(process_t * proc, long src, long dest);
