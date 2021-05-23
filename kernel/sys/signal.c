@@ -206,7 +206,7 @@ int send_signal(pid_t process, int signal, int force_root) {
 		if (!(receiver->flags & PROC_FLAG_SUSPENDED)) {
 			return -EINVAL;
 		} else {
-			__sync_and_and_fetch(&this_core->current_process->flags, ~(PROC_FLAG_SUSPENDED));
+			__sync_and_and_fetch(&receiver->flags, ~(PROC_FLAG_SUSPENDED));
 			receiver->status = 0;
 		}
 	}
@@ -223,7 +223,7 @@ int send_signal(pid_t process, int signal, int force_root) {
 	} else {
 		spin_unlock(receiver->sched_lock);
 	}
-	if (!process_is_ready(receiver) && !(receiver->flags & PROC_FLAG_RUNNING)) {
+	if (!process_is_ready(receiver) || receiver == this_core->current_process) {
 		make_process_ready(receiver);
 	}
 
