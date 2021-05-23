@@ -1009,7 +1009,6 @@ process_t * process_get_parent(process_t * process) {
 
 void task_exit(int retval) {
 	this_core->current_process->status = retval;
-	__sync_or_and_fetch(&this_core->current_process->flags, PROC_FLAG_FINISHED);
 	list_free(this_core->current_process->wait_queue);
 	free(this_core->current_process->wait_queue);
 	list_free(this_core->current_process->signal_queue);
@@ -1048,6 +1047,8 @@ void task_exit(int retval) {
 	}
 
 	process_t * parent = process_get_parent((process_t *)this_core->current_process);
+	__sync_or_and_fetch(&this_core->current_process->flags, PROC_FLAG_FINISHED);
+
 	if (parent && !(parent->flags & PROC_FLAG_FINISHED)) {
 		send_signal(parent->group, SIGCHLD, 1);
 		wakeup_queue(parent->wait_queue);
