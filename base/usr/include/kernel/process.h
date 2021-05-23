@@ -149,6 +149,7 @@ struct ProcessorLocal {
 	union PML * current_pml;
 	volatile int sync_depth;
 	int cpu_id;
+	volatile process_t * previous_process;
 };
 
 extern struct ProcessorLocal processor_local_data[32];

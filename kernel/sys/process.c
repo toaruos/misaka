@@ -80,8 +80,7 @@ static spin_lock_t talking = { 0 };
  * @returns never.
  */
 void switch_next(void) {
-	/* Mark the current thread as not running */
-	__sync_and_and_fetch(&this_core->current_process->flags, ~(PROC_FLAG_RUNNING));
+	this_core->previous_process = this_core->current_process;
 
 	/* Get the next available process, discarded anything in the queue
 	 * marked as finished. */
@@ -115,6 +114,9 @@ void switch_next(void) {
 
 	/* Mark the process as running and started. */
 	__sync_or_and_fetch(&this_core->current_process->flags, PROC_FLAG_STARTED);
+	
+	if (this_core->previous_process != this_core->current_process)
+		__sync_and_and_fetch(&this_core->previous_process->flags, ~(PROC_FLAG_RUNNING));
 
 	/* Restore the execution context of this process's kernel thread. */
 	arch_restore_context(&this_core->current_process->thread);
@@ -237,6 +239,7 @@ int is_valid_process(process_t * process) {
  * @returns the new file descriptor index
  */
 unsigned long process_append_fd(process_t * proc, fs_node_t * node) {
+	spin_lock(proc->fds->lock);
 	/* Fill gaps */
 	for (unsigned long i = 0; i < proc->fds->length; ++i) {
 		if (!proc->fds->entries[i]) {
@@ -244,6 +247,7 @@ unsigned long process_append_fd(process_t * proc, fs_node_t * node) {
 			/* modes, offsets must be set by caller */
 			proc->fds->modes[i] = 0;
 			proc->fds->offsets[i] = 0;
+			spin_unlock(proc->fds->lock);
 			return i;
 		}
 	}
@@ -259,6 +263,7 @@ unsigned long process_append_fd(process_t * proc, fs_node_t * node) {
 	proc->fds->modes[proc->fds->length] = 0;
 	proc->fds->offsets[proc->fds->length] = 0;
 	proc->fds->length++;
+	spin_unlock(proc->fds->lock);
 	return proc->fds->length-1;
 }
 
@@ -270,13 +275,10 @@ unsigned long process_append_fd(process_t * proc, fs_node_t * node) {
  * FIXME This used to use a bitset in Toaru32 so it could
  *       handle overflow of the pid counter. We need to
  *       bring that back.
- *
- * FIXME This defintely needs a lock for SMP, and probably
- *       just in general... or at least an atomic increment...
  */
 pid_t get_next_pid(void) {
 	static pid_t _next_pid = 2;
-	return _next_pid++;
+	return __sync_fetch_and_add(&_next_pid,1);
 }
 
 /**
@@ -566,21 +568,26 @@ volatile process_t * next_ready_process(void) {
 	}
 
 	node_t * np = list_dequeue(process_queue);
+
 	if ((uintptr_t)np < 0xFFFFff0000000000UL || (uintptr_t)np > 0xFFFFff0000f00000UL) {
 		printf("Suspicious pointer in queue: %#zx\n", (uintptr_t)np);
 		arch_fatal();
 	}
 	volatile process_t * next = np->value;
 
-	if (next->flags & PROC_FLAG_RUNNING) {
-		printf("Process %d reports already running but was pulled from queue (might be owned by %d, I am %d; I'll wait a bit.)\n", next->id, next->owner, this_core->cpu_id);
-		while (next->flags & PROC_FLAG_RUNNING);
+	if ((next->flags & PROC_FLAG_RUNNING) && (next->owner != this_core->cpu_id)) {
+		/* We pulled a process too soon, switch to idle for a bit so the
+		 * core that marked this process as ready can finish switching away from it. */
+		list_append(process_queue, (node_t*)&next->sched_node);
+		spin_unlock(process_queue_lock);
+		return this_core->kernel_idle_task;
 	}
+
+	spin_unlock(process_queue_lock);
 
 	__sync_or_and_fetch(&next->flags, PROC_FLAG_RUNNING);
 	next->owner = this_core->cpu_id;
 
-	spin_unlock(process_queue_lock);
 	return next;
 }
 
