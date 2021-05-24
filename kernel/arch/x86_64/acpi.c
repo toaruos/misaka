@@ -115,7 +115,7 @@ void ap_main(void) {
 	switch_next();
 }
 
-uintptr_t lapic_final = 0xffffff1fd0000000;
+uintptr_t lapic_final = 0;
 void lapic_send_ipi(int i, uint32_t val) {
 	*((volatile uint32_t*)(lapic_final + 0x310)) = (i << 24);
 	asm volatile ("":::"memory");
@@ -177,9 +177,7 @@ void acpi_initialize(void) {
 	if (!lapic_base || cores <= 1) return;
 
 	/* Allocate a virtual address with which we can poke the lapic */
-	union PML * p = mmu_get_page(lapic_final, MMU_GET_MAKE);
-	mmu_frame_map_address(p, MMU_FLAG_KERNEL | MMU_FLAG_WRITABLE | MMU_FLAG_NOCACHE | MMU_FLAG_WRITETHROUGH, lapic_base);
-	mmu_invalidate(lapic_final);
+	lapic_final = (uintptr_t)mmu_map_mmio_region(lapic_base, 0x1000);
 
 	/* Map the bootstrap code */
 	memcpy(mmu_map_from_physical(0x1000), &_ap_bootstrap_start, (uintptr_t)&_ap_bootstrap_end - (uintptr_t)&_ap_bootstrap_start);

@@ -52,6 +52,14 @@ static uint32_t read_command(uint16_t addr) {
 	return mmio_read32(mem_base + addr);
 }
 
+static void delay_yield(size_t subticks) {
+	unsigned long s, ss;
+	relative_time(0, subticks, &s, &ss);
+	sleep_until((process_t *)this_core->current_process, s, ss);
+	switch_task(0);
+
+}
+
 #define E1000_NUM_RX_DESC 32
 #define E1000_NUM_TX_DESC 8
 
@@ -368,21 +376,13 @@ static void e1000_init(void * data) {
 	command_reg |= (1 << 0);
 	pci_write_field(e1000_device_pci, PCI_COMMAND, 2, command_reg);
 
-	unsigned long s, ss;
-	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)this_core->current_process, s, ss);
-	switch_task(0);
+	delay_yield(10000);
 
 	uint32_t initial_bar = pci_read_field(e1000_device_pci, PCI_BAR0, 4);
-	/* We can't use the general -128GiB mapping are because _certain VMs_
-	 * won't let us access this MMIO range through 1GiB pages, so we'll
-	 * map to the region just above the heap */
-	mem_base = 0xffffff1fc0000000;
-	for (size_t i = 0; i < 0x80000; i += 0x1000) {
-		union PML * p = mmu_get_page(mem_base + i, MMU_GET_MAKE);
-		mmu_frame_map_address(p, MMU_FLAG_KERNEL | MMU_FLAG_WRITABLE | MMU_FLAG_NOCACHE | MMU_FLAG_WRITETHROUGH, initial_bar + i);
-		mmu_invalidate(mem_base + i);
-	}
+
+	/* For MMIO, we need to have a direct 4KiB mapping configured for
+	 * write-through access, we can't use the large page mappings. */
+	mem_base = (uintptr_t)mmu_map_mmio_region(initial_bar, 0x80000);
 
 	eeprom_detect();
 	read_mac();
@@ -392,32 +392,21 @@ static void e1000_init(void * data) {
 	/* reset phy */
 	write_command(E1000_REG_CTRL, ctrl | (0x80000000));
 	read_command(E1000_REG_STATUS);
-	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)this_core->current_process, s, ss);
-	switch_task(0);
+	delay_yield(10000);
 
 	/* reset mac */
 	write_command(E1000_REG_CTRL, ctrl | (0x04000000));
 	read_command(E1000_REG_STATUS);
-	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)this_core->current_process, s, ss);
-	switch_task(0);
+	delay_yield(10000);
 
 	/* Reload EEPROM */
 	write_command(E1000_REG_CTRL, ctrl | (0x00002000));
 	read_command(E1000_REG_STATUS);
-	relative_time(0, 20000, &s, &ss);
-	sleep_until((process_t *)this_core->current_process, s, ss);
-	switch_task(0);
-
+	delay_yield(20000);
 
 	/* initialize */
 	write_command(E1000_REG_CTRL, ctrl | (1 << 26));
-
-	/* wait */
-	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)this_core->current_process, s, ss);
-	switch_task(0);
+	delay_yield(10000);
 
 	uint32_t status = read_command(E1000_REG_CTRL);
 	status |= (1 << 5);   /* set auto speed detection */
@@ -437,10 +426,7 @@ static void e1000_init(void * data) {
 	status = read_command(E1000_REG_CTRL);
 	status &= ~(1 << 30);
 	write_command(E1000_REG_CTRL, status);
-
-	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)this_core->current_process, s, ss);
-	switch_task(0);
+	delay_yield(10000);
 
 	net_queue = list_create("e1000 net queue", NULL);
 	rx_wait = list_create("e1000 rx sem", NULL);
@@ -473,10 +459,7 @@ static void e1000_init(void * data) {
 	write_command(0x00D0, 0xFF);
 	write_command(0x00D8, 0xFF);
 	write_command(0x00D0,(1 << 2) | (1 << 6) | (1 << 7) | (1 << 1) | (1 << 0));
-
-	relative_time(0, 10000, &s, &ss);
-	sleep_until((process_t *)this_core->current_process, s, ss);
-	switch_task(0);
+	delay_yield(10000);
 
 	link_is_up = (read_command(E1000_REG_STATUS) & (1 << 1));
 
@@ -534,9 +517,5 @@ void e1000_initialize(void) {
 	}
 
 	spawn_worker_thread(e1000_init, "[e1000]", NULL);
-
-#if 0
-	create_kernel_tasklet(e1000_init, "[e1000]", NULL);
-#endif
 }
 

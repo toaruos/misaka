@@ -1018,7 +1018,7 @@ static void redraw_windows(yutani_globals_t * yg) {
 
 		if ((!yg->bottom_z || yg->bottom_z->anim_mode) && renderer_blit_screen) {
 			/* TODO: Need to clear with Cairo backend */
-			draw_fill(yg->backend_ctx, rgb(110,110,110));
+			draw_fill(yg->backend_ctx, rgb(5,5,5));
 		}
 
 		if (renderer_set_clip) renderer_set_clip(yg);
@@ -2103,7 +2103,7 @@ int main(int argc, char * argv[]) {
 	yg->width = yg->backend_ctx->width;
 	yg->height = yg->backend_ctx->height;
 
-	draw_fill(yg->backend_ctx, rgb(110,110,110));
+	draw_fill(yg->backend_ctx, rgb(5,5,5));
 	flip(yg->backend_ctx);
 
 	yg->backend_framebuffer = yg->backend_ctx->backbuffer;

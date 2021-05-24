@@ -7,6 +7,7 @@
 #define MMU_FLAG_WRITETHROUGH 0x08
 #define MMU_FLAG_SPEC         0x10
 #define MMU_FLAG_WC           (MMU_FLAG_NOCACHE | MMU_FLAG_WRITETHROUGH | MMU_FLAG_SPEC)
+#define MMU_FLAG_NOEXECUTE    0x20
 
 #define MMU_GET_MAKE 0x01
 
@@ -29,8 +30,8 @@ void mmu_invalidate(uintptr_t addr);
 uintptr_t mmu_allocate_a_frame(void);
 uintptr_t mmu_allocate_n_frames(int n);
 union PML * mmu_get_kernel_directory(void);
-void mmu_set_kernel_heap(uintptr_t heap_start);
 void * mmu_map_from_physical(uintptr_t frameaddress);
+void * mmu_map_mmio_region(uintptr_t physical_address, size_t size);
 
 size_t mmu_count_user(union PML * from);
 size_t mmu_count_shm(union PML * from);
