@@ -26,6 +26,7 @@ extern void shm_install(void);
 extern void random_initialize(void);
 extern int system(const char * path, int argc, const char ** argv, const char ** envin);
 extern void snd_install(void);
+extern void net_install(void);
 
 void generic_startup(void) {
 	args_parse(arch_get_cmdline());
@@ -40,6 +41,7 @@ void generic_startup(void) {
 	procfs_initialize();
 	random_initialize();
 	snd_install();
+	net_install();
 	tasking_start();
 }
 

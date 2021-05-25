@@ -163,9 +163,23 @@ int main(int argc, char * argv[]) {
 
 	/* Let's make a socket. */
 	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sockfd < 0) { perror("socket"); return 1; }
+	//if (sockfd < 0) { perror("socket"); return 1; }
 
-	int netdev = open("/dev/eth0", O_RDWR);
+	/* Bind the socket to the requested device. */
+	//if (setsockopt(sockfd, SOL_SOCKET, SO_BINDTODEVICE, 
+
+	char * if_name = "enp0s4";
+	char if_path[100];
+
+	if (argc > 1) {
+		if_name = argv[1];
+	}
+
+	snprintf(if_path, 100, "/dev/net/%s", if_name);
+
+	int netdev = open(if_path, O_RDWR);
+
+	fprintf(stderr, "Configuring %s\n", if_name);
 
 	uint8_t mac_addr[6];
 	if (ioctl(netdev, 0x12340001, &mac_addr)) {
