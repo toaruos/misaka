@@ -182,6 +182,7 @@ void arch_clock_initialize(void) {
 	uintptr_t end   = ((end_hi & 0xFFFFffff)   << 32) | (end_lo & 0xFFFFffff);
 	uintptr_t start = ((uintptr_t)(start_hi & 0xFFFFffff) << 32) | (start_lo & 0xFFFFffff);
 	tsc_mhz = (end - start) / 10000;
+	if (tsc_mhz == 0) tsc_mhz = 1000; /* uh oh */
 }
 
 #define SUBTICKS_PER_TICK 1000000

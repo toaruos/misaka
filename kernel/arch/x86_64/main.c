@@ -40,6 +40,7 @@ extern void portio_initialize(void);
 extern void keyboard_install(void);
 extern void mouse_install(void);
 extern void serial_initialize(void);
+extern void fbterm_initialize(void);
 
 #define EARLY_LOG_DEVICE 0x3F8
 static size_t _early_log_write(size_t size, uint8_t * buffer) {
@@ -277,13 +278,15 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 		tsc_mhz = atoi(args_value("tsc_mhz"));
 	}
 
-	/* Allow SMP to disabled with an arg */
-	if (!args_present("nosmp")) {
-		acpi_initialize();
-	}
-
 	/* Scheduler is running and we have parsed the kcmdline, initialize video. */
 	framebuffer_initialize();
+	fbterm_initialize();
+
+	/* Allow SMP to disabled with an arg */
+	if (!args_present("nosmp")) {
+		printf("Setting up APs...\n");
+		acpi_initialize();
+	}
 
 	/* Decompress and mount all initial ramdisks. */
 	mount_multiboot_ramdisks(mboot);

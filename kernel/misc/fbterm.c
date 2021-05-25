@@ -234,4 +234,5 @@ void fbterm_initialize(void) {
 
 	fbterm_width = (lfb_resolution_x - LEFT_PAD) / char_width;
 	fbterm_height = (lfb_resolution_y) / char_height;
+	printf_output = fbterm_write;
 }

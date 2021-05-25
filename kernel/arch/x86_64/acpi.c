@@ -2,6 +2,7 @@
 #include <kernel/string.h>
 #include <kernel/process.h>
 #include <kernel/printf.h>
+#include <kernel/misc.h>
 #include <kernel/arch/x86_64/acpi.h>
 #include <kernel/arch/x86_64/mmu.h>
 
@@ -89,18 +90,23 @@ static void short_delay(unsigned long amount) {
 	while (read_tsc() < clock + amount * arch_cpu_mhz());
 }
 
+static volatile int _ap_current = 0;
+
 /* C entrypoint for APs */
 void ap_main(void) {
+	arch_set_core_base((uintptr_t)&processor_local_data[_ap_current]);
+
 	uint32_t ebx;
 	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1) : "ecx", "edx", "memory");
-	arch_set_core_base((uintptr_t)&processor_local_data[ebx >> 24]);
+	if (this_core->lapic_id != (int)(ebx >> 24)) {
+		printf("alert: lapic id does not match\n");
+	}
 
 	/* Load the IDT */
 	idt_ap_install();
 	fpu_initialize();
 	pat_initialize();
 
-	this_core->cpu_id = ebx >> 24;
 
 	/* Set our pml pointers */
 	this_core->current_pml = &init_page_region[0];
@@ -141,7 +147,10 @@ void acpi_initialize(void) {
 		}
 	}
 
-	if (!good) return;
+	if (!good) {
+		printf("No RSD PTR found\n");
+		return;
+	}
 
 	struct rsdp_descriptor * rsdp = (struct rsdp_descriptor *)scan;
 	uint8_t check = 0;
@@ -150,6 +159,7 @@ void acpi_initialize(void) {
 		check += *tmp;
 	}
 	if (check != 0) {
+		printf("Bad checksum on RSDP\n");
 		return; /* bad checksum */
 	}
 
@@ -166,7 +176,16 @@ void acpi_initialize(void) {
 			for (uint8_t * entry = madt->entries; entry < table + madt->header.length; entry += entry[1]) {
 				switch (entry[0]) {
 					case 0:
-						if (entry[4] & 0x01) cores++;
+						if (entry[4] & 0x01) {
+							printf("cpu%d = %d\n", cores, entry[3]);
+							processor_local_data[cores].cpu_id = cores;
+							processor_local_data[cores].lapic_id = entry[3];
+							cores++;
+							if (cores == 33) {
+								printf("too many cores\n");
+								arch_fatal();
+							}
+						}
 						break;
 					/* TODO: Other entries */
 				}
@@ -174,12 +193,16 @@ void acpi_initialize(void) {
 		}
 	}
 
-	if (!lapic_base || cores <= 1) return;
+	if (!lapic_base || cores <= 1) {
+		printf("Not setting up SMP\n");
+		return;
+	}
 
 	/* Allocate a virtual address with which we can poke the lapic */
 	lapic_final = (uintptr_t)mmu_map_mmio_region(lapic_base, 0x1000);
 
 	/* Map the bootstrap code */
+	printf("Installing trampoline...\n");
 	memcpy(mmu_map_from_physical(0x1000), &_ap_bootstrap_start, (uintptr_t)&_ap_bootstrap_end - (uintptr_t)&_ap_bootstrap_start);
 
 	for (int i = 1; i < cores; ++i) {
@@ -191,12 +214,14 @@ void acpi_initialize(void) {
 		/* Make an initial stack for this AP */
 		_ap_stack_base = (uintptr_t)valloc(KERNEL_STACK_SIZE)+ KERNEL_STACK_SIZE;
 
+		_ap_current = i;
+
 		/* Send INIT */
-		lapic_send_ipi(i, 0x4500);
+		lapic_send_ipi(processor_local_data[i].lapic_id, 0x4500);
 		short_delay(5000UL);
 
 		/* Send SIPI */
-		lapic_send_ipi(i, 0x4601);
+		lapic_send_ipi(processor_local_data[i].lapic_id, 0x4601);
 
 		/* Wait for AP to signal it is ready before starting next AP */
 		do { asm volatile ("pause" : : : "memory"); } while (!_ap_startup_flag);

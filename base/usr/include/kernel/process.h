@@ -146,10 +146,16 @@ struct ProcessorLocal {
 	 * there is nothing else to do.
 	 */
 	process_t * kernel_idle_task;
-	union PML * current_pml;
-	volatile int sync_depth;
-	int cpu_id;
+	/**
+	 * @brief Process this core was last scheduled to run.
+	 */
 	volatile process_t * previous_process;
+
+	int cpu_id;
+	union PML * current_pml;
+#ifdef __x86_64__
+	int lapic_id;
+#endif
 };
 
 extern struct ProcessorLocal processor_local_data[32];
