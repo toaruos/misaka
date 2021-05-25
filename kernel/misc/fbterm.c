@@ -221,11 +221,14 @@ static void process_char(char ch) {
 	invert_at(x,y);
 }
 
+static size_t (*previous_writer)(size_t,uint8_t*) = NULL;
+
 size_t fbterm_write(size_t size, uint8_t *buffer) {
 	if (!buffer) return 0;
 	for (unsigned int i = 0; i < size; ++i) {
 		process_char(buffer[i]);
 	}
+	if (previous_writer) previous_writer(size,buffer);
 	return size;
 }
 
@@ -234,5 +237,6 @@ void fbterm_initialize(void) {
 
 	fbterm_width = (lfb_resolution_x - LEFT_PAD) / char_width;
 	fbterm_height = (lfb_resolution_y) / char_height;
+	previous_writer = printf_output;
 	printf_output = fbterm_write;
 }

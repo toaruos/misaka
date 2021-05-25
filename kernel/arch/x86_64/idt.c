@@ -15,6 +15,9 @@
 #include <kernel/arch/x86_64/regs.h>
 #include <kernel/arch/x86_64/irq.h>
 
+#undef DEBUG_FAULTS
+#define LOUD_SEGFAULTS
+
 static struct idt_pointer idtp;
 static idt_entry_t idt[256];
 
@@ -213,6 +216,10 @@ struct regs * isr_handler(struct regs * r) {
 			spin_unlock(fault_lock);
 			arch_fatal();
 #else
+# ifdef LOUD_SEGFAULTS
+			printf("Page fault in pid=%d (%s; cpu=%d) at %#zx\n", (int)this_core->current_process->id, this_core->current_process->name, this_core->cpu_id, faulting_address);
+			dump_regs(r);
+# endif
 			send_signal(this_core->current_process->id, SIGSEGV, 1);
 #endif
 			break;
@@ -230,6 +237,10 @@ struct regs * isr_handler(struct regs * r) {
 			spin_unlock(fault_lock);
 			arch_fatal();
 #else
+# ifdef LOUD_SEGFAULTS
+			printf("GPF in userspace on CPU %d\n", this_core->cpu_id);
+			dump_regs(r);
+# endif
 			send_signal(this_core->current_process->id, SIGSEGV, 1);
 #endif
 			break;
