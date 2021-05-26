@@ -22,7 +22,6 @@
 #include <kernel/args.h>
 
 #include <kernel/arch/x86_64/ports.h>
-#include <kernel/arch/x86_64/idt.h>
 #include <kernel/arch/x86_64/cmos.h>
 #include <kernel/arch/x86_64/pml.h>
 
@@ -37,8 +36,7 @@ extern void idt_install(void);
 extern void pit_initialize(void);
 extern void acpi_initialize(void);
 extern void portio_initialize(void);
-extern void keyboard_install(void);
-extern void mouse_install(void);
+extern void ps2hid_install(void);
 extern void serial_initialize(void);
 extern void fbterm_initialize(void);
 
@@ -295,8 +293,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	pit_initialize();
 
 	/* Install generic PC device drivers. */
-	keyboard_install();
-	mouse_install();
+	ps2hid_install();
 	serial_initialize();
 	portio_initialize();
 

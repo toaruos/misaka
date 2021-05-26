@@ -59,7 +59,7 @@
 /* -Wpedantic complains about unnamed unions */
 #pragma GCC diagnostic ignored "-Wpedantic"
 
-extern void (*ps2_mouse_alternate)(void); /* modules/mouse.c */
+extern void (*ps2_mouse_alternate)(uint8_t); /* modules/mouse.c */
 
 static fs_node_t * mouse_pipe;
 
@@ -150,9 +150,9 @@ static void mouse_absolute(void) {
 
 volatile int8_t vmware_mouse_byte = 0;
 
-static void vmware_mouse(void) {
+static void vmware_mouse(uint8_t byte) {
 	/* unused, but we need to read the fake mouse event bytes from the PS/2 device. */
-	vmware_mouse_byte = inportb(0x60);
+	vmware_mouse_byte = byte;
 
 	/* Read status byte. */
 	vmware_cmd cmd;
