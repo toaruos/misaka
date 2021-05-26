@@ -159,6 +159,66 @@ void ip_ntoa(uint32_t src_addr, char * out) {
 		(src_addr & 0xFF));
 }
 
+uint8_t mac_addr[6];
+
+void fill(struct payload *it, size_t payload_size) {
+
+	it->eth_header.source[0] = mac_addr[0];
+	it->eth_header.source[1] = mac_addr[1];
+	it->eth_header.source[2] = mac_addr[2];
+	it->eth_header.source[3] = mac_addr[3];
+	it->eth_header.source[4] = mac_addr[4];
+	it->eth_header.source[5] = mac_addr[5];
+
+	it->eth_header.destination[0] = 0xFF;
+	it->eth_header.destination[1] = 0xFF;
+	it->eth_header.destination[2] = 0xFF;
+	it->eth_header.destination[3] = 0xFF;
+	it->eth_header.destination[4] = 0xFF;
+	it->eth_header.destination[5] = 0xFF;
+
+	it->eth_header.type = htons(0x0800);
+
+	it->ip_header.version_ihl = ((0x4 << 4) | (0x5 << 0));
+	it->ip_header.dscp_ecn    = 0;
+	it->ip_header.length      = htons(sizeof(struct ipv4_packet) + sizeof(struct udp_packet) + sizeof(struct dhcp_packet) + payload_size);
+	it->ip_header.ident       = htons(1);
+	it->ip_header.flags_fragment = 0;
+	it->ip_header.ttl         = 0x40;
+	it->ip_header.protocol    = IPV4_PROT_UDP;
+	it->ip_header.checksum    = 0;
+	it->ip_header.source      = htonl(0);
+	it->ip_header.destination = htonl(0xFFFFFFFF);
+
+	it->ip_header.checksum = htons(calculate_ipv4_checksum(&it->ip_header));
+
+	it->udp_header.source_port = htons(68);
+	it->udp_header.destination_port = htons(67);
+	it->udp_header.length = htons(sizeof(struct udp_packet) + sizeof(struct dhcp_packet) + payload_size);
+	it->udp_header.checksum = 0; /* uh */
+
+	it->dhcp_header.op = 1;
+	it->dhcp_header.htype = 1;
+	it->dhcp_header.hlen = 6;
+	it->dhcp_header.hops = 0;
+	it->dhcp_header.xid = htons(0x1337); /* transaction id... */
+	it->dhcp_header.secs = 0;
+	it->dhcp_header.flags = 0;
+
+	it->dhcp_header.ciaddr = 0;
+	it->dhcp_header.yiaddr = 0;
+	it->dhcp_header.siaddr = 0;
+	it->dhcp_header.giaddr = 0;
+	it->dhcp_header.chaddr[0] = mac_addr[0];
+	it->dhcp_header.chaddr[1] = mac_addr[1];
+	it->dhcp_header.chaddr[2] = mac_addr[2];
+	it->dhcp_header.chaddr[3] = mac_addr[3];
+	it->dhcp_header.chaddr[4] = mac_addr[4];
+	it->dhcp_header.chaddr[5] = mac_addr[5];
+
+	it->dhcp_header.magic = htonl(DHCP_MAGIC);
+}
+
 int main(int argc, char * argv[]) {
 
 	/* Let's make a socket. */
@@ -181,7 +241,6 @@ int main(int argc, char * argv[]) {
 
 	fprintf(stderr, "Configuring %s\n", if_name);
 
-	uint8_t mac_addr[6];
 	if (ioctl(netdev, 0x12340001, &mac_addr)) {
 		fprintf(stderr, "could not get mac address\n");
 		return 1;
@@ -192,75 +251,19 @@ int main(int argc, char * argv[]) {
 		mac_addr[3], mac_addr[4], mac_addr[5]);
 
 	/* Try to frob the whatsit */
-	struct payload thething = {0};
-	size_t payload_size = 8;
+	{
+		struct payload thething = {
+			.payload = {53,1,1,55,2,3,6,255,0}
+		};
 
-	thething.eth_header.source[0] = mac_addr[0];
-	thething.eth_header.source[1] = mac_addr[1];
-	thething.eth_header.source[2] = mac_addr[2];
-	thething.eth_header.source[3] = mac_addr[3];
-	thething.eth_header.source[4] = mac_addr[4];
-	thething.eth_header.source[5] = mac_addr[5];
+		fill(&thething, 8);
 
-	thething.eth_header.destination[0] = 0xFF;
-	thething.eth_header.destination[1] = 0xFF;
-	thething.eth_header.destination[2] = 0xFF;
-	thething.eth_header.destination[3] = 0xFF;
-	thething.eth_header.destination[4] = 0xFF;
-	thething.eth_header.destination[5] = 0xFF;
+		write(netdev, &thething, sizeof(struct payload));
+	}
 
-	thething.eth_header.type = htons(0x0800);
+	uint32_t yiaddr;
+	uint32_t siaddr;
 
-	thething.ip_header.version_ihl = ((0x4 << 4) | (0x5 << 0));
-	thething.ip_header.dscp_ecn    = 0;
-	thething.ip_header.length      = htons(sizeof(struct ipv4_packet) + sizeof(struct udp_packet) + sizeof(struct dhcp_packet) + payload_size);
-	thething.ip_header.ident       = htons(1);
-	thething.ip_header.flags_fragment = 0;
-	thething.ip_header.ttl         = 0x40;
-	thething.ip_header.protocol    = IPV4_PROT_UDP;
-	thething.ip_header.checksum    = 0;
-	thething.ip_header.source      = htonl(0);
-	thething.ip_header.destination = htonl(0xFFFFFFFF);
-
-	thething.ip_header.checksum = htons(calculate_ipv4_checksum(&thething.ip_header));
-
-	thething.udp_header.source_port = htons(68);
-	thething.udp_header.destination_port = htons(67);
-	thething.udp_header.length = htons(sizeof(struct udp_packet) + sizeof(struct dhcp_packet) + payload_size);
-	thething.udp_header.checksum = 0; /* uh */
-
-	thething.dhcp_header.op = 1;
-	thething.dhcp_header.htype = 1;
-	thething.dhcp_header.hlen = 6;
-	thething.dhcp_header.hops = 0;
-	thething.dhcp_header.xid = htons(0x1337); /* transaction id... */
-	thething.dhcp_header.secs = 0;
-	thething.dhcp_header.flags = 0;
-
-	thething.dhcp_header.ciaddr = 0;
-	thething.dhcp_header.yiaddr = 0;
-	thething.dhcp_header.siaddr = 0;
-	thething.dhcp_header.giaddr = 0;
-	thething.dhcp_header.chaddr[0] = mac_addr[0];
-	thething.dhcp_header.chaddr[1] = mac_addr[1];
-	thething.dhcp_header.chaddr[2] = mac_addr[2];
-	thething.dhcp_header.chaddr[3] = mac_addr[3];
-	thething.dhcp_header.chaddr[4] = mac_addr[4];
-	thething.dhcp_header.chaddr[5] = mac_addr[5];
-
-	//thething.dhcp_header.sname
-	thething.dhcp_header.magic = htonl(DHCP_MAGIC);
-
-	thething.payload[0] = 53; /* message type */
-	thething.payload[1] = 1;  /* length */
-	thething.payload[2] = 1;  /* discover */
-	thething.payload[3] = 55;
-	thething.payload[4] = 2;
-	thething.payload[5] = 3;
-	thething.payload[6] = 6;
-	thething.payload[7] = 255;
-
-	write(netdev, &thething, sizeof(struct payload));
 	do {
 		char buf[8092] = {0};
 		ssize_t rsize = read(netdev, &buf, 8092);
@@ -277,11 +280,58 @@ int main(int argc, char * argv[]) {
 			continue;
 		}
 
-		uint32_t yiaddr = ntohl(response->dhcp_header.yiaddr);
+		yiaddr = response->dhcp_header.yiaddr;
+		siaddr = response->dhcp_header.siaddr;
 		char yiaddr_ip[16];
-		ip_ntoa(yiaddr, yiaddr_ip);
+		ip_ntoa(ntohl(yiaddr), yiaddr_ip);
 
 		printf("Response from DHCP Discover: %s\n", yiaddr_ip);
+
+		break;
+	} while (1);
+
+	{
+		printf("Writing request\n");
+		struct payload thething = {
+			.payload = {53,1,3,50,4,
+				(yiaddr) & 0xFF,
+				(yiaddr >> 8) & 0xFF,
+				(yiaddr >> 16) & 0xFF,
+				(yiaddr >> 24) & 0xFF,
+				55,2,3,6,255,0}
+		};
+
+		fill(&thething, 14);
+
+		thething.dhcp_header.ciaddr = yiaddr;
+		thething.dhcp_header.siaddr = siaddr;
+
+		write(netdev, &thething, sizeof(struct payload));
+	}
+
+	do {
+		char buf[8092] = {0};
+		ssize_t rsize = read(netdev, &buf, 8092);
+
+		if (rsize <= 0) {
+			printf("bad size? %zd\n", rsize);
+			continue;
+		}
+
+		struct payload * response = (void*)buf;
+
+		if (ntohs(response->udp_header.destination_port) != 68) {
+			printf("not what I was expecting\n");
+			continue;
+		}
+
+		yiaddr = response->dhcp_header.yiaddr;
+		siaddr = response->dhcp_header.siaddr;
+		char yiaddr_ip[16];
+		ip_ntoa(ntohl(yiaddr), yiaddr_ip);
+
+		printf("ACK returns: %s\n", yiaddr_ip);
+
 		break;
 	} while (1);
 
