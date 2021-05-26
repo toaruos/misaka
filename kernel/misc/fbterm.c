@@ -9,10 +9,14 @@
  */
 #include <kernel/printf.h>
 #include <kernel/string.h>
+#include <kernel/args.h>
 
 /* Exported cell sizing */
 size_t fbterm_width = 0;
 size_t fbterm_height = 0;
+
+/* Whether to scroll or wrap when cursor reaches the bottom. */
+static int fbterm_scroll = 0;
 
 /* Is this in a header somewhere? */
 extern uint8_t * lfb_vid_memory;
@@ -212,11 +216,13 @@ static void process_char(char ch) {
 		x = LEFT_PAD;
 	}
 	if (y > lfb_resolution_y - char_height) {
-		y = 0;
-		/* scroll everything?*/
-		//y -= char_height;
-		//memmove(lfb_vid_memory, lfb_vid_memory + sizeof(uint32_t) * lfb_resolution_x * char_height, (lfb_resolution_y - char_height) * lfb_resolution_x * 4);
-		//memset(lfb_vid_memory + sizeof(uint32_t) * (lfb_resolution_y - char_height) * lfb_resolution_x, 0x05, char_height * lfb_resolution_x * 4);
+		if (fbterm_scroll) {
+			y -= char_height;
+			memmove(lfb_vid_memory, lfb_vid_memory + sizeof(uint32_t) * lfb_resolution_x * char_height, (lfb_resolution_y - char_height) * lfb_resolution_x * 4);
+			memset(lfb_vid_memory + sizeof(uint32_t) * (lfb_resolution_y - char_height) * lfb_resolution_x, 0x05, char_height * lfb_resolution_x * 4);
+		} else {
+			y = 0;
+		}
 	}
 	invert_at(x,y);
 }
@@ -234,6 +240,10 @@ size_t fbterm_write(size_t size, uint8_t *buffer) {
 
 void fbterm_initialize(void) {
 	memset(lfb_vid_memory, 0x05, lfb_resolution_x * lfb_resolution_y * 4);
+
+	if (args_present("fbterm-scroll")) {
+		fbterm_scroll = 1;
+	}
 
 	fbterm_width = (lfb_resolution_x - LEFT_PAD) / char_width;
 	fbterm_height = (lfb_resolution_y) / char_height;
