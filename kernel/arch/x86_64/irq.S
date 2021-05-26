@@ -5,7 +5,6 @@
     .global _irq\index
     .type _irq\index, @function
     _irq\index:
-        cli
         pushq $0x00
         pushq $\byte
         jmp isr_common
@@ -15,7 +14,6 @@
     .global _isr\index
     .type _isr\index, @function
     _isr\index:
-        cli
         pushq $0x00
         pushq $\index
         jmp isr_common
@@ -25,7 +23,6 @@
     .global _isr\index
     .type _isr\index, @function
     _isr\index:
-        cli
         pushq $\index
         jmp isr_common
 .endm
@@ -81,11 +78,19 @@ IRQ 14, 46
 IRQ 15, 47
 ISR_NOERR 127
 
+.macro _swapgs
+    cmpq $8, 24(%rsp)
+    je 1f
+    swapgs
+1:
+.endm
+
 .extern isr_handler
 .type isr_handler, @function
 
 isr_common:
     /* Save all registers */
+    _swapgs
     push %rax
     push %rbx
     push %rcx
@@ -125,6 +130,8 @@ isr_common:
     pop %rcx
     pop %rbx
     pop %rax
+
+    _swapgs
 
     /* Cleanup error code and interrupt # */
     add $16, %rsp

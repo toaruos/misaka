@@ -233,6 +233,7 @@ const char * arch_get_loader(void) {
 void arch_set_core_base(uintptr_t base) {
 	asm volatile ("wrmsr" : : "c"(0xc0000101), "d"((uint32_t)(base >> 32)), "a"((uint32_t)(base & 0xFFFFFFFF)));
 	asm volatile ("wrmsr" : : "c"(0xc0000102), "d"((uint32_t)(base >> 32)), "a"((uint32_t)(base & 0xFFFFFFFF)));
+	asm volatile ("swapgs");
 }
 
 /**

@@ -19,6 +19,7 @@ void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[
 		"pushq %2\n"
 		"pushq %3\n"
 		"pushq %4\n"
+		"swapgs\n"
 		"iretq"
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
 	    "D"(argc), "S"(argv), "d"(envp));
@@ -39,6 +40,7 @@ void arch_enter_signal_handler(uintptr_t entrypoint, int signum) {
 		"pushq %2\n"
 		"pushq %3\n"
 		"pushq %4\n"
+		"swapgs\n"
 		"iretq"
 	: : "m"(ret.ss), "m"(ret.rsp), "m"(ret.rflags), "m"(ret.cs), "m"(ret.rip),
 	    "D"(signum));
@@ -64,6 +66,7 @@ void arch_resume_user(void) {
 		"pop %rbx\n"
 		"pop %rax\n"
 		"add $16, %rsp\n"
+		"swapgs\n"
 		"iretq\n"
 	);
 	__builtin_unreachable();
