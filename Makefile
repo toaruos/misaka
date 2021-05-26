@@ -109,7 +109,7 @@ $(BASE)/lib/ld.so: linker/linker.c $(BASE)/lib/libc.a | dirs $(LC)
 	$(CC) -g -static -Wl,-static $(CFLAGS) -o $@ -Os -T linker/link.ld $<
 
 run: system
-	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "root=/dev/ram0 start=live-session migrate" -initrd ramdisk.igz
+	${EMU} ${EMU_ARGS} ${EMU_KVM} -append "root=/dev/ram0 start=live-session migrate sharedps2" -initrd ramdisk.igz
 
 shell: system
 	${EMU} -m $(RAM) ${EMU_KVM} -kernel misaka-kernel -append "root=/dev/ram0 start=--headless migrate" -initrd ramdisk.igz \
