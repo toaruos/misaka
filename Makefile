@@ -53,7 +53,7 @@ EMU_ARGS += -soundhw pcspk,ac97
 EMU_ARGS += -netdev user,id=u1,hostfwd=tcp::5555-:23 -device e1000,netdev=u1 -object filter-dump,id=f1,netdev=u1,file=qemu.pcap
 EMU_ARGS += -netdev user,id=u2,hostfwd=tcp::5580-:80 -device e1000,netdev=u2
 #EMU_ARGS += -hda toaruos-disk.img
-EMU_KVM   = -enable-kvm
+EMU_KVM  ?= -enable-kvm
 
 APPS=$(patsubst apps/%.c,%,$(wildcard apps/*.c)) $(patsubst apps/%.c++,%,$(wildcard apps/*.c++))
 APPS_X=$(foreach app,$(APPS),$(BASE)/bin/$(app))
