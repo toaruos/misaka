@@ -114,11 +114,8 @@ void switch_next(void) {
 
 	/* Mark the process as running and started. */
 	__sync_or_and_fetch(&this_core->current_process->flags, PROC_FLAG_STARTED);
-	
-	if (this_core->previous_process != this_core->current_process)
-		__sync_and_and_fetch(&this_core->previous_process->flags, ~(PROC_FLAG_RUNNING));
 
-	/* Restore the execution context of this process's kernel thread. */
+	/* Jump to next */
 	arch_restore_context(&this_core->current_process->thread);
 	__builtin_unreachable();
 }
