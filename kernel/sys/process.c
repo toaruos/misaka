@@ -501,6 +501,18 @@ void process_delete(process_t * proc) {
 	}
 	// FIXME bitset_clear(&pid_set, proc->id);
 	proc->tree_entry = NULL;
+
+	/* Free these later */
+	shm_release_all(proc);
+	free(proc->shm_mappings);
+
+	if (proc->signal_kstack) {
+		free(proc->signal_kstack);
+	}
+	free((void *)(proc->image.stack - KERNEL_STACK_SIZE));
+	process_release_directory(proc->thread.page_directory);
+
+	free(proc->name);
 	free(proc);
 }
 
@@ -813,12 +825,6 @@ static int wait_candidate(volatile process_t * parent, int pid, int options, vol
 	return 0;
 }
 
-void reap_process(process_t * proc) {
-	//printf("reaping %p\n", proc);
-	free(proc->name);
-	process_delete(proc);
-}
-
 int waitpid(int pid, int * status, int options) {
 	volatile process_t * volatile proc = (process_t*)this_core->current_process;
 	if (proc->group) {
@@ -860,7 +866,7 @@ int waitpid(int pid, int * status, int options) {
 			}
 			int pid = candidate->id;
 			if (candidate->flags & PROC_FLAG_FINISHED) {
-				reap_process((process_t*)candidate);
+				process_delete((process_t*)candidate);
 			}
 			return pid;
 		} else {
@@ -1006,6 +1012,8 @@ process_t * process_get_parent(process_t * process) {
 
 void task_exit(int retval) {
 	this_core->current_process->status = retval;
+
+	/* free whatever we can */
 	list_free(this_core->current_process->wait_queue);
 	free(this_core->current_process->wait_queue);
 	list_free(this_core->current_process->signal_queue);
@@ -1016,14 +1024,6 @@ void task_exit(int retval) {
 		free(this_core->current_process->node_waits);
 		this_core->current_process->node_waits = NULL;
 	}
-	shm_release_all((process_t*)this_core->current_process);
-	free(this_core->current_process->shm_mappings);
-
-	if (this_core->current_process->signal_kstack) {
-		free(this_core->current_process->signal_kstack);
-	}
-
-	process_release_directory(this_core->current_process->thread.page_directory);
 
 	if (this_core->current_process->fds) {
 		this_core->current_process->fds->refs--;
@@ -1039,7 +1039,6 @@ void task_exit(int retval) {
 			free(this_core->current_process->fds->modes);
 			free(this_core->current_process->fds);
 			this_core->current_process->fds = NULL;
-			free((void *)(this_core->current_process->image.stack - KERNEL_STACK_SIZE));
 		}
 	}
 
