@@ -128,7 +128,7 @@ static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size
 	long shm_usage = mmu_count_shm(proc->thread.page_directory->directory) * 4;
 	long mem_permille = 1000 * (mem_usage + shm_usage) / mmu_total_memory();
 
-	snprintf(buf, 1000,
+	snprintf(buf, 2000,
 			"Name:\t%s\n"  /* name */
 			"State:\t%c\n"
 			"Tgid:\t%d\n"  /* group ? group : pid */
@@ -149,6 +149,7 @@ static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size
 			"VmSize:\t %ld kB\n"
 			"RssShmem:\t %ld kB\n"
 			"MemPermille:\t %ld\n"
+			"LastCore:\t %d\n"
 			,
 			name,
 			state,
@@ -167,7 +168,8 @@ static uint64_t proc_status_func(fs_node_t *node, uint64_t offset, uint64_t size
 			proc->syscall_registers ? arch_syscall_arg4(proc->syscall_registers) : 0,
 			proc->syscall_registers ? arch_stack_pointer(proc->syscall_registers) : 0,
 			proc->cmdline ? proc->cmdline[0] : "(none)",
-			mem_usage, shm_usage, mem_permille
+			mem_usage, shm_usage, mem_permille,
+			proc->owner
 			);
 
 	size_t _bsize = strlen(buf);
