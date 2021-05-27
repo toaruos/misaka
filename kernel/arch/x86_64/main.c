@@ -283,7 +283,6 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 
 	/* Allow SMP to disabled with an arg */
 	if (!args_present("nosmp")) {
-		printf("Setting up APs...\n");
 		acpi_initialize();
 	}
 

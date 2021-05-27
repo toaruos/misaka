@@ -362,7 +362,5 @@ void ps2hid_install(void) {
 		irq_install_handler(KEYBOARD_IRQ, keyboard_handler, "ps2hid");
 		irq_install_handler(MOUSE_IRQ,    mouse_handler,    "ps2hid");
 	}
-
-	printf("Done with PS/2\n");
 }
 

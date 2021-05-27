@@ -99,7 +99,7 @@ void ap_main(void) {
 	uint32_t ebx;
 	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1) : "ecx", "edx", "memory");
 	if (this_core->lapic_id != (int)(ebx >> 24)) {
-		printf("alert: lapic id does not match\n");
+		printf("acpi: lapic id does not match\n");
 	}
 
 	/* Load the IDT */
@@ -148,7 +148,7 @@ void acpi_initialize(void) {
 	}
 
 	if (!good) {
-		printf("No RSD PTR found\n");
+		printf("acpi: No RSD PTR found\n");
 		return;
 	}
 
@@ -159,7 +159,7 @@ void acpi_initialize(void) {
 		check += *tmp;
 	}
 	if (check != 0) {
-		printf("Bad checksum on RSDP\n");
+		printf("acpi: Bad checksum on RSDP\n");
 		return; /* bad checksum */
 	}
 
@@ -177,12 +177,11 @@ void acpi_initialize(void) {
 				switch (entry[0]) {
 					case 0:
 						if (entry[4] & 0x01) {
-							printf("cpu%d = %d\n", cores, entry[3]);
 							processor_local_data[cores].cpu_id = cores;
 							processor_local_data[cores].lapic_id = entry[3];
 							cores++;
 							if (cores == 33) {
-								printf("too many cores\n");
+								printf("acpi: too many cores\n");
 								arch_fatal();
 							}
 						}
@@ -194,7 +193,6 @@ void acpi_initialize(void) {
 	}
 
 	if (!lapic_base || cores <= 1) {
-		printf("Not setting up SMP\n");
 		return;
 	}
 
@@ -202,7 +200,6 @@ void acpi_initialize(void) {
 	lapic_final = (uintptr_t)mmu_map_mmio_region(lapic_base, 0x1000);
 
 	/* Map the bootstrap code */
-	printf("Installing trampoline...\n");
 	memcpy(mmu_map_from_physical(0x1000), &_ap_bootstrap_start, (uintptr_t)&_ap_bootstrap_end - (uintptr_t)&_ap_bootstrap_start);
 
 	for (int i = 1; i < cores; ++i) {

@@ -422,8 +422,6 @@ static void find_e1000(uint32_t device, uint16_t vendorid, uint16_t deviceid, vo
 			(int)pci_extract_bus(device),
 			(int)pci_extract_slot(device));
 
-		printf("e1000: registering %s\n", nic->if_name);
-
 		char worker_name[34];
 		snprintf(worker_name, 33, "[%s]", nic->if_name);
 		spawn_worker_thread(e1000_init, worker_name, nic);
