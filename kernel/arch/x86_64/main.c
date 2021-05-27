@@ -281,10 +281,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	framebuffer_initialize();
 	fbterm_initialize();
 
-	/* Allow SMP to disabled with an arg */
-	if (!args_present("nosmp")) {
-		acpi_initialize();
-	}
+	acpi_initialize();
 
 	/* Decompress and mount all initial ramdisks. */
 	mount_multiboot_ramdisks(mboot);

@@ -3,10 +3,13 @@
 #include <kernel/process.h>
 #include <kernel/printf.h>
 #include <kernel/misc.h>
+#include <kernel/args.h>
 #include <kernel/arch/x86_64/acpi.h>
 #include <kernel/arch/x86_64/mmu.h>
 
-void __ap_bootstrap(void) {
+__attribute__((used))
+__attribute__((naked))
+static void __ap_bootstrap(void) {
 	asm volatile (
 		".code16\n"
 		".org 0x0\n"
@@ -77,6 +80,7 @@ extern union PML init_page_region[];
 
 uintptr_t _ap_stack_base = 0;
 static volatile int _ap_startup_flag = 0;
+void load_processor_info(void);
 
 /* For timing delays on IPIs */
 static inline uint64_t read_tsc(void) {
@@ -92,12 +96,14 @@ static void short_delay(unsigned long amount) {
 
 static volatile int _ap_current = 0;
 
+#define cpuid(in,a,b,c,d) do { asm volatile ("cpuid" : "=a"(a),"=b"(b),"=c"(c),"=d"(d) : "a"(in)); } while(0)
+
 /* C entrypoint for APs */
 void ap_main(void) {
 	arch_set_core_base((uintptr_t)&processor_local_data[_ap_current]);
 
-	uint32_t ebx;
-	asm volatile ("cpuid" : "=b"(ebx) : "a"(0x1) : "ecx", "edx", "memory");
+	uint32_t ebx, _unused;
+	cpuid(0x1,_unused,ebx,_unused,_unused);
 	if (this_core->lapic_id != (int)(ebx >> 24)) {
 		printf("acpi: lapic id does not match\n");
 	}
@@ -115,11 +121,45 @@ void ap_main(void) {
 	this_core->kernel_idle_task = spawn_kidle(0);
 	this_core->current_process = this_core->kernel_idle_task;
 
+	load_processor_info();
+
 	/* Inform BSP it can continue. */
 	_ap_startup_flag = 1;
 
 	switch_next();
 }
+
+void load_processor_info(void) {
+	unsigned long a, b, unused;
+	cpuid(0,unused,b,unused,unused);
+
+	this_core->cpu_manufacturer = "Unknown";
+
+	if (b == 0x756e6547) {
+		cpuid(1, a, b, unused, unused);
+		this_core->cpu_manufacturer = "Intel";
+		this_core->cpu_model        = (a >> 4) & 0x0F;
+		this_core->cpu_family       = (a >> 8) & 0x0F;
+	} else if (b == 0x68747541) {
+		cpuid(1, a, unused, unused, unused);
+		this_core->cpu_manufacturer = "AMD";
+		this_core->cpu_model        = (a >> 4) & 0x0F;
+		this_core->cpu_family       = (a >> 8) & 0x0F;
+	}
+
+	snprintf(processor_local_data[this_core->cpu_id].cpu_model_name, 20, "(unknown)");
+
+	/* See if we can get a long manufacturer strings */
+	cpuid(0x80000000, a, unused, unused, unused);
+	if (a >= 0x80000004) {
+		uint32_t brand[12];
+		cpuid(0x80000002, brand[0], brand[1], brand[2], brand[3]);
+		cpuid(0x80000003, brand[4], brand[5], brand[6], brand[7]);
+		cpuid(0x80000004, brand[8], brand[9], brand[10], brand[11]);
+		memcpy(processor_local_data[this_core->cpu_id].cpu_model_name, brand, 48);
+	}
+}
+
 
 uintptr_t lapic_final = 0;
 void lapic_send_ipi(int i, uint32_t val) {
@@ -147,6 +187,8 @@ void acpi_initialize(void) {
 		}
 	}
 
+	load_processor_info();
+
 	if (!good) {
 		printf("acpi: No RSD PTR found\n");
 		return;
@@ -162,6 +204,10 @@ void acpi_initialize(void) {
 		printf("acpi: Bad checksum on RSDP\n");
 		return; /* bad checksum */
 	}
+
+	/* Load information for the current CPU. */
+
+	if (args_present("nosmp")) return;
 
 	struct rsdt * rsdt = mmu_map_from_physical(rsdp->rsdt_address);
 
@@ -195,6 +241,8 @@ void acpi_initialize(void) {
 	if (!lapic_base || cores <= 1) {
 		return;
 	}
+
+	processor_count = cores;
 
 	/* Allocate a virtual address with which we can poke the lapic */
 	lapic_final = (uintptr_t)mmu_map_mmio_region(lapic_base, 0x1000);

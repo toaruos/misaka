@@ -46,6 +46,7 @@ list_t * process_queue; /* Scheduler ready queue. This the round-robin source. T
 list_t * sleep_queue;   /* Ordered list of processes waiting to be awoken by timeouts. The head is the earliest thread to awaken. */
 
 struct ProcessorLocal processor_local_data[32] = {0};
+int processor_count = 1;
 
 /* The following locks protect access to the process tree, scheduler queue,
  * sleeping, and the very special wait queue... */

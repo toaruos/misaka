@@ -155,10 +155,16 @@ struct ProcessorLocal {
 	union PML * current_pml;
 #ifdef __x86_64__
 	int lapic_id;
+	/* Processor information loaded at startup. */
+	int  cpu_model;
+	int  cpu_family;
+	char cpu_model_name[48];
+	const char * cpu_manufacturer;
 #endif
 };
 
 extern struct ProcessorLocal processor_local_data[32];
+extern int processor_count;
 
 /**
  * @brief Core-local kernel data.

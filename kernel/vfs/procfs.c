@@ -250,51 +250,31 @@ static fs_node_t * procfs_procdir_create(process_t * process) {
 	return fnode;
 }
 
-#define cpuid(in,a,b,c,d) do { asm volatile ("cpuid" : "=a"(a),"=b"(b),"=c"(c),"=d"(d) : "a"(in)); } while(0)
-
 static uint64_t cpuinfo_func(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t *buffer) {
-	char buf[1024];
+	char buf[4096];
+	size_t _bsize = 0;
 
-	unsigned long a, b, unused;;
-	cpuid(0,unused,b,unused,unused);
-
-	const char * _manu = "Unknown";
-	int _model = 0, _family = 0;
-
-	if (b == 0x756e6547) {
-		cpuid(1, a, b, unused, unused);
-		_manu   = "Intel";
-		_model  = (a >> 4) & 0x0F;
-		_family = (a >> 8) & 0x0F;
-	} else if (b == 0x68747541) {
-		cpuid(1, a, unused, unused, unused);
-		_manu   = "AMD";
-		_model  = (a >> 4) & 0x0F;
-		_family = (a >> 8) & 0x0F;
+#ifdef __x86_64__
+	for (int i = 0; i < processor_count; ++i) {
+		_bsize += snprintf(buf + _bsize, 1000,
+				"Processor: %d\n"
+				"Manufacturer: %s\n"
+				"MHz: %zd\n"
+				"Family: %d\n"
+				"Model: %d\n"
+				"Model name: %s\n"
+				"LAPIC id: %d\n"
+				"\n",
+				processor_local_data[i].cpu_id,
+				processor_local_data[i].cpu_manufacturer,
+				arch_cpu_mhz(), /* TODO Should this be per-cpu? */
+				processor_local_data[i].cpu_family,
+				processor_local_data[i].cpu_model,
+				processor_local_data[i].cpu_model_name,
+				processor_local_data[i].lapic_id
+				);
 	}
-
-	char model_name[48] = "(unknown)";
-
-	/* See if we can get a long manufacturer strings */
-	cpuid(0x80000000, a, unused, unused, unused);
-	if (a >= 0x80000004) {
-		uint32_t brand[12];
-		cpuid(0x80000002, brand[0], brand[1], brand[2], brand[3]);
-		cpuid(0x80000003, brand[4], brand[5], brand[6], brand[7]);
-		cpuid(0x80000004, brand[8], brand[9], brand[10], brand[11]);
-
-		memcpy(model_name, brand, 48);
-	}
-
-	size_t _mhz = arch_cpu_mhz();
-
-	size_t _bsize = snprintf(buf, 1000,
-		"Manufacturer: %s\n"
-		"MHz: %zd\n"
-		"Family: %d\n"
-		"Model: %d\n"
-		"Model name: %s\n"
-		, _manu, _mhz, _family, _model, model_name);
+#endif
 
 	if (offset > _bsize) return 0;
 	if (size > _bsize - offset) size = _bsize - offset;
