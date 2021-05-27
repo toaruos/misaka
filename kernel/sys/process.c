@@ -293,6 +293,7 @@ static void _kidle(void) {
 
 static void _kburn(void) {
 	while (1) {
+		arch_pause();
 		if (((volatile list_t *)process_queue)->head) switch_next();
 	}
 }
@@ -558,6 +559,8 @@ void make_process_ready(volatile process_t * proc) {
 	spin_lock(process_queue_lock);
 	list_append(process_queue, (node_t*)&proc->sched_node);
 	spin_unlock(process_queue_lock);
+
+	arch_wakeup_others();
 }
 
 /**
@@ -866,6 +869,7 @@ int waitpid(int pid, int * status, int options) {
 			}
 			int pid = candidate->id;
 			if (candidate->flags & PROC_FLAG_FINISHED) {
+				while (*((volatile int *)&candidate->flags) & PROC_FLAG_RUNNING);
 				process_delete((process_t*)candidate);
 			}
 			return pid;

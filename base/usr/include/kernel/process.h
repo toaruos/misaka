@@ -216,4 +216,5 @@ extern void arch_set_kernel_stack(uintptr_t);
 extern void arch_enter_user(uintptr_t entrypoint, int argc, char * argv[], char * envp[], uintptr_t stack);
 __attribute__((noreturn))
 extern void arch_enter_signal_handler(uintptr_t,int);
+extern void arch_wakeup_others(void);
 
