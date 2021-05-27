@@ -50,7 +50,9 @@ extern struct regs * _irq12(struct regs*);
 extern struct regs * _irq13(struct regs*);
 extern struct regs * _irq14(struct regs*);
 extern struct regs * _irq15(struct regs*);
-extern struct regs * _isr127(struct regs*);
+extern struct regs * _isr125(struct regs*); /* Does not actually take regs */
+extern struct regs * _isr126(struct regs*); /* Does not actually take regs */
+extern struct regs * _isr127(struct regs*); /* Syscall entry point */
 
 typedef struct regs * (*interrupt_handler_t)(struct regs *);
 

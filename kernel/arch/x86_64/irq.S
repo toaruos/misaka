@@ -30,7 +30,7 @@
 /* Interrupt Requests */
 ISR_NOERR 0
 ISR_NOERR 1
-ISR_NOERR 2
+//ISR_NOERR 2
 ISR_NOERR 3
 ISR_NOERR 4
 ISR_NOERR 5
@@ -76,7 +76,38 @@ IRQ 12, 44
 IRQ 13, 45
 IRQ 14, 46
 IRQ 15, 47
+
+/* syscall entry point */
 ISR_NOERR 127
+
+/* No op, used to signal sleeping processor to wake and check the queue. */
+.extern lapic_final
+.global _isr126
+.type _isr126, @function
+_isr126:
+    pushq %r12
+    mov (lapic_final), %r12
+    movq $0, 0xb0(%r12)
+    popq %r12
+    iretq
+
+/* Fatal signal, stop everything. */
+.global _isr125
+.type _isr125, @function
+_isr125:
+    cli
+1:
+    hlt
+    jmp 1b
+
+/* Fatal signal, stop everything. */
+.global _isr2
+.type _isr2, @function
+_isr2:
+    cli
+1:
+    hlt
+    jmp 1b
 
 .macro _swapgs
     cmpq $8, 24(%rsp)

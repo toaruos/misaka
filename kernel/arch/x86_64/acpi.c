@@ -95,6 +95,7 @@ static void short_delay(unsigned long amount) {
 }
 
 static volatile int _ap_current = 0;
+uintptr_t lapic_final = 0;
 
 #define cpuid(in,a,b,c,d) do { asm volatile ("cpuid" : "=a"(a),"=b"(b),"=c"(c),"=d"(d) : "a"(in)); } while(0)
 
@@ -113,6 +114,8 @@ void ap_main(void) {
 	fpu_initialize();
 	pat_initialize();
 
+	/* Enable our spurious vector register */
+	*((volatile uint32_t*)(lapic_final + 0x0F0)) = 0x127;
 
 	/* Set our pml pointers */
 	this_core->current_pml = &init_page_region[0];
@@ -160,13 +163,19 @@ void load_processor_info(void) {
 	}
 }
 
-
-uintptr_t lapic_final = 0;
-void lapic_send_ipi(int i, uint32_t val) {
-	*((volatile uint32_t*)(lapic_final + 0x310)) = (i << 24);
+void lapic_write(size_t addr, uint32_t value) {
+	*((volatile uint32_t*)(lapic_final + addr)) = value;
 	asm volatile ("":::"memory");
-	*((volatile uint32_t*)(lapic_final + 0x300)) = val;
-	do { asm volatile ("pause" : : : "memory"); } while (*((volatile uint32_t*)(lapic_final + 0x300)) & (1 << 12));
+}
+
+uint32_t lapic_read(size_t addr) {
+	return *((volatile uint32_t*)(lapic_final + addr));
+}
+
+void lapic_send_ipi(int i, uint32_t val) {
+	lapic_write(0x310, i << 24);
+	lapic_write(0x300, val);
+	do { asm volatile ("pause" : : : "memory"); } while (lapic_read(0x300) & (1 << 12));
 }
 
 void acpi_initialize(void) {
@@ -238,14 +247,14 @@ void acpi_initialize(void) {
 		}
 	}
 
-	if (!lapic_base || cores <= 1) {
-		return;
-	}
-
 	processor_count = cores;
+
+	if (!lapic_base) return;
 
 	/* Allocate a virtual address with which we can poke the lapic */
 	lapic_final = (uintptr_t)mmu_map_mmio_region(lapic_base, 0x1000);
+
+	if (cores <= 1) return;
 
 	/* Map the bootstrap code */
 	memcpy(mmu_map_from_physical(0x1000), &_ap_bootstrap_start, (uintptr_t)&_ap_bootstrap_end - (uintptr_t)&_ap_bootstrap_start);

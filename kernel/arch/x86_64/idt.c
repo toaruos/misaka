@@ -86,6 +86,8 @@ void idt_install(void) {
 	idt_set_gate(46, _irq14, 0x08, 0x8E, 0);
 	idt_set_gate(47, _irq15, 0x08, 0x8E, 0);
 
+	idt_set_gate(125, _isr125, 0x08, 0x8E, 0); /* Halts everyone. */
+	idt_set_gate(126, _isr126, 0x08, 0x8E, 0); /* Intentionally does nothing. */
 	idt_set_gate(127, _isr127, 0x08, 0x8E, 1);
 
 	asm volatile (
@@ -103,7 +105,6 @@ void idt_ap_install(void) {
 	);
 }
 
-static spin_lock_t fault_lock = {0};
 static spin_lock_t dump_lock = {0};
 static void dump_regs(struct regs * r) {
 	spin_lock(dump_lock);
@@ -126,41 +127,6 @@ static void dump_regs(struct regs * r) {
 }
 
 extern void syscall_handler(struct regs *);
-
-static const char *exception_messages[32] = {
-	"Division by zero",
-	"Debug",
-	"Non-maskable interrupt",
-	"Breakpoint",
-	"Detected overflow",
-	"Out-of-bounds",
-	"Invalid opcode",
-	"No coprocessor",
-	"Double fault",
-	"Coprocessor segment overrun",
-	"Bad TSS",
-	"Segment not present",
-	"Stack fault",
-	"General protection fault",
-	"Page fault",
-	"Unknown interrupt",
-	"Coprocessor fault",
-	"Alignment check",
-	"Machine check",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved",
-	"Reserved"
-};
 
 #define IRQ_CHAIN_SIZE  16
 #define IRQ_CHAIN_DEPTH 4
@@ -189,15 +155,11 @@ void irq_uninstall_handler(size_t irq) {
 }
 
 struct regs * isr_handler(struct regs * r) {
-	this_core->current_process->interrupt_registers = r;
-
 	switch (r->int_no) {
 		case 14: /* Page fault */ {
 			uintptr_t faulting_address;
 			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
 			if (!this_core->current_process || r->cs == 0x08) {
-				printf("Page fault in kernel (cpu=%d) at %#zx\n", this_core->cpu_id, faulting_address);
-				dump_regs(r);
 				arch_fatal();
 			}
 			if (faulting_address == 0xFFFFB00F) {
@@ -210,10 +172,6 @@ struct regs * isr_handler(struct regs * r) {
 				break;
 			}
 #ifdef DEBUG_FAULTS
-			spin_lock(fault_lock);
-			printf("Page fault in pid=%d (%s; cpu=%d) at %#zx\n", (int)this_core->current_process->id, this_core->current_process->name, this_core->cpu_id, faulting_address);
-			dump_regs(r);
-			spin_unlock(fault_lock);
 			arch_fatal();
 #else
 # ifdef LOUD_SEGFAULTS
@@ -225,18 +183,12 @@ struct regs * isr_handler(struct regs * r) {
 			break;
 		}
 		case 13: /* GPF */ {
-			if (!this_core->current_process || r->cs == 0x08) {
-				printf("GPF in kernel (cpu=%d)\n", this_core->cpu_id);
-				dump_regs(r);
-				arch_fatal();
-			}
 #ifdef DEBUG_FAULTS
-			spin_lock(fault_lock);
-			printf("GPF in userspace on CPU %d\n", this_core->cpu_id);
-			dump_regs(r);
-			spin_unlock(fault_lock);
 			arch_fatal();
 #else
+			if (!this_core->current_process || r->cs == 0x08) {
+				arch_fatal();
+			}
 # ifdef LOUD_SEGFAULTS
 			printf("GPF in userspace on CPU %d\n", this_core->cpu_id);
 			dump_regs(r);
@@ -246,11 +198,6 @@ struct regs * isr_handler(struct regs * r) {
 			break;
 		}
 		case 8: /* Double fault */ {
-			printf("Double fault?\n");
-			uintptr_t faulting_address;
-			asm volatile("mov %%cr2, %0" : "=r"(faulting_address));
-			printf("cr2: 0x%016lx\n", faulting_address);
-			dump_regs(r);
 			arch_fatal();
 			break;
 		}
@@ -265,18 +212,12 @@ struct regs * isr_handler(struct regs * r) {
 		}
 		default: {
 			if (r->int_no < 32) {
-				if (!this_core->current_process || r->cs == 0x08) {
-					printf("Unhandled %s in kernel (cpu=%d)\n", exception_messages[r->int_no], this_core->cpu_id);
-					dump_regs(r);
-					arch_fatal();
-				}
 #ifdef DEBUG_FAULTS
-				spin_lock(fault_lock);
-				printf("Unhandled %s in userspace (cpu=%d)\n", exception_messages[r->int_no], this_core->cpu_id);
-				dump_regs(r);
-				spin_unlock(fault_lock);
 				arch_fatal();
 #else
+				if (!this_core->current_process || r->cs == 0x08) {
+					arch_fatal();
+				}
 				send_signal(this_core->current_process->id, SIGILL, 1);
 #endif
 			} else {
@@ -295,7 +236,7 @@ struct regs * isr_handler(struct regs * r) {
 
 done:
 
-	if (this_core->current_process == this_core->kernel_idle_task && process_queue->head) {
+	if (this_core->current_process == this_core->kernel_idle_task && process_queue && process_queue->head) {
 		/* If this is kidle and we got here, instead of finishing the interrupt
 		 * we can just switch task and there will probably be something else
 		 * to run that was awoken by the interrupt. */
