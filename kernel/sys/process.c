@@ -54,7 +54,6 @@ static spin_lock_t tree_lock = { 0 };
 static spin_lock_t process_queue_lock = { 0 };
 static spin_lock_t wait_lock_tmp = { 0 };
 static spin_lock_t sleep_lock = { 0 };
-static spin_lock_t talking = { 0 };
 
 /**
  * @brief Restore the context of the next available process's kernel thread.

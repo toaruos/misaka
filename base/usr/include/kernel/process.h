@@ -47,7 +47,7 @@ typedef struct image {
 	uintptr_t heap;
 	uintptr_t stack;
 	uintptr_t shm_heap;
-	volatile int lock[2];
+	spin_lock_t lock;
 } image_t;
 
 typedef struct file_descriptors {
