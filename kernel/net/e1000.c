@@ -25,6 +25,8 @@
 
 #include <kernel/net/e1000.h>
 
+#define INTS ((1 << 2) | (1 << 6) | (1 << 7) | (1 << 1) | (1 << 0))
+
 struct e1000_nic {
 	/* This should be generic netif struct stuff... */
 	char if_name[32];
@@ -140,10 +142,14 @@ static void read_mac(struct e1000_nic * device) {
 		device->mac[4] = t & 0xFF;
 		device->mac[5] = t >> 8;
 	} else {
-		uint8_t * mac_addr = (uint8_t *)(device->mmio_addr + E1000_REG_RXADDR);
-		for (int i = 0; i < 6; ++i) {
-			device->mac[i] = mac_addr[i];
-		}
+		uint32_t mac_addr_low  = *(uint32_t *)(device->mmio_addr + E1000_REG_RXADDR);
+		uint32_t mac_addr_high = *(uint32_t *)(device->mmio_addr + E1000_REG_RXADDR + 4);
+		device->mac[0] = (mac_addr_low >> 0 ) & 0xFF;
+		device->mac[1] = (mac_addr_low >> 8 ) & 0xFF;
+		device->mac[2] = (mac_addr_low >> 16) & 0xFF;
+		device->mac[3] = (mac_addr_low >> 24) & 0xFF;
+		device->mac[4] = (mac_addr_high>> 0 ) & 0xFF;
+		device->mac[5] = (mac_addr_high>> 8 ) & 0xFF;
 	}
 }
 
@@ -155,6 +161,10 @@ static void e1000_handle(struct e1000_nic * nic, uint32_t status) {
 
 	if (status & ICR_TXQE) {
 		/* Transmit queue empty; nothing to do. */
+	}
+
+	if (status & ICR_TXDW) {
+		/* transmit descriptor written */
 	}
 
 	if (status & (ICR_RXO | ICR_RXT0)) {
@@ -191,11 +201,14 @@ static int irq_handler(struct regs *r) {
 		if (devices[i]->irq_number == irq) {
 			uint32_t status = read_command(devices[i], E1000_REG_ICR);
 			if (status) {
+				write_command(devices[i], 0x00D8,INTS);
+				e1000_handle(devices[i], status);
+				read_command(devices[i], E1000_REG_ICR);
 				if (!handled) {
 					handled = 1;
-					irq_ack(r->int_no - 32);
+					irq_ack(irq);
 				}
-				e1000_handle(devices[i], status);
+				write_command(devices[i], 0x00D0,INTS);
 			}
 		}
 	}
@@ -226,8 +239,11 @@ static void init_rx(struct e1000_nic * device) {
 
 	write_command(device, E1000_REG_RCTRL,
 		RCTL_EN  |
-		(read_command(device, E1000_REG_RCTRL) & (~((1 << 17) | (1 << 16)))));
-
+		(1 << 2) | /* store bad packets */
+		(1 << 4) | /* multicast promiscuous */
+		(1 << 15) | /* broadcast accept */
+		(1 << 26) /* strip CRC */
+	);
 }
 
 static void init_tx(struct e1000_nic * device) {
@@ -381,15 +397,13 @@ static void e1000_init(void * data) {
 		write_command(nic, 0x4000 + i * 4, 0);
 	}
 
-	write_command(nic, E1000_REG_RCTRL, (1 << 4));
-
 	init_rx(nic);
 	init_tx(nic);
 
 	/* Twiddle interrupts */
-	write_command(nic, 0x00D0, 0xFF);
-	write_command(nic, 0x00D8, 0xFF);
-	write_command(nic, 0x00D0,(1 << 2) | (1 << 6) | (1 << 7) | (1 << 1) | (1 << 0));
+	write_command(nic, 0x00D0, 0xFFFFFFFF);
+	write_command(nic, 0x00D8, 0xFFFFFFFF);
+	write_command(nic, 0x00D0, INTS);
 	delay_yield(10000);
 
 	nic->link_status = (read_command(nic, E1000_REG_STATUS) & (1 << 1));
@@ -411,7 +425,7 @@ static void e1000_init(void * data) {
 }
 
 static void find_e1000(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * found) {
-	if ((vendorid == 0x8086) && (deviceid == 0x100e || deviceid == 0x1004 || deviceid == 0x100f || deviceid == 0x10ea)) {
+	if ((vendorid == 0x8086) && (deviceid == 0x100e || deviceid == 0x1004 || deviceid == 0x100f || deviceid == 0x10ea || deviceid == 0x10d3)) {
 		/* Allocate a device */
 		struct e1000_nic * nic = calloc(1,sizeof(struct e1000_nic));
 		nic->pci_device = device;
