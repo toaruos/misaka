@@ -262,7 +262,6 @@ int main(int argc, char * argv[]) {
 	}
 
 	uint32_t yiaddr;
-	uint32_t siaddr;
 
 	do {
 		char buf[8092] = {0};
@@ -281,7 +280,6 @@ int main(int argc, char * argv[]) {
 		}
 
 		yiaddr = response->dhcp_header.yiaddr;
-		siaddr = response->dhcp_header.siaddr;
 		char yiaddr_ip[16];
 		ip_ntoa(ntohl(yiaddr), yiaddr_ip);
 
@@ -303,9 +301,6 @@ int main(int argc, char * argv[]) {
 
 		fill(&thething, 14);
 
-		thething.dhcp_header.ciaddr = yiaddr;
-		thething.dhcp_header.siaddr = siaddr;
-
 		write(netdev, &thething, sizeof(struct payload));
 	}
 
@@ -326,7 +321,6 @@ int main(int argc, char * argv[]) {
 		}
 
 		yiaddr = response->dhcp_header.yiaddr;
-		siaddr = response->dhcp_header.siaddr;
 		char yiaddr_ip[16];
 		ip_ntoa(ntohl(yiaddr), yiaddr_ip);
 
