@@ -35,6 +35,7 @@ struct e1000_nic {
 
 	fs_node_t * device_node;
 	uint32_t pci_device;
+	uint16_t deviceid;
 	uintptr_t mmio_addr;
 	int irq_number;
 
@@ -101,6 +102,9 @@ static struct ethernet_packet * dequeue_packet(struct e1000_nic * device) {
 }
 
 static int eeprom_detect(struct e1000_nic * device) {
+
+	/* Definitely not */
+	if (device->deviceid == 0x10d3) return 0;
 
 	write_command(device, E1000_REG_EEPROM, 1);
 
@@ -429,6 +433,7 @@ static void find_e1000(uint32_t device, uint16_t vendorid, uint16_t deviceid, vo
 		/* Allocate a device */
 		struct e1000_nic * nic = calloc(1,sizeof(struct e1000_nic));
 		nic->pci_device = device;
+		nic->deviceid   = deviceid;
 		devices[device_count++] = nic;
 
 		snprintf(nic->if_name, 31,
