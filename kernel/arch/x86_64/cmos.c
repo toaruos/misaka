@@ -169,20 +169,32 @@ void arch_clock_initialize(void) {
 		"rdtsc\n"
 		"movl  %%eax, %2\n"
 		"movl  %%edx, %3\n"
-		/* Loop into output goes high */
-	"_loop:\n"
+		/* In QEMU and VirtualBox, this seems to flip low.
+		 * On real hardware and VMware it flips high. */
 		"inb   $0x61, %%al\n"
 		"andb  $0x20, %%al\n"
-		"jnz   _loop\n"
-		/* Do one final read to end_ vars */
+		"jz   2f\n"
+		/* Loop until output goes low? */
+	"1:\n"
+		"inb   $0x61, %%al\n"
+		"andb  $0x20, %%al\n"
+		"jnz   1b\n"
 		"rdtsc\n"
+		"jmp   3f\n"
+		/* Loop until output goes high */
+	"2:\n"
+		"inb   $0x61, %%al\n"
+		"andb  $0x20, %%al\n"
+		"jz   2b\n"
+		"rdtsc\n"
+	"3:\n"
 		: "=a"(end_lo), "=d"(end_hi), "=r"(start_lo), "=r"(start_hi)
 	);
 
 	uintptr_t end   = ((end_hi & 0xFFFFffff)   << 32) | (end_lo & 0xFFFFffff);
 	uintptr_t start = ((uintptr_t)(start_hi & 0xFFFFffff) << 32) | (start_lo & 0xFFFFffff);
 	tsc_mhz = (end - start) / 10000;
-	if (tsc_mhz == 0) tsc_mhz = 1000; /* uh oh */
+	if (tsc_mhz == 0) tsc_mhz = 2000; /* uh oh */
 }
 
 #define SUBTICKS_PER_TICK 1000000
