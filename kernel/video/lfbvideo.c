@@ -26,8 +26,8 @@
 /* FIXME: Not sure what to do with this; ifdef around it? */
 #include <kernel/arch/x86_64/ports.h>
 
-#define PREFERRED_W  1024
-#define PREFERRED_H  768
+static int PREFERRED_W = 1440;
+static int PREFERRED_H = 900;
 #define PREFERRED_VY 4096
 #define PREFERRED_B 32
 
@@ -280,6 +280,13 @@ static void graphics_install_preset(uint16_t w, uint16_t h) {
 	finalize_graphics("preset");
 }
 
+static void check_multiboot(void) {
+	if ((mboot_struct->flags & MULTIBOOT_FLAG_FB) && (mboot_struct->framebuffer_width)) {
+		PREFERRED_W = mboot_struct->framebuffer_width;
+		PREFERRED_H = mboot_struct->framebuffer_height;
+	}
+}
+
 #define SVGA_IO_BASE (vmware_io)
 #define SVGA_IO_MUL 1
 #define SVGA_INDEX_PORT 0
@@ -382,6 +389,7 @@ static int lfb_init(const char * c) {
 
 	uint16_t x, y;
 	if (argc < 3) {
+		check_multiboot();
 		x = PREFERRED_W;
 		y = PREFERRED_H;
 	} else {
@@ -416,14 +424,7 @@ static int lfb_init(const char * c) {
 
 int framebuffer_initialize(void) {
 	lfb_device = lfb_video_device_create();
-
-	if (args_present("vid")) {
-		lfb_init(args_value("vid"));
-	} else {
-		/* Default to something... */
-		lfb_init("auto,1440,900");
-	}
-
+	lfb_init(args_present("vid") ? args_value("vid") : "auto");
 	vfs_mount("/dev/fb0", lfb_device);
 
 	return 0;
