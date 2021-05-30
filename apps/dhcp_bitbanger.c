@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <poll.h>
+#include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
@@ -10,7 +12,7 @@ struct ethernet_packet {
 	uint8_t source[6];
 	uint16_t type;
 	uint8_t payload[];
-} __attribute__((packed));
+} __attribute__((packed)) __attribute__((aligned(2)));
 
 struct ipv4_packet {
 	uint8_t  version_ihl;
@@ -24,7 +26,7 @@ struct ipv4_packet {
 	uint32_t source;
 	uint32_t destination;
 	uint8_t  payload[];
-} __attribute__ ((packed));
+} __attribute__ ((packed)) __attribute__((aligned(2)));
 
 struct udp_packet {
 	uint16_t source_port;
@@ -32,7 +34,7 @@ struct udp_packet {
 	uint16_t length;
 	uint16_t checksum;
 	uint8_t  payload[];
-} __attribute__ ((packed));
+} __attribute__ ((packed)) __attribute__((aligned(2)));
 
 struct dhcp_packet {
 	uint8_t op;
@@ -58,7 +60,7 @@ struct dhcp_packet {
 	uint32_t magic;
 
 	uint8_t  options[];
-} __attribute__ ((packed));
+} __attribute__ ((packed)) __attribute__((aligned(2)));
 
 struct dns_packet {
 	uint16_t qid;
@@ -68,7 +70,7 @@ struct dns_packet {
 	uint16_t authorities;
 	uint16_t additional;
 	uint8_t data[];
-} __attribute__ ((packed));
+} __attribute__ ((packed)) __attribute__((aligned(2)));
 
 struct tcp_header {
 	uint16_t source_port;
@@ -83,7 +85,7 @@ struct tcp_header {
 	uint16_t urgent;
 
 	uint8_t  payload[];
-} __attribute__((packed));
+} __attribute__((packed)) __attribute__((aligned(2)));
 
 struct tcp_check_header {
 	uint32_t source;
@@ -135,6 +137,60 @@ struct payload {
 	uint8_t payload[32];
 };
 
+static void eth_ntoa(const uint8_t addr[6], char * out) {
+	/* XX:XX:XX:XX:XX:XX */
+	snprintf(out, 18, "%02x:%02x:%02x:%02x:%02x:%02x",
+		addr[0], addr[1], addr[2],
+		addr[3], addr[4], addr[5]);
+}
+
+static void ip_ntoa(const uint32_t src_addr, char * out) {
+	snprintf(out, 16, "%d.%d.%d.%d",
+		(src_addr & 0xFF000000) >> 24,
+		(src_addr & 0xFF0000) >> 16,
+		(src_addr & 0xFF00) >> 8,
+		(src_addr & 0xFF));
+}
+
+static const char * eth_type_str(uint16_t type) {
+	switch(type) {
+		case ETHERNET_TYPE_IPV4: return "IPv4";
+		case ETHERNET_TYPE_ARP: return "ARP";
+		default: return "unknown";
+	}
+}
+
+static void print_ipv4_header(struct ipv4_packet * packet) {
+	/* get addresses, type... */
+	char dest_addr[16];
+	char src_addr[16];
+	ip_ntoa(ntohl(packet->destination), dest_addr);
+	ip_ntoa(ntohl(packet->source), src_addr);
+	fprintf(stderr, "%s -> %s %d (%s) ",
+		src_addr, dest_addr, packet->protocol,
+		packet->protocol == IPV4_PROT_UDP ? "udp" :
+			packet->protocol == IPV4_PROT_TCP ? "tcp" : "?");
+}
+
+void print_header(const struct payload * header) {
+	/* Assume it's at least an Ethernet frame */
+	char dest_addr[18];
+	char src_addr[18];
+	eth_ntoa(header->eth_header.destination, dest_addr);
+	eth_ntoa(header->eth_header.source, src_addr);
+	fprintf(stderr, "%s -> %s %d (%s) ",
+		src_addr, dest_addr, ntohs(header->eth_header.type), eth_type_str(ntohs(header->eth_header.type)));
+	switch (ntohs(header->eth_header.type)) {
+		case ETHERNET_TYPE_IPV4:
+			print_ipv4_header((void*)&header->eth_header.payload);
+			break;
+		case ETHERNET_TYPE_ARP:
+			//print_arp_header(&header->eth_header.payload);
+			break;
+	}
+	fprintf(stderr, "\n");
+}
+
 uint16_t calculate_ipv4_checksum(struct ipv4_packet * p) {
 	uint32_t sum = 0;
 	uint16_t * s = (uint16_t *)p;
@@ -149,14 +205,6 @@ uint16_t calculate_ipv4_checksum(struct ipv4_packet * p) {
 	}
 
 	return ~(sum & 0xFFFF) & 0xFFFF;
-}
-
-void ip_ntoa(uint32_t src_addr, char * out) {
-	sprintf(out, "%d.%d.%d.%d",
-		(src_addr & 0xFF000000) >> 24,
-		(src_addr & 0xFF0000) >> 16,
-		(src_addr & 0xFF00) >> 8,
-		(src_addr & 0xFF));
 }
 
 uint8_t mac_addr[6];
@@ -221,12 +269,14 @@ void fill(struct payload *it, size_t payload_size) {
 
 int main(int argc, char * argv[]) {
 
+#if 0
 	/* Let's make a socket. */
 	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-	//if (sockfd < 0) { perror("socket"); return 1; }
+	if (sockfd < 0) { perror("socket"); return 1; }
 
 	/* Bind the socket to the requested device. */
 	//if (setsockopt(sockfd, SOL_SOCKET, SO_BINDTODEVICE, 
+#endif
 
 	char * if_name = "enp0s4";
 	char if_path[100];
@@ -262,9 +312,19 @@ int main(int argc, char * argv[]) {
 	}
 
 	uint32_t yiaddr;
+	int stage = 1;
 
 	do {
 		char buf[8092] = {0};
+
+		struct pollfd fds[1];
+		fds[0].fd = netdev;
+		fds[0].events = POLLIN;
+		int ret = poll(fds,1,2000);
+		if (ret <= 0) {
+			printf("...\n");
+			continue;
+		}
 		ssize_t rsize = read(netdev, &buf, 8092);
 
 		if (rsize <= 0) {
@@ -274,60 +334,41 @@ int main(int argc, char * argv[]) {
 
 		struct payload * response = (void*)buf;
 
-		if (ntohs(response->udp_header.destination_port) != 68) {
-			printf("not what I was expecting\n");
-			continue;
-		}
-
-		yiaddr = response->dhcp_header.yiaddr;
-		char yiaddr_ip[16];
-		ip_ntoa(ntohl(yiaddr), yiaddr_ip);
-
-		printf("Response from DHCP Discover: %s\n", yiaddr_ip);
-
-		break;
-	} while (1);
-
-	{
-		printf("Writing request\n");
-		struct payload thething = {
-			.payload = {53,1,3,50,4,
-				(yiaddr) & 0xFF,
-				(yiaddr >> 8) & 0xFF,
-				(yiaddr >> 16) & 0xFF,
-				(yiaddr >> 24) & 0xFF,
-				55,2,3,6,255,0}
-		};
-
-		fill(&thething, 14);
-
-		write(netdev, &thething, sizeof(struct payload));
-	}
-
-	do {
-		char buf[8092] = {0};
-		ssize_t rsize = read(netdev, &buf, 8092);
-
-		if (rsize <= 0) {
-			printf("bad size? %zd\n", rsize);
-			continue;
-		}
-
-		struct payload * response = (void*)buf;
+		print_header(response);
 
 		if (ntohs(response->udp_header.destination_port) != 68) {
-			printf("not what I was expecting\n");
 			continue;
 		}
 
-		yiaddr = response->dhcp_header.yiaddr;
-		char yiaddr_ip[16];
-		ip_ntoa(ntohl(yiaddr), yiaddr_ip);
+		if (stage == 1) {
+			yiaddr = response->dhcp_header.yiaddr;
+			char yiaddr_ip[16];
+			ip_ntoa(ntohl(yiaddr), yiaddr_ip);
 
-		printf("ACK returns: %s\n", yiaddr_ip);
+			printf("Response from DHCP Discover: %s\n", yiaddr_ip);
+			struct payload thething = {
+				.payload = {53,1,3,50,4,
+					(yiaddr) & 0xFF,
+					(yiaddr >> 8) & 0xFF,
+					(yiaddr >> 16) & 0xFF,
+					(yiaddr >> 24) & 0xFF,
+					55,2,3,6,255,0}
+			};
 
-		break;
+			fill(&thething, 14);
+			write(netdev, &thething, sizeof(struct payload));
+
+			stage = 2;
+		} else if (stage == 2) {
+			yiaddr = response->dhcp_header.yiaddr;
+			char yiaddr_ip[16];
+			ip_ntoa(ntohl(yiaddr), yiaddr_ip);
+
+			printf("ACK returns: %s\n", yiaddr_ip);
+			printf("Address is configured, continuing trace mode.\n");
+
+			stage = 3;
+		}
 	} while (1);
-
 	return 0;
 }

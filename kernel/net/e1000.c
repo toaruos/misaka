@@ -45,8 +45,10 @@ struct e1000_nic {
 	int link_status;
 
 	spin_lock_t net_queue_lock;
+	spin_lock_t alert_lock;
 	list_t * net_queue;
 	list_t * rx_wait;
+	list_t * alert_wait;
 
 	uint8_t * rx_virt[E1000_NUM_RX_DESC];
 	uint8_t * tx_virt[E1000_NUM_TX_DESC];
@@ -157,6 +159,19 @@ static void read_mac(struct e1000_nic * device) {
 	}
 }
 
+static void e1000_alert_waiters(struct e1000_nic * nic) {
+	spin_lock(nic->alert_lock);
+	while (nic->alert_wait->head) {
+		node_t * node = list_dequeue(nic->alert_wait);
+		process_t * p = node->value;
+		free(node);
+		spin_unlock(nic->alert_lock);
+		process_alert_node(p, nic->device_node);
+		spin_lock(nic->alert_lock);
+	}
+	spin_unlock(nic->alert_lock);
+}
+
 static void e1000_handle(struct e1000_nic * nic, uint32_t status) {
 	if (status & ICR_LSC) {
 		/* TODO: Change interface link status. */
@@ -194,6 +209,7 @@ static void e1000_handle(struct e1000_nic * nic, uint32_t status) {
 			}
 		} while (1);
 		wakeup_queue(nic->rx_wait);
+		e1000_alert_waiters(nic);
 	}
 }
 
@@ -296,6 +312,22 @@ static uint64_t read_e1000(fs_node_t *node, uint64_t offset, uint64_t size, uint
 	return 8092;
 }
 
+static int check_e1000(fs_node_t *node) {
+	struct e1000_nic * nic = node->device;
+	return nic->net_queue->head ? 0 : 1;
+}
+
+static int wait_e1000(fs_node_t *node, void * process) {
+	struct e1000_nic * nic = node->device;
+	spin_lock(nic->alert_lock);
+	if (!list_find(nic->alert_wait, process)) {
+		list_insert(nic->alert_wait, process);
+	}
+	list_insert(((process_t *)process)->node_waits, nic->device_node);
+	spin_unlock(nic->alert_lock);
+	return 0;
+}
+
 static void e1000_init(void * data) {
 	struct e1000_nic * nic = data;
 	uint32_t e1000_device_pci = nic->pci_device;
@@ -388,6 +420,7 @@ static void e1000_init(void * data) {
 
 	nic->net_queue = list_create("e1000 net queue", nic);
 	nic->rx_wait = list_create("e1000 rx sem", nic);
+	nic->alert_wait = list_create("e1000 select waiters", nic);
 
 	nic->irq_number = pci_get_interrupt(e1000_device_pci);
 
@@ -419,6 +452,8 @@ static void e1000_init(void * data) {
 	nic->device_node->ioctl = ioctl_e1000;
 	nic->device_node->write = write_e1000;
 	nic->device_node->read  = read_e1000;
+	nic->device_node->selectcheck = check_e1000;
+	nic->device_node->selectwait  = wait_e1000;
 	nic->device_node->device = nic;
 
 	char tmp[100];
