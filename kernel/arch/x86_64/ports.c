@@ -1,3 +1,7 @@
+/**
+ * @file  kernel/arch/x86_64/ports.c
+ * @brief Port I/O methods for x86-64.
+ */
 #include <kernel/types.h>
 
 unsigned short inports(unsigned short _port) {

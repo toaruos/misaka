@@ -1,13 +1,35 @@
+/**
+ * @file  kernel/misc/pci.c
+ * @brief PCI configuration and scanning.
+ *
+ * Functions for dealing with PCI devices through configuration mode #1
+ * (CPU port I/O methods), including scanning and modifying device
+ * configuration bytes.
+ *
+ * This used to have methods for dealing with ISA bridge IRQ remapping,
+ * but it has been removed for the moment.
+ *
+ * TODO: Implement MSI configuration?
+ */
 #include <stdint.h>
 #include <kernel/string.h>
 #include <kernel/pci.h>
+
+/* TODO: PCI is sufficiently generic this shouldn't depend
+ *       directly on x86-64 hardware... */
 #include <kernel/arch/x86_64/ports.h>
 
+/**
+ * @brief Write to a PCI device configuration space field.
+ */
 void pci_write_field(uint32_t device, int field, int size, uint32_t value) {
 	outportl(PCI_ADDRESS_PORT, pci_get_addr(device, field));
 	outportl(PCI_VALUE_PORT, value);
 }
 
+/**
+ * @brief Read from a PCI device configuration space field.
+ */
 uint32_t pci_read_field(uint32_t device, int field, int size) {
 	outportl(PCI_ADDRESS_PORT, pci_get_addr(device, field));
 
@@ -24,12 +46,14 @@ uint32_t pci_read_field(uint32_t device, int field, int size) {
 	return 0xFFFF;
 }
 
+/**
+ * @brief Obtain the device type from the class and subclass fields.
+ */
 uint16_t pci_find_type(uint32_t dev) {
 	return (pci_read_field(dev, PCI_CLASS, 1) << 8) | pci_read_field(dev, PCI_SUBCLASS, 1);
 }
 
-
-void pci_scan_hit(pci_func_t f, uint32_t dev, void * extra) {
+static void pci_scan_hit(pci_func_t f, uint32_t dev, void * extra) {
 	int dev_vend = (int)pci_read_field(dev, PCI_VENDOR_ID, 2);
 	int dev_dvid = (int)pci_read_field(dev, PCI_DEVICE_ID, 2);
 
@@ -69,8 +93,14 @@ void pci_scan_bus(pci_func_t f, int type, int bus, void * extra) {
 	}
 }
 
+/**
+ * @brief Scan PCI buses for devices, calling the given function for each device.
+ *
+ * Used by drivers to implement device discovery, runs a callback function for ever
+ * device found. A device consists of a bus, slot, and function. Also performs
+ * recursive scans of bridges.
+ */
 void pci_scan(pci_func_t f, int type, void * extra) {
-
 	if ((pci_read_field(0, PCI_HEADER_TYPE, 1) & 0x80) == 0) {
 		pci_scan_bus(f,type,0,extra);
 		return;
@@ -86,50 +116,11 @@ void pci_scan(pci_func_t f, int type, void * extra) {
 	}
 }
 
-static void find_isa_bridge(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
-	if (vendorid == 0x8086 && (deviceid == 0x7000 || deviceid == 0x7110)) {
-		*((uint32_t *)extra) = device;
-	}
-}
-static uint32_t pci_isa = 0;
-static uint8_t pci_remaps[4] = {0};
-void pci_remap(void) {
-	pci_scan(&find_isa_bridge, -1, &pci_isa);
-	if (pci_isa) {
-		for (int i = 0; i < 4; ++i) {
-			pci_remaps[i] = pci_read_field(pci_isa, 0x60+i, 1);
-			if (pci_remaps[i] == 0x80) {
-				pci_remaps[i] = 10 + (i%1);
-			}
-		}
-		uint32_t out = 0;
-		memcpy(&out, &pci_remaps, 4);
-		pci_write_field(pci_isa, 0x60, 4, out);
-	}
-}
-
+/**
+ * @brief Extract the interrupt line from a device.
+ *
+ * Previously also did IRQ pin decoding, but we don't do that anymore.
+ */
 int pci_get_interrupt(uint32_t device) {
-	if (pci_isa) {
-		uint32_t irq_pin = pci_read_field(device, 0x3D, 1);
-		if (irq_pin == 0) {
-			return pci_read_field(device, PCI_INTERRUPT_LINE, 1);
-		}
-		int pirq = (irq_pin + pci_extract_slot(device) - 2) % 4;
-		int int_line = pci_read_field(device, PCI_INTERRUPT_LINE, 1);
-		if (pci_remaps[pirq] >= 0x80) {
-			if (int_line == 0xFF) {
-				int_line = 10;
-				pci_write_field(device, PCI_INTERRUPT_LINE, 1, int_line);
-			}
-			pci_remaps[pirq] = int_line;
-			uint32_t out = 0;
-			memcpy(&out, &pci_remaps, 4);
-			pci_write_field(pci_isa, 0x60, 4, out);
-			return int_line;
-		}
-		pci_write_field(device, PCI_INTERRUPT_LINE, 1, pci_remaps[pirq]);
-		return pci_remaps[pirq];
-	} else {
-		return pci_read_field(device, PCI_INTERRUPT_LINE, 1);
-	}
+	return pci_read_field(device, PCI_INTERRUPT_LINE, 1);
 }

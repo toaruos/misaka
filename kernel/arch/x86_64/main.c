@@ -33,8 +33,9 @@ extern char end[];
 
 extern void gdt_install(void);
 extern void idt_install(void);
+extern void pic_initialize(void);
 extern void pit_initialize(void);
-extern void acpi_initialize(void);
+extern void smp_initialize(void);
 extern void portio_initialize(void);
 extern void ps2hid_install(void);
 extern void serial_initialize(void);
@@ -62,9 +63,9 @@ static void multiboot_initialize(struct multiboot * mboot) {
 		memCount = (uintptr_t)mboot->mem_upper * 0x400 + 0x100000;
 	}
 
-	/* Check mmap if available */
-#if 0
-	/* The multiboot 0.6.96 spec actually says the upper_memory is at most
+	/**
+	 * FIXME:
+	 * The multiboot 0.6.96 spec actually says the upper_memory is at most
 	 * the address of the first hole, minus 1MiB, so in theory there should
 	 * not be any unavailable memory between 1MiB and mem_upper... that
 	 * also technically means there might be even higher memory above that
@@ -75,6 +76,7 @@ static void multiboot_initialize(struct multiboot * mboot) {
 	 * mem_upper is probably the total available physical RAM. That's probably
 	 * good enough for 1GiB~4GiB cases...
 	 */
+#if 0
 	printf("mem_upper = %#zx\n", mboot->mem_upper);
 	if (mboot->flags & MULTIBOOT_FLAG_MMAP) {
 		mboot_memmap_t * mmap = (void *)(uintptr_t)mboot->mmap_addr;
@@ -228,7 +230,7 @@ const char * arch_get_loader(void) {
 }
 
 /**
- * x86-64: The GS register, which is set by a pair of MSRs, tracks kernel stack.
+ * x86-64: The GS register, which is set by a pair of MSRs, tracks per-CPU kernel state.
  */
 void arch_set_core_base(uintptr_t base) {
 	asm volatile ("wrmsr" : : "c"(0xc0000101), "d"((uint32_t)(base >> 32)), "a"((uint32_t)(base & 0xFFFFFFFF)));
@@ -267,6 +269,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	gdt_install();
 	idt_install();
 	fpu_initialize();
+	pic_initialize();
 
 	/* Early generic stuff */
 	generic_startup();
@@ -281,7 +284,7 @@ int kmain(struct multiboot * mboot, uint32_t mboot_mag, void* esp) {
 	framebuffer_initialize();
 	fbterm_initialize();
 
-	acpi_initialize();
+	smp_initialize();
 
 	/* Decompress and mount all initial ramdisks. */
 	mount_multiboot_ramdisks(mboot);

@@ -1,3 +1,9 @@
+/**
+ * @file  kernel/arch/x86_64/smp.c
+ * @brief Multi-processor Support for x86-64.
+ *
+ * Locates and bootstraps APs using ACPI MADT tables.
+ */
 #include <stdint.h>
 #include <kernel/string.h>
 #include <kernel/process.h>
@@ -106,7 +112,7 @@ void ap_main(void) {
 	uint32_t ebx, _unused;
 	cpuid(0x1,_unused,ebx,_unused,_unused);
 	if (this_core->lapic_id != (int)(ebx >> 24)) {
-		printf("acpi: lapic id does not match\n");
+		printf("smp: lapic id does not match\n");
 	}
 
 	/* Load the IDT */
@@ -178,8 +184,8 @@ void lapic_send_ipi(int i, uint32_t val) {
 	do { asm volatile ("pause" : : : "memory"); } while (lapic_read(0x300) & (1 << 12));
 }
 
-void acpi_initialize(void) {
-	/* ACPI */
+void smp_initialize(void) {
+	/* Locate ACPI tables */
 	uintptr_t scan;
 	int good = 0;
 	for (scan = 0x000E0000; scan < 0x00100000; scan += 16) {
@@ -199,7 +205,7 @@ void acpi_initialize(void) {
 	load_processor_info();
 
 	if (!good) {
-		printf("acpi: No RSD PTR found\n");
+		printf("smp: No RSD PTR found\n");
 		return;
 	}
 
@@ -210,7 +216,7 @@ void acpi_initialize(void) {
 		check += *tmp;
 	}
 	if (check != 0) {
-		printf("acpi: Bad checksum on RSDP\n");
+		printf("smp: Bad checksum on RSDP\n");
 		return; /* bad checksum */
 	}
 
@@ -236,7 +242,7 @@ void acpi_initialize(void) {
 							processor_local_data[cores].lapic_id = entry[3];
 							cores++;
 							if (cores == 33) {
-								printf("acpi: too many cores\n");
+								printf("smp: too many cores\n");
 								arch_fatal();
 							}
 						}

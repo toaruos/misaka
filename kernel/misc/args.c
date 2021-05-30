@@ -26,8 +26,7 @@ hashmap_t * kernel_args_map = NULL;
  * so the caller should check whether it is correctly set.
  */
 int args_present(const char * karg) {
-	if (!kernel_args_map) return 0; /* derp */
-
+	if (!kernel_args_map) return 0;
 	return hashmap_has(kernel_args_map, karg);
 }
 
@@ -35,8 +34,7 @@ int args_present(const char * karg) {
  * @brief Return the value associated with an argument provided to the kernel.
  */
 char * args_value(const char * karg) {
-	if (!kernel_args_map) return 0; /* derp */
-
+	if (!kernel_args_map) return 0;
 	return hashmap_get(kernel_args_map, karg);
 }
 
@@ -54,7 +52,6 @@ void args_parse(const char * _arg) {
 	int argc = tokenize(arg, " ", argv);
 
 	/* New let's parse the tokens into the arguments list so we can index by key */
-
 	if (!kernel_args_map) {
 		kernel_args_map = hashmap_create(10);
 	}
@@ -84,6 +81,5 @@ _break:
 	}
 
 	free(arg);
-
 }
 

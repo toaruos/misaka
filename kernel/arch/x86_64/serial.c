@@ -5,15 +5,11 @@
  * Attaches serial ports to TTY interfaces. Serial input processing
  * happens in a kernel tasklet so that blocking is handled smoothly.
  *
- * FIXME This needs to be adapted to an irq chaining API when one
- *       is built for Misaka.
- *
  * @copyright
  * This file is part of ToaruOS and is released under the terms
  * of the NCSA / University of Illinois License - see LICENSE.md
  * Copyright (C) 2014-2021 K. Lange
  */
-
 #include <kernel/string.h>
 #include <kernel/types.h>
 #include <kernel/vfs.h>
@@ -90,6 +86,8 @@ static void process_serial(void * argp) {
 			pty = *pty_for_port(port);
 			tty_input_process(pty, ch);
 			next = serial_rcvd(port);
+			/* TODO: Can we handle more than one character here
+			 *       before yielding? Would that be helpful? */
 			if (next) switch_task(1);
 		} while (next);
 	}

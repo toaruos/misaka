@@ -1,3 +1,19 @@
+/**
+ * @file  kernel/misc/gzip.c
+ * @brief Gzip/DEFLATE decompression.
+ *
+ * Provides decompression for ramdisks.
+ * Based on the same approach to DEFLATE decompression as libraries
+ * like "tinf", this is a slow-but-simple implementation of Huffman
+ * decoding. The kernel version operates directly on two pointers,
+ * @c gzip_inputPtr and @c gzip_outputPtr. For a more robust API,
+ * see the userspace version.
+ *
+ * @copyright
+ * This file is part of ToaruOS and is released under the terms
+ * of the NCSA / University of Illinois License - see LICENSE.md
+ * Copyright (C) 2020-2021 K. Lange
+ */
 #include <stdint.h>
 #include <stddef.h>
 
@@ -16,7 +32,6 @@ __attribute__((always_inline))
 static inline void _write(unsigned int sym) {
 	*gzip_outputPtr++ = sym;
 }
-
 
 /**
  * Decoded Huffman table

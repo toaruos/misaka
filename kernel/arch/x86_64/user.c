@@ -1,3 +1,7 @@
+/**
+ * @file  kernel/arch/x86_64/user.c
+ * @brief Various assembly snippets for jumping to usermode and back.
+ */
 #include <stdint.h>
 #include <kernel/process.h>
 #include <kernel/string.h>

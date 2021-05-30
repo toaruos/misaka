@@ -2,8 +2,12 @@
  * @file kernel/arch/x86_64/cmos.c
  * @author K. Lange
  * @brief Real-time clock.
+ *
+ * Provides access to the CMOS RTC for initial boot time and
+ * calibrates the TSC to use as a general timing source. IRQ 0
+ * handler is also in here because it updates the wall clock time
+ * and triggers timeout-based wakeups.
  */
-
 #include <kernel/printf.h>
 #include <kernel/string.h>
 #include <kernel/process.h>

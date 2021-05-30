@@ -1,3 +1,7 @@
+/**
+ * @file  kernel/misc/tokenize.c
+ * @brief Wrapper around strtok_r, used to turn strings into arrays.
+ */
 #include <kernel/string.h>
 #include <kernel/tokenize.h>
 

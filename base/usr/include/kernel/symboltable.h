@@ -8,5 +8,4 @@ typedef struct {
 	char name[];
 } kernel_symbol_t;
 
-extern void (* symbol_find(const char * name))(void);
 

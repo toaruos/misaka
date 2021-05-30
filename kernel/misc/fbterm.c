@@ -27,7 +27,7 @@ extern uint32_t lfb_resolution_s;
 extern size_t lfb_memsize;
 
 /* Bitmap font details */
-#include "../terminal-font.h"
+#include "../../apps/terminal-font.h"
 #define char_height 20
 #define char_width  9
 

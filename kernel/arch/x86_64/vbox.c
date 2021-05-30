@@ -257,23 +257,10 @@ uint64_t write_rectpipe(fs_node_t *node, uint64_t offset, uint64_t size, uint8_t
 
 	if (count > 254) count = 254; /* enforce maximum */
 
-#if 0
-	fprintf(&vb, "Writing %d rectangles\n", count);
-#endif
-
 	buffer += sizeof(uint32_t);
 
 	for (unsigned int i = 0; i < count; ++i) {
 		memcpy(&vbox_visibleregion->rect[i], buffer, sizeof(struct vbox_rtrect));
-#if 0
-		fprintf(&vb, "Rectangle %d is [%d,%d,%d,%d]\n",
-				i,
-				vbox_visibleregion->rect[i].xLeft,
-				vbox_visibleregion->rect[i].yTop,
-				vbox_visibleregion->rect[i].xRight,
-				vbox_visibleregion->rect[i].yBottom);
-#endif
-
 		buffer += sizeof(struct vbox_rtrect);
 	}
 
@@ -293,12 +280,9 @@ void vbox_initialize(void) {
 	pci_scan(vbox_scan_pci, -1, &vbox_device);
 
 	if (vbox_device) {
-		//fprintf(&vb, "VirtualBox host detected, switching log to VirtualBox.\n");
-
 		if (!args_present("novboxdebug")) {
 			vbox_set_log();
 		}
-		//fprintf(&vb, "HELLO WORLD\n");
 
 		uintptr_t t = pci_read_field(vbox_device, PCI_BAR0, 4);
 		if (t > 0) {
