@@ -1,9 +1,8 @@
 TOOLCHAIN=util
 BASE=base
 export PATH := $(shell $(TOOLCHAIN)/activate.sh)
-include build/arch.mk
 
-TARGET=x86_64-pc-toaru
+include build/x86_64.mk
 
 CC = ${TARGET}-gcc
 NM = ${TARGET}-nm
@@ -13,14 +12,8 @@ AS = ${TARGET}-as
 OC = ${TARGET}-objcopy
 
 KERNEL_CFLAGS  = -ffreestanding -O2 -std=gnu11 -g -static
-
-# Arch-specific arguments
-KERNEL_CFLAGS += -mno-red-zone -fno-omit-frame-pointer -mfsgsbase
-KERNEL_CFLAGS += -mgeneral-regs-only -z max-page-size=0x1000 -nostdlib
-
-# Warnings
 KERNEL_CFLAGS += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter
-KERNEL_CFLAGS += -pedantic -Wwrite-strings
+KERNEL_CFLAGS += -pedantic -Wwrite-strings ${ARCH_KERNEL_CFLAGS}
 
 # Defined constants for the kernel
 KERNEL_CFLAGS += -D_KERNEL_ -DKERNEL_ARCH=${ARCH}
